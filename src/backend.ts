@@ -47,15 +47,18 @@ if (spindle.permissions.has('interceptor')) {
     else if (fill_percent >= 21) { belly_status = "Full-Term"; }
     else if (fill_percent >= 13) { belly_status = "Bloated"; }
     else if (fill_percent >= 6) { belly_status = "Potbelly"; }
-    
-// Build the silent injection string
-    const injection = `[SYSTEM BIO-TRACKER DATA]\n- Stomach Capacity: ${capacity_L.toFixed(2)}L\n- Current Volume: ${state.stomach_current_ml}ml\n- Status: ${belly_status}\n- Mobility Penalty: ${mobility}\n- Cash: ${state.cash}`;
 
-    // Force inject as a brand new system message to guarantee the AI reads it
-    messages.push({
-      role: 'system',
-      content: injection
-    });
+    // Build the silent injection string
+    const injection = `\n\n[OOC SYSTEM NOTE: The user's current physical state is -> Stomach Capacity: ${capacity_L.toFixed(2)}L | Current Volume: ${state.stomach_current_ml}ml | Status: ${belly_status} | Mobility: ${mobility} | Cash: ${state.cash}]`;
+
+    // Pop a notification on your screen to prove the engine fired!
+    spindle.toast.info("⚙️ Bio-Tracker math engine processed!");
+
+    // Attach the stats directly to the LAST message (your message)
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage) {
+        lastMessage.content += injection;
+    }
 
     return messages;
   });
