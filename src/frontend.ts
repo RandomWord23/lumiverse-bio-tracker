@@ -48,7 +48,6 @@ export function setup(ctx: SpindleFrontendContext) {
   `;
   document.head.appendChild(style);
 
-  // BUILD PREVIEW MODAL
   const previewModal = document.createElement('div');
   previewModal.id = 'bt-preview-modal';
   previewModal.innerHTML = `
@@ -77,7 +76,6 @@ export function setup(ctx: SpindleFrontendContext) {
     </div>
 
     <div class="bt-content">
-      <!-- CHARACTER TAB -->
       <div id="tab-char" class="bt-tab-content active">
         <div class="bt-sub-tabs">
           <button class="bt-sub-btn active" data-sub="sub-app">Appearance</button>
@@ -155,7 +153,6 @@ export function setup(ctx: SpindleFrontendContext) {
         </div>
       </div>
 
-      <!-- INVENTORY TAB -->
       <div id="tab-inv" class="bt-tab-content">
         <div class="bt-row">
           <span style="font-weight:bold; color:#ff4444;">WEALTH</span>
@@ -227,7 +224,6 @@ export function setup(ctx: SpindleFrontendContext) {
         <div id="inv-container" style="margin-top: 10px;"></div>
       </div>
 
-      <!-- VITALS TAB -->
       <div id="tab-vitals" class="bt-tab-content">
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
         <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input bt-scrape" data-id="CurrentAcidPct" id="bt-acid-level" value="0"></div>
@@ -430,7 +426,6 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-  // DYNAMIC ADD BUTTONS
   document.getElementById('add-food-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot is-food';
     div.innerHTML = `
@@ -499,16 +494,16 @@ export function setup(ctx: SpindleFrontendContext) {
   // 🚀 THE SCRAPER & XML GENERATOR
   document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
     
-    let xml = \`<CharacterSheet>\\n  <BaseStats>\\n\`;
+    let xml = `<CharacterSheet>\n  <BaseStats>\n`;
     document.querySelectorAll('.bt-scrape').forEach(el => {
       const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
       const val = input.value.trim();
       const id = input.getAttribute('data-id');
       if (val !== '' && val !== '0' && id) {
-        xml += \`    <\${id}>\${val}</\${id}>\\n\`;
+        xml += `    <${id}>${val}</${id}>\n`;
       }
     });
-    xml += \`  </BaseStats>\\n\\n  <Clothing>\\n\`;
+    xml += `  </BaseStats>\n\n  <Clothing>\n`;
     
     document.querySelectorAll('.bt-cloth-slot').forEach(el => {
       const input = el as HTMLInputElement;
@@ -516,31 +511,31 @@ export function setup(ctx: SpindleFrontendContext) {
       const slot = input.getAttribute('data-slot');
       if (val !== '') {
         const flexEl = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement;
-        const flexStr = flexEl ? \` elasticity="\${flexEl.value}"\` : '';
-        xml += \`    <Equip slot="\${slot}"\${flexStr}>\${val}</Equip>\\n\`;
+        const flexStr = flexEl ? ` elasticity="${flexEl.value}"` : '';
+        xml += `    <Equip slot="${slot}"${flexStr}>${val}</Equip>\n`;
       }
     });
-    xml += \`  </Clothing>\\n\\n  <Backpack>\\n\`;
+    xml += `  </Clothing>\n\n  <Backpack>\n`;
     
     document.querySelectorAll('.dyn-inv').forEach(el => {
       const qty = (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() || '1';
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
-      if(name) xml += \`    <Item qty="\${qty}">\${name}</Item>\\n\`;
+      if(name) xml += `    <Item qty="${qty}">${name}</Item>\n`;
     });
-    xml += \`  </Backpack>\\n\\n  <SkillsAndTraits>\\n\`;
+    xml += `  </Backpack>\n\n  <SkillsAndTraits>\n`;
     
     document.querySelectorAll('.dyn-skill').forEach(el => {
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
       const lvl = (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() || '1';
       const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim();
-      if(name) xml += \`    <Skill name="\${name}" level="\${lvl}">\${desc}</Skill>\\n\`;
+      if(name) xml += `    <Skill name="${name}" level="${lvl}">${desc}</Skill>\n`;
     });
     document.querySelectorAll('.dyn-trait').forEach(el => {
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
       const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim();
-      if(name) xml += \`    <Trait name="\${name}">\${desc}</Trait>\\n\`;
+      if(name) xml += `    <Trait name="${name}">${desc}</Trait>\n`;
     });
-    xml += \`  </SkillsAndTraits>\\n\\n  <DigestiveTract>\\n\`;
+    xml += `  </SkillsAndTraits>\n\n  <DigestiveTract>\n`;
     
     const bellyStatus = document.getElementById('bt-belly-status')?.innerText || 'Flat';
     const mobility = document.getElementById('bt-mobility')?.innerText || 'Agile';
@@ -548,8 +543,8 @@ export function setup(ctx: SpindleFrontendContext) {
     const stomMax = document.getElementById('bt-stom-max-disp')?.innerText || '0 L';
     const bowFill = document.getElementById('bt-bowel-fill')?.innerText || '0 L';
     
-    xml += \`    <Status belly="\${bellyStatus}" mobility="\${mobility}" />\\n\`;
-    xml += \`    <Stomach current="\${stomFill}" max="\${stomMax}">\\n\`;
+    xml += `    <Status belly="${bellyStatus}" mobility="${mobility}" />\n`;
+    xml += `    <Stomach current="${stomFill}" max="${stomMax}">\n`;
     
     document.querySelectorAll('#stomach-container .vital-slot').forEach(el => {
       const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown';
@@ -560,24 +555,24 @@ export function setup(ctx: SpindleFrontendContext) {
         const status = (el.querySelector('.prey-status') as HTMLElement)?.innerText || 'Unknown';
         const flavor = (el.querySelector('.v-flavor') as HTMLTextAreaElement)?.value.trim();
         const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim();
-        xml += \`      <Prey name="\${name}" volume_L="\${vol}" digestion="\${dig}%" lifeStatus="\${status}">\\n\`;
-        if (flavor) xml += \`        <ActionFlavor>\${flavor}</ActionFlavor>\\n\`;
-        if (gear) xml += \`        <BoundGear>\${gear}</BoundGear>\\n\`;
-        xml += \`      </Prey>\\n\`;
+        xml += `      <Prey name="${name}" volume_L="${vol}" digestion="${dig}%" lifeStatus="${status}">\n`;
+        if (flavor) xml += `        <ActionFlavor>${flavor}</ActionFlavor>\n`;
+        if (gear) xml += `        <BoundGear>${gear}</BoundGear>\n`;
+        xml += `      </Prey>\n`;
       } else if (el.classList.contains('is-food')) {
-        xml += \`      <Food name="\${name}" volume_L="\${vol}" digestion="\${dig}%" />\\n\`;
+        xml += `      <Food name="${name}" volume_L="${vol}" digestion="${dig}%" />\n`;
       }
     });
     
-    xml += \`    </Stomach>\\n    <Bowels current="\${bowFill}">\\n\`;
+    xml += `    </Stomach>\n    <Bowels current="${bowFill}">\n`;
     
     document.querySelectorAll('#bowel-container .vital-slot').forEach(el => {
       const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Waste';
       const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0';
-      xml += \`      <Remains volume_L="\${vol}">\${name}</Remains>\\n\`;
+      xml += `      <Remains volume_L="${vol}">${name}</Remains>\n`;
     });
     
-    xml += \`    </Bowels>\\n  </DigestiveTract>\\n</CharacterSheet>\`;
+    xml += `    </Bowels>\n  </DigestiveTract>\n</CharacterSheet>`;
 
     const btn = document.getElementById('bt-sync-btn');
     if (btn) {
