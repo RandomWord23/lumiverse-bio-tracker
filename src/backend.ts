@@ -47,14 +47,15 @@ if (spindle.permissions.has('interceptor')) {
     else if (fill_percent >= 21) { belly_status = "Full-Term"; }
     else if (fill_percent >= 13) { belly_status = "Bloated"; }
     else if (fill_percent >= 6) { belly_status = "Potbelly"; }
+    
+// Build the silent injection string
+    const injection = `[SYSTEM BIO-TRACKER DATA]\n- Stomach Capacity: ${capacity_L.toFixed(2)}L\n- Current Volume: ${state.stomach_current_ml}ml\n- Status: ${belly_status}\n- Mobility Penalty: ${mobility}\n- Cash: ${state.cash}`;
 
-    // Build the silent injection string
-    const injection = `\n\n[SYSTEM BIO-TRACKER]\n- Stomach Capacity: ${capacity_L.toFixed(2)}L\n- Current Volume: ${state.stomach_current_ml}ml\n- Status: ${belly_status}\n- Mobility Penalty: ${mobility}\n- Cash: ${state.cash}`;
-
-    // Inject the stats into the first System message of the prompt
-    if (messages.length > 0 && messages[0].role === 'system') {
-       messages[0].content += injection;
-    }
+    // Force inject as a brand new system message to guarantee the AI reads it
+    messages.push({
+      role: 'system',
+      content: injection
+    });
 
     return messages;
   });
