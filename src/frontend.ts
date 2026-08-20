@@ -29,13 +29,16 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-textarea { width: 100%; box-sizing: border-box; resize: vertical; margin-bottom: 10px; }
     .bt-value { font-weight: bold; color: #ff4444; }
     .bt-section-title { font-size: 12px; color: #ff4444; margin: 15px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; font-weight: bold; letter-spacing: 1px; }
-    .bt-add-btn { background: #2a2a2a; color: #4CAF50; border: 1px solid #333; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; }
+    .bt-add-btn { background: #2a2a2a; color: #4CAF50; border: 1px solid #333; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; font-size: 11px; }
     .bt-dynamic-item { background: #222; border: 1px dashed #444; padding: 10px; border-radius: 6px; margin-bottom: 10px; position: relative; }
     .bt-remove-btn { position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; }
     .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
     
     .slot-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 2px; display: block; }
     .flex-row { display: flex; justify-content: space-between; align-items: center; }
+    
+    .vital-slot { background: #222; border: 1px dashed #555; border-radius: 6px; padding: 8px; margin-bottom: 8px; position: relative; }
+    .vital-remove { position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ff4444; cursor: pointer; font-size: 14px; }
   `;
   document.head.appendChild(style);
 
@@ -134,8 +137,6 @@ export function setup(ctx: SpindleFrontendContext) {
 
       <!-- INVENTORY TAB -->
       <div id="tab-inv" class="bt-tab-content">
-        
-        <!-- Wealth System -->
         <div class="bt-row">
           <span style="font-weight:bold; color:#ff4444;">WEALTH</span>
           <select id="bt-currency-type" class="bt-select" style="width: 100px;">
@@ -143,20 +144,13 @@ export function setup(ctx: SpindleFrontendContext) {
             <option value="fantasy">Fantasy (G/S/C)</option>
           </select>
         </div>
-        
-        <div id="currency-modern">
-          <input type="number" class="bt-input full" id="bt-cash-modern" placeholder="Balance (e.g. 1500)">
-        </div>
-        
+        <div id="currency-modern"><input type="number" class="bt-input full" id="bt-cash-modern" placeholder="Balance (e.g. 1500)"></div>
         <div id="currency-fantasy" style="display:none; justify-content:space-between; gap:5px; margin-bottom:10px;">
           <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#ffd700; font-weight:bold;">G</span></div>
           <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#c0c0c0; font-weight:bold;">S</span></div>
           <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#cd7f32; font-weight:bold;">C</span></div>
         </div>
-
         <hr style="border-color: #333; margin: 15px 0;">
-        
-        <!-- Clothing System -->
         <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
           CLOTHING SLOTS
           <select class="bt-select" id="bt-cloth-mode" style="width:110px; border-color:#ff4444;">
@@ -164,20 +158,14 @@ export function setup(ctx: SpindleFrontendContext) {
             <option value="hardcore">Mode: Hardcore</option>
           </select>
         </div>
-
-        <!-- Head & Neck -->
         <span class="slot-label">Head (Top)</span><input type="text" class="bt-input full" placeholder="Hats, Helmets, Hoods">
         <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full" placeholder="Glasses, Goggles, Visors">
         <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full" placeholder="Masks, Bandanas">
         <span class="slot-label">Neck</span><input type="text" class="bt-input full" placeholder="Scarves, Gorgets, Chokers">
-
-        <!-- Underwear -->
         <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Bra, Binder, Undershirt">
         <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Panties, Boxers, Loincloth">
-
-        <!-- Torso Layers -->
         <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="T-shirt, Blouse, Gambeson">
         <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
@@ -186,30 +174,19 @@ export function setup(ctx: SpindleFrontendContext) {
         <input type="text" class="bt-input full" placeholder="Jacket, Coat, Cuirass">
         <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Overcoat, Poncho, Power Armor">
-
-        <!-- Hands -->
         <span class="slot-label">Hands (Layer 1)</span><input type="text" class="bt-input full" placeholder="Inner Gloves, Wraps">
         <span class="slot-label">Hands (Layer 2)</span><input type="text" class="bt-input full" placeholder="Gauntlets, Thick Gloves">
-
-        <!-- Legs -->
         <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Jeans, Leggings, Trousers">
         <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Greaves, Chaps, Snow Pants">
-
-        <!-- Feet -->
         <span class="slot-label">Feet (Layer 1)</span><input type="text" class="bt-input full" placeholder="Socks, Stockings">
         <span class="slot-label">Feet (Layer 2)</span><input type="text" class="bt-input full" placeholder="Shoes, Boots, Sabatons">
-
-        <!-- Accessories & Extras -->
         <span class="slot-label">Jewelry</span><input type="text" class="bt-input full" placeholder="Rings, Amulets, Bracelets">
         <span class="slot-label">Back</span><input type="text" class="bt-input full" placeholder="Backpack, Cape, Quiver">
         <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Belt, Holster, Scabbard">
-
         <hr style="border-color: #333; margin: 15px 0;">
-        
-        <!-- NEW SLOTTED BACKPACK SYSTEM -->
         <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
           <span>BACKPACK / POCKETS</span>
           <button class="bt-add-btn" id="add-inv-btn">+ Add Item</button>
@@ -217,14 +194,42 @@ export function setup(ctx: SpindleFrontendContext) {
         <div id="inv-container" style="margin-top: 10px;"></div>
       </div>
 
-      <!-- VITALS TAB -->
+      <!-- NEW VITALS TAB (BIOLOGICAL INVENTORY) -->
       <div id="tab-vitals" class="bt-tab-content">
-        <div class="bt-row"><span>Health / HP:</span> <input type="text" class="bt-input" id="bt-health" value="100/100"></div>
+        
+        <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
+        <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input" id="bt-acid-level" value="0"></div>
+        <div class="bt-row"><span>Base Digestion (%/t):</span> <input type="number" class="bt-input" id="bt-dig-base" value="5"></div>
+        <div class="bt-row"><span>Acid Rise (%/t):</span> <input type="number" class="bt-input" id="bt-acid-rise" value="10"></div>
+        <div class="bt-row"><span>Acid Decay (%/t):</span> <input type="number" class="bt-input" id="bt-acid-decay" value="5"></div>
+
         <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-row"><span>Stomach (ml):</span> <input type="number" class="bt-input" id="bt-stom" value="0"></div>
-        <div class="bt-row"><span>Capacity:</span> <span class="bt-value">115.20 L</span></div>
-        <div class="bt-row"><span>Belly Status:</span> <span class="bt-value" style="color:#aaa;">Flat (0-5%)</span></div>
-        <div class="bt-row"><span>Mobility:</span> <span class="bt-value" style="color:#aaa;">Normal</span></div>
+
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>STOMACH PIPELINE</span>
+          <div>
+            <button class="bt-add-btn" style="background: #2a3a5a; color: #66b2ff; border-color:#446699; margin-right: 5px;" id="add-food-btn">+ Food</button>
+            <button class="bt-add-btn" style="background: #5a2020; color: #ff6666; border-color:#994444;" id="add-prey-btn">+ Prey</button>
+          </div>
+        </div>
+        
+        <div class="bt-row"><span>Max Capacity (L):</span> <input type="number" class="bt-input" id="bt-stom-max" value="115.2"></div>
+        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-stom-fill">0.00 L</span></div>
+        
+        <div id="stomach-container" style="margin-top: 10px;"></div>
+
+        <hr style="border-color: #333; margin: 15px 0;">
+
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>BOWEL PIPELINE</span>
+          <button class="bt-add-btn" style="background: #4a3a2a; color: #d2b48c; border-color:#8b6b4a;" id="add-remains-btn">+ Remains</button>
+        </div>
+        
+        <div class="bt-row"><span>Max Capacity (L):</span> <input type="number" class="bt-input" id="bt-bowel-max" value="40"></div>
+        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-bowel-fill">0.00 L</span></div>
+        
+        <div id="bowel-container" style="margin-top: 10px;"></div>
+
         <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
       </div>
@@ -296,18 +301,118 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
+  // Vitals Auto-Sum Logic
+  function updateCapacities() {
+    let stomTotal = 0;
+    document.querySelectorAll('.stomach-vol').forEach(el => {
+      stomTotal += parseFloat((el as HTMLInputElement).value) || 0;
+    });
+    const stomFillEl = document.getElementById('bt-stom-fill');
+    if(stomFillEl) stomFillEl.innerText = stomTotal.toFixed(2) + ' L';
+
+    let bowelTotal = 0;
+    document.querySelectorAll('.bowel-vol').forEach(el => {
+      bowelTotal += parseFloat((el as HTMLInputElement).value) || 0;
+    });
+    const bowelFillEl = document.getElementById('bt-bowel-fill');
+    if(bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L';
+  }
+
+  // Event delegation for capacity inputs and prey digestion slider
+  panel.addEventListener('input', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
+      updateCapacities();
+    }
+    if (target.classList.contains('prey-dig-input')) {
+      const val = parseInt((target as HTMLInputElement).value) || 0;
+      const statusSpan = target.parentElement?.parentElement?.querySelector('.prey-status') as HTMLElement;
+      if (statusSpan) {
+        let text = 'Fully Conscious'; let color = '#4CAF50';
+        if (val >= 90) { text = 'Dead'; color = '#ff4444'; }
+        else if (val >= 80) { text = 'Unconscious'; color = '#999'; }
+        else if (val >= 70) { text = 'Drowsy'; color = '#ffeb3b'; }
+        else if (val >= 50) { text = 'Conscious'; color = '#ff9800'; }
+        statusSpan.innerText = text;
+        statusSpan.style.color = color;
+      }
+    }
+  });
+
+  document.getElementById('add-food-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); div.className = 'vital-slot';
+    div.innerHTML = `
+      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-stom-max').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
+      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
+        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Food/Drink Name...">
+      </div>
+      <div class="flex-row">
+        <span>Vol (L): <input type="number" class="bt-input stomach-vol" style="width: 50px;" value="0"></span>
+        <span>Dig %: <input type="number" class="bt-input" style="width: 40px;" value="0"></span>
+      </div>
+    `;
+    document.getElementById('stomach-container')?.appendChild(div);
+  });
+
+  document.getElementById('add-prey-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); div.className = 'vital-slot'; div.style.borderColor = '#994444';
+    div.innerHTML = `
+      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-stom-max').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
+      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
+        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Prey Description...">
+      </div>
+      <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
+        <span>Status: <strong class="prey-status" style="color:#4CAF50;">Fully Conscious</strong></span>
+      </div>
+      <div class="flex-row" style="margin-bottom: 5px;">
+        <span>Vol (L): <input type="number" class="bt-input stomach-vol" style="width: 50px;" value="0"></span>
+        <span>Dig %: <input type="number" class="bt-input prey-dig-input" style="width: 40px;" value="0"></span>
+      </div>
+      <textarea class="bt-textarea" rows="2" style="margin-bottom: 0;" placeholder="Bound Gear / Items..."></textarea>
+    `;
+    document.getElementById('stomach-container')?.appendChild(div);
+  });
+
+  document.getElementById('add-remains-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); div.className = 'vital-slot'; div.style.borderColor = '#8b6b4a';
+    div.innerHTML = `
+      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-bowel-max').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
+      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
+        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Waste / Remains Name...">
+      </div>
+      <div class="flex-row">
+        <span>Vol (L): <input type="number" class="bt-input bowel-vol" style="width: 50px;" value="0"></span>
+      </div>
+    `;
+    document.getElementById('bowel-container')?.appendChild(div);
+  });
+
+  // Re-bind old dynamic buttons
+  document.getElementById('add-skill-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); div.className = 'bt-dynamic-item';
+    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
+    document.getElementById('skills-container')?.appendChild(div);
+  });
+  document.getElementById('add-trait-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); div.className = 'bt-dynamic-item';
+    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
+    document.getElementById('traits-container')?.appendChild(div);
+  });
+  document.getElementById('add-inv-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); div.className = 'bt-row'; div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;';
+    div.innerHTML = `<input type="number" class="bt-input" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1"><input type="text" class="bt-input full" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name..."><button style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;" onclick="this.parentElement.remove()">✖</button>`;
+    document.getElementById('inv-container')?.appendChild(div);
+  });
+
   const currencyType = document.getElementById('bt-currency-type') as HTMLSelectElement;
   const currencyModern = document.getElementById('currency-modern');
   const currencyFantasy = document.getElementById('currency-fantasy');
-
   if (currencyType && currencyModern && currencyFantasy) {
     currencyType.addEventListener('change', (e) => {
       if ((e.target as HTMLSelectElement).value === 'fantasy') {
-        currencyModern.style.display = 'none';
-        currencyFantasy.style.display = 'flex';
+        currencyModern.style.display = 'none'; currencyFantasy.style.display = 'flex';
       } else {
-        currencyModern.style.display = 'block';
-        currencyFantasy.style.display = 'none';
+        currencyModern.style.display = 'block'; currencyFantasy.style.display = 'none';
       }
     });
   }
@@ -315,47 +420,28 @@ export function setup(ctx: SpindleFrontendContext) {
   const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
   const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
   breastInput?.addEventListener('input', () => {
-    const ml = parseInt(breastInput.value) || 0;
-    let cup = "AA";
-    if (ml >= 1000) cup = "H+";
-    else if (ml >= 800) cup = "G";
-    else if (ml >= 650) cup = "F";
-    else if (ml >= 550) cup = "DD";
-    else if (ml >= 450) cup = "D";
-    else if (ml >= 350) cup = "C";
-    else if (ml >= 250) cup = "B";
-    else if (ml >= 150) cup = "A";
+    const ml = parseInt(breastInput.value) || 0; let cup = "AA";
+    if (ml >= 1000) cup = "H+"; else if (ml >= 800) cup = "G"; else if (ml >= 650) cup = "F"; else if (ml >= 550) cup = "DD"; else if (ml >= 450) cup = "D"; else if (ml >= 350) cup = "C"; else if (ml >= 250) cup = "B"; else if (ml >= 150) cup = "A";
     breastCup.innerText = cup;
   });
 
-  const colorMap: Record<string, string> = {
-    'blonde': '#e8c872', 'blond': '#e8c872', 'brunette': '#5c4033', 'brown': '#5c4033',
-    'black': '#333333', 'red': '#cc3333', 'ginger': '#d95a2b', 'blue': '#3366cc',
-    'green': '#339966', 'hazel': '#8e7618', 'purple': '#800080', 'pink': '#ff99cc',
-    'white': '#ffffff', 'gray': '#808080', 'grey': '#808080', 'pale': '#ffe4e1', 'tan': '#d2b48c'
-  };
+  const colorMap: Record<string, string> = { 'blonde': '#e8c872', 'blond': '#e8c872', 'brunette': '#5c4033', 'brown': '#5c4033', 'black': '#333333', 'red': '#cc3333', 'ginger': '#d95a2b', 'blue': '#3366cc', 'green': '#339966', 'hazel': '#8e7618', 'purple': '#800080', 'pink': '#ff99cc', 'white': '#ffffff', 'gray': '#808080', 'grey': '#808080', 'pale': '#ffe4e1', 'tan': '#d2b48c' };
   function applyColorEffect(inputId: string) {
-    const el = document.getElementById(inputId);
-    if(!el) return;
+    const el = document.getElementById(inputId); if(!el) return;
     el.addEventListener('input', (e) => {
-      const val = (e.target as HTMLInputElement).value.toLowerCase();
-      let foundColor = '';
+      const val = (e.target as HTMLInputElement).value.toLowerCase(); let foundColor = '';
       for (const key in colorMap) { if (val.includes(key)) { foundColor = colorMap[key]; break; } }
       if (foundColor) { el.style.borderLeft = '4px solid ' + foundColor; el.style.paddingLeft = '8px'; } 
       else { el.style.borderLeft = '1px solid #444'; el.style.paddingLeft = '6px'; }
     });
   }
-  applyColorEffect('bt-hair');
-  applyColorEffect('bt-eyes');
-  applyColorEffect('bt-skin');
+  applyColorEffect('bt-hair'); applyColorEffect('bt-eyes'); applyColorEffect('bt-skin');
 
   const genderInput = document.getElementById('bt-gender') as HTMLInputElement;
   const genderIcon = document.getElementById('bt-gender-icon');
-  
   if (genderInput && genderIcon) {
     genderInput.addEventListener('input', () => {
-      const val = genderInput.value.toLowerCase().trim();
-      let icon = ''; let color = '#fff';
+      const val = genderInput.value.toLowerCase().trim(); let icon = ''; let color = '#fff';
       if (val === 'female' || val === 'woman' || val === 'girl' || val === 'f') { icon = '♀️'; color = '#ff99cc'; } 
       else if (val === 'male' || val === 'man' || val === 'boy' || val === 'm') { icon = '♂️'; color = '#66b2ff'; } 
       else if (val.includes('trans') || val.includes('non-binary') || val === 'nb' || val === 't') { icon = '⚧️'; color = '#e0e0e0'; } 
@@ -363,29 +449,4 @@ export function setup(ctx: SpindleFrontendContext) {
       genderIcon.innerText = icon; genderIcon.style.color = color;
     });
   }
-
-  // Dynamic Add Buttons (Skills, Traits, and now Inventory!)
-  document.getElementById('add-skill-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'bt-dynamic-item';
-    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
-    document.getElementById('skills-container')?.appendChild(div);
-  });
-  
-  document.getElementById('add-trait-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'bt-dynamic-item';
-    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
-    document.getElementById('traits-container')?.appendChild(div);
-  });
-
-  document.getElementById('add-inv-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); 
-    div.className = 'bt-row'; 
-    div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;';
-    div.innerHTML = `
-      <input type="number" class="bt-input" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1">
-      <input type="text" class="bt-input full" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name...">
-      <button style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;" onclick="this.parentElement.remove()">✖</button>
-    `;
-    document.getElementById('inv-container')?.appendChild(div);
-  });
 }
