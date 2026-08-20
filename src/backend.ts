@@ -1,38 +1,40 @@
 import type { SpindleBackendContext } from 'lumiverse-spindle-types';
 
-// This variable will hold our XML string in memory
 let currentCharacterSheetXML = "";
 
 export function setup(ctx: SpindleBackendContext) {
   
-  // 1. Listen for the Frontend sending us the new XML data
+  // 1. Listen for the Frontend sending us data
   ctx.onMessage((message) => {
     if (message.type === 'SYNC_BIO_DATA') {
       currentCharacterSheetXML = message.xmlData;
-      console.log("Backend received new Character Sheet XML!");
+      console.log("=== BACKEND: SUCCESSFULLY RECEIVED XML DATA ===");
+      console.log(currentCharacterSheetXML);
     }
   });
 
-  // 2. Intercept the chat request right before it goes to the AI
+  // 2. Intercept the chat request
   ctx.hooks.on('before_generate', async (request) => {
+    console.log("=== BACKEND: before_generate triggered ===");
     
-    // If we have data synced, inject it!
     if (currentCharacterSheetXML !== "") {
-      
-      // We wrap it in a strict system instruction so the AI knows how to handle it
-      const injectionString = `
-[SYSTEM NOTE: Below is the absolute, current mechanical state of the user's character and digestive tract. You must strictly adhere to these physical limits, items, and capacities in your next response. Do not hallucinate items not in this inventory.]
-${currentCharacterSheetXML}
-`;
+      const injectionString = `\n\n[SYSTEM NOTE: Absolute mechanical state of the character. Strictly adhere to these values:]\n${currentCharacterSheetXML}`;
 
-      // Find the System Prompt (usually the first message in the array) and append our data
-      const systemMessage = request.messages.find(m => m.role === 'system');
-      if (systemMessage) {
-        systemMessage.content += '\n\n' + injectionString;
+      // Let's check what properties request has and inject safely
+      if (request && request.messages && Array.isArray(request.messages)) {
+        const systemMessage = request.messages.find(m => m.role === 'system');
+        if (systemMessage) {
+          systemMessage.content += injectionString;
+          console.log("=== BACKEND: Injected into existing system message ===");
+        } else {
+          request.messages.unshift({ role: 'system', content: injectionString });
+          console.log("=== BACKEND: Created new system message and injected ===");
+        }
       } else {
-        // If there isn't a system message for some reason, we add one
-        request.messages.unshift({ role: 'system', content: injectionString });
+        console.log("=== BACKEND ERROR: request.messages not found or invalid format ===");
       }
+    } else {
+      console.log("=== BACKEND WARNING: currentCharacterSheetXML is empty! Did you press Sync? ===");
     }
     
     return request;
