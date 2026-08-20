@@ -201,7 +201,13 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input" id="bt-acid-level" value="0"></div>
         <div class="bt-row"><span>Base Digestion (%/t):</span> <input type="number" class="bt-input" id="bt-dig-base" value="5"></div>
         <div class="bt-row"><span>Acid Rise (%/t):</span> <input type="number" class="bt-input" id="bt-acid-rise" value="10"></div>
-        <div class="bt-row"><span>Acid Decay (%/t):</span> <input type="number" class="bt-input" id="bt-acid-decay" value="5"></div>
+        <div class="bt-row"><span>Capacity Multiplier:</span> <input type="number" class="bt-input" id="bt-cap-mult" step="0.1" value="1.0"></div>
+
+        <hr style="border-color: #333; margin: 15px 0;">
+
+        <!-- Dynamic Belly & Mobility Display -->
+        <div class="bt-row"><span>Belly Status:</span> <span class="bt-value" id="bt-belly-status" style="color:#aaa;">Flat</span></div>
+        <div class="bt-row"><span>Mobility:</span> <span class="bt-value" id="bt-mobility" style="color:#4CAF50;">Agile / Normal</span></div>
 
         <hr style="border-color: #333; margin: 15px 0;">
 
@@ -213,7 +219,7 @@ export function setup(ctx: SpindleFrontendContext) {
           </div>
         </div>
         
-        <div class="bt-row"><span>Max Capacity (L):</span> <input type="number" class="bt-input" id="bt-stom-max" value="115.2"></div>
+        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-stom-max-disp">115.20 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-stom-fill">0.00 L</span></div>
         
         <div id="stomach-container" style="margin-top: 10px;"></div>
@@ -225,7 +231,7 @@ export function setup(ctx: SpindleFrontendContext) {
           <button class="bt-add-btn" style="background: #4a3a2a; color: #d2b48c; border-color:#8b6b4a;" id="add-remains-btn">+ Remains</button>
         </div>
         
-        <div class="bt-row"><span>Max Capacity (L):</span> <input type="number" class="bt-input" id="bt-bowel-max" value="40"></div>
+        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-bowel-max-disp">40.32 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-bowel-fill">0.00 L</span></div>
         
         <div id="bowel-container" style="margin-top: 10px;"></div>
@@ -301,8 +307,20 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
-  // Vitals Auto-Sum Logic
+  // Vitals Auto-Sum & Status Logic
   function updateCapacities() {
+    const height = parseFloat((document.getElementById('bt-height') as HTMLInputElement).value) || 160;
+    const weight = parseFloat((document.getElementById('bt-weight') as HTMLInputElement).value) || 60;
+    const mult = parseFloat((document.getElementById('bt-cap-mult') as HTMLInputElement).value) || 1.0;
+
+    const baseStomMax = (height * weight * 0.012) * mult;
+    const baseBowelMax = baseStomMax * 0.35; 
+
+    const stomMaxDisp = document.getElementById('bt-stom-max-disp');
+    if (stomMaxDisp) stomMaxDisp.innerText = baseStomMax.toFixed(2) + ' L';
+    const bowelMaxDisp = document.getElementById('bt-bowel-max-disp');
+    if (bowelMaxDisp) bowelMaxDisp.innerText = baseBowelMax.toFixed(2) + ' L';
+
     let stomTotal = 0;
     document.querySelectorAll('.stomach-vol').forEach(el => {
       stomTotal += parseFloat((el as HTMLInputElement).value) || 0;
@@ -316,7 +334,34 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     const bowelFillEl = document.getElementById('bt-bowel-fill');
     if(bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L';
+
+    // Status Engine Updates
+    let stomPct = (stomTotal / baseStomMax) * 100;
+    let bellyEl = document.getElementById('bt-belly-status');
+    if (bellyEl) {
+      if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.style.color = '#aaa'; }
+      else if (stomPct <= 25) { bellyEl.innerText = 'Pudge'; bellyEl.style.color = '#fff'; }
+      else if (stomPct <= 50) { bellyEl.innerText = 'Distended'; bellyEl.style.color = '#ffeb3b'; }
+      else if (stomPct <= 75) { bellyEl.innerText = 'Stuffed'; bellyEl.style.color = '#ff9800'; }
+      else if (stomPct < 100) { bellyEl.innerText = 'Overstuffed'; bellyEl.style.color = '#ff5722'; }
+      else { bellyEl.innerText = 'Bursting / Critical'; bellyEl.style.color = '#ff4444'; }
+    }
+
+    let totalPct = ((stomTotal + bowelTotal) / (baseStomMax + baseBowelMax)) * 100;
+    let mobEl = document.getElementById('bt-mobility');
+    if (mobEl) {
+      if (totalPct <= 20) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
+      else if (totalPct <= 50) { mobEl.innerText = 'Sluggish'; mobEl.style.color = '#ffeb3b'; }
+      else if (totalPct <= 75) { mobEl.innerText = 'Waddling'; mobEl.style.color = '#ff9800'; }
+      else if (totalPct < 100) { mobEl.innerText = 'Heavily Encumbered'; mobEl.style.color = '#ff5722'; }
+      else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444'; }
+    }
   }
+
+  // Bind Height/Weight/Mult to calculation
+  document.getElementById('bt-height')?.addEventListener('input', updateCapacities);
+  document.getElementById('bt-weight')?.addEventListener('input', updateCapacities);
+  document.getElementById('bt-cap-mult')?.addEventListener('input', updateCapacities);
 
   // Event delegation for capacity inputs and prey digestion slider
   panel.addEventListener('input', (e) => {
@@ -324,9 +369,10 @@ export function setup(ctx: SpindleFrontendContext) {
     if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
       updateCapacities();
     }
+    // Bug Fix: Use .closest('.vital-slot') to reliably target the Status span
     if (target.classList.contains('prey-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0;
-      const statusSpan = target.parentElement?.parentElement?.querySelector('.prey-status') as HTMLElement;
+      const statusSpan = target.closest('.vital-slot')?.querySelector('.prey-status') as HTMLElement;
       if (statusSpan) {
         let text = 'Fully Conscious'; let color = '#4CAF50';
         if (val >= 90) { text = 'Dead'; color = '#ff4444'; }
@@ -342,7 +388,7 @@ export function setup(ctx: SpindleFrontendContext) {
   document.getElementById('add-food-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot';
     div.innerHTML = `
-      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-stom-max').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
+      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
         <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Food/Drink Name...">
       </div>
@@ -357,7 +403,7 @@ export function setup(ctx: SpindleFrontendContext) {
   document.getElementById('add-prey-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot'; div.style.borderColor = '#994444';
     div.innerHTML = `
-      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-stom-max').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
+      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
         <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Prey Description...">
       </div>
@@ -376,7 +422,7 @@ export function setup(ctx: SpindleFrontendContext) {
   document.getElementById('add-remains-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot'; div.style.borderColor = '#8b6b4a';
     div.innerHTML = `
-      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-bowel-max').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
+      <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
         <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Waste / Remains Name...">
       </div>
