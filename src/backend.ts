@@ -1,115 +1,73 @@
-import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
+declare const spindle: import('lumiverse-spindle-types').SpindleAPI;
 
-export function setup(ctx: SpindleFrontendContext) {
+// The local memory map - this holds the stats for every chat!
+const chatStates = new Map<string, any>();
+
+const defaultState = {
+  weight: 60,
+  height: 160,
+  stomach_current_ml: 0, 
+  bowel_current_ml: 0,
+  cash: 0,
+  inventory: []
+};
+
+let interceptorRegistered = false;
+
+function tryRegisterInterceptor() {
+  if (interceptorRegistered) return;
+  if (!spindle.permissions.has('interceptor')) return;
+
+  spindle.registerInterceptor(async (messages, ctx) => {
+    
+    // 1. Get the state for this specific chat, or create it if it's new
+    let state = chatStates.get(ctx.chatId);
+    if (!state) {
+      state = { ...defaultState };
+      chatStates.set(ctx.chatId, state);
+    }
+
+    // 2. The Math Engine
+    const capacity_L = ((state.height * state.weight) / 100) * 1.2;
+    const capacity_ml = capacity_L * 1000;
+    
+    let fill_percent = 0;
+    if (capacity_ml > 0) {
+      fill_percent = Math.round((state.stomach_current_ml / capacity_ml) * 100);
+    }
+
+    let belly_status = "Flat (0-5%)";
+    let mobility = "Normal";
+    if (fill_percent > 160) { belly_status = "Critical"; mobility = "Immobile"; }
+    else if (fill_percent >= 126) { belly_status = "Strained"; mobility = "Crawl only"; }
+    else if (fill_percent >= 96) { belly_status = "Overfull"; mobility = "Half speed, stumbles"; }
+    else if (fill_percent >= 61) { belly_status = "Same-Size"; mobility = "Slowed, clumsy"; }
+    else if (fill_percent >= 49) { belly_status = "Triplets"; }
+    else if (fill_percent >= 36) { belly_status = "Twins"; }
+    else if (fill_percent >= 21) { belly_status = "Full-Term"; }
+    else if (fill_percent >= 13) { belly_status = "Bloated"; }
+    else if (fill_percent >= 6) { belly_status = "Potbelly"; }
+    
+    const injection = `\n\n[OOC SYSTEM NOTE: The user's current physical state is -> Stomach Capacity: ${capacity_L.toFixed(2)}L | Current Volume: ${state.stomach_current_ml}ml | Status: ${belly_status} | Mobility: ${mobility} | Cash: ${state.cash}]`;
+
+    // 3. Attach it to your message
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage) {
+        lastMessage.content += injection;
+    }
+
+    spindle.toast.info("⚙️ Bio-Tracker math engine processed!");
+    return messages;
+  });
   
-  // 1. Inject the CSS for our slide-out panel
-  const style = document.createElement('style');
-  style.innerHTML = `
-    #bio-tracker-panel {
-      position: fixed;
-      top: 0;
-      right: -400px; /* Hidden off-screen by default */
-      width: 350px;
-      height: 100vh;
-      background: #1a1a1a;
-      color: #e0e0e0;
-      z-index: 10000;
-      transition: right 0.3s ease-in-out;
-      box-shadow: -5px 0 20px rgba(0,0,0,0.6);
-      display: flex;
-      flex-direction: column;
-      font-family: system-ui, -apple-system, sans-serif;
-      border-left: 1px solid #333;
-    }
-    #bio-tracker-panel.open {
-      right: 0; /* Slide in */
-    }
-    .bt-header {
-      background: #2a2a2a; padding: 15px 20px; font-size: 18px; font-weight: bold;
-      display: flex; justify-content: space-between; align-items: center;
-      border-bottom: 2px solid #ff4444;
-    }
-    .bt-close { cursor: pointer; color: #ff4444; font-size: 20px; }
-    .bt-content { padding: 15px; overflow-y: auto; flex-grow: 1; }
-    .bt-section { margin-bottom: 20px; background: #222; padding: 12px; border-radius: 8px; border: 1px solid #333; }
-    .bt-section h3 { margin: 0 0 12px 0; font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #333; padding-bottom: 5px; }
-    .bt-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
-    .bt-input { width: 70px; background: #111; border: 1px solid #444; color: #fff; padding: 4px 8px; border-radius: 4px; text-align: right; }
-    .bt-textarea { width: 100%; box-sizing: border-box; background: #111; color: #fff; border: 1px solid #444; border-radius: 4px; padding: 8px; margin-top: 5px; resize: vertical; }
-    .bt-value { font-weight: bold; color: #ff4444; }
-    .bt-btn { width: 100%; padding: 10px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 8px; font-weight: bold; transition: background 0.2s; }
-    .bt-btn:hover { background: #444; }
-    .bt-btn.danger { background: #5a2020; border-color: #ff4444; }
-    .bt-btn.danger:hover { background: #7a2a2a; }
-  `;
-  document.head.appendChild(style);
-
-  // 2. Build the HTML structure for the panel
-  const panel = document.createElement('div');
-  panel.id = 'bio-tracker-panel';
-  panel.innerHTML = `
-    <div class="bt-header">
-      <span>🧬 Master Control</span>
-      <span class="bt-close" id="bt-close-btn">✖</span>
-    </div>
-    <div class="bt-content">
-      
-      <!-- Vitals & Bio -->
-      <div class="bt-section">
-        <h3>Vitals & Bio</h3>
-        <div class="bt-row"><span>Weight (kg):</span> <input class="bt-input" type="number" id="bt-weight" value="60"></div>
-        <div class="bt-row"><span>Height (cm):</span> <input class="bt-input" type="number" id="bt-height" value="160"></div>
-        <div class="bt-row"><span>Stomach (ml):</span> <input class="bt-input" type="number" id="bt-stom-cur" value="0"></div>
-        <div class="bt-row"><span>Capacity:</span> <span class="bt-value">115.20 L</span></div>
-        <div class="bt-row"><span>Belly Status:</span> <span class="bt-value" style="color:#aaa;">Flat (0-5%)</span></div>
-        <div class="bt-row"><span>Mobility:</span> <span class="bt-value" style="color:#aaa;">Normal</span></div>
-      </div>
-
-      <!-- Inventory & Wallet -->
-      <div class="bt-section">
-        <h3>Inventory</h3>
-        <div class="bt-row"><span>Cash:</span> <input class="bt-input" type="number" id="bt-cash" value="0"></div>
-        <div style="font-size: 14px; margin-top: 10px;">Pocket / Bag Contents:</div>
-        <textarea class="bt-textarea" rows="3" id="bt-inv">Empty</textarea>
-      </div>
-
-      <!-- Clothing -->
-      <div class="bt-section">
-        <h3>Clothing State</h3>
-        <div style="font-size: 14px;">Current Outfit & Constraints:</div>
-        <textarea class="bt-textarea" rows="2" id="bt-cloth">Standard civilian clothes. (Will tear if stretched past Twins size)</textarea>
-      </div>
-
-      <!-- Quick Actions -->
-      <div class="bt-section">
-        <h3>Quick Actions</h3>
-        <button class="bt-btn" id="bt-save-btn">💾 Sync Changes to AI</button>
-        <button class="bt-btn danger" id="bt-empty-btn">🚽 Force Empty Stomach</button>
-      </div>
-
-    </div>
-  `;
-  document.body.appendChild(panel);
-
-  // 3. Create the floating button to open the panel
-  const floatingBtn = document.createElement('div');
-  floatingBtn.innerText = '🧬 BIO';
-  Object.assign(floatingBtn.style, {
-    position: 'fixed', bottom: '80px', right: '20px', backgroundColor: '#ff4444', color: '#fff',
-    padding: '12px 18px', borderRadius: '30px', fontWeight: 'bold', cursor: 'pointer',
-    zIndex: '9999', boxShadow: '0 4px 8px rgba(0,0,0,0.3)', fontFamily: 'sans-serif'
-  });
-
-  // 4. Button Click Logic (Open / Close)
-  floatingBtn.addEventListener('click', () => {
-    panel.classList.add('open');
-    floatingBtn.style.display = 'none'; // Hide button when panel is open
-  });
-
-  document.getElementById('bt-close-btn')?.addEventListener('click', () => {
-    panel.classList.remove('open');
-    floatingBtn.style.display = 'block'; // Show button again
-  });
-
-  document.body.appendChild(floatingBtn);
+  interceptorRegistered = true;
+  spindle.toast.info("✅ Bio-Tracker hooked into chat!");
 }
+
+tryRegisterInterceptor();
+
+spindle.permissions.onChanged(({ permission, granted }) => {
+  if (permission === 'interceptor' && granted) {
+    tryRegisterInterceptor();
+  }
+});
