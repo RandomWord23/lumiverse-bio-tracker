@@ -2,7 +2,6 @@ import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 
 export function setup(ctx: SpindleFrontendContext) {
   
-  // 1. Inject the CSS
   const style = document.createElement('style');
   style.innerHTML = `
     #bio-tracker-panel {
@@ -33,7 +32,8 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
     .bt-input, .bt-textarea { background: #111; border: 1px solid #444; color: #fff; border-radius: 4px; padding: 6px; }
     .bt-input { width: 90px; text-align: right; }
-    .bt-input-wide { width: 65%; text-align: left; } /* New class for long descriptions */
+    .bt-input-wide { width: 65%; text-align: left; }
+    .bt-input-small { width: 50px; text-align: center; }
     .bt-input.full { width: 100%; text-align: left; margin-bottom: 10px; box-sizing: border-box; }
     .bt-textarea { width: 100%; box-sizing: border-box; resize: vertical; margin-bottom: 10px; }
     .bt-value { font-weight: bold; color: #ff4444; }
@@ -43,17 +43,14 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-dynamic-item { background: #222; border: 1px dashed #444; padding: 10px; border-radius: 6px; margin-bottom: 10px; position: relative; }
     .bt-remove-btn { position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; }
     .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
-    .bt-action-btn:hover { background: #444; }
-    .bt-action-btn.danger { background: #5a2020; border-color: #ff4444; }
   `;
   document.head.appendChild(style);
 
-  // 2. Build the HTML structure
   const panel = document.createElement('div');
   panel.id = 'bio-tracker-panel';
   panel.innerHTML = `
     <div class="bt-header">
-      <span>🧬 Master Control</span>
+      <span>📋 Character Sheet</span>
       <span class="bt-close" id="bt-close-btn">✖</span>
     </div>
     
@@ -72,9 +69,7 @@ export function setup(ctx: SpindleFrontendContext) {
           <button class="bt-sub-btn" data-sub="sub-skills">Skills & Traits</button>
         </div>
         
-        <!-- Appearance Sub-Tab -->
         <div id="sub-app" class="bt-sub-content active">
-          
           <div class="bt-section-title" style="margin-top: 0;">IDENTITY & BASE</div>
           <input type="text" class="bt-input full" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide" id="bt-species"></div>
@@ -96,15 +91,39 @@ export function setup(ctx: SpindleFrontendContext) {
           <div class="bt-row"><span>Build:</span> <input type="text" class="bt-input bt-input-wide" id="bt-build"></div>
           <div class="bt-row"><span>Height (cm):</span> <input type="number" class="bt-input" id="bt-height" value="160"></div>
           <div class="bt-row"><span>Weight (kg):</span> <input type="number" class="bt-input" id="bt-weight" value="60"></div>
-          <div class="bt-row"><span>Breasts:</span> <input type="text" class="bt-input bt-input-wide" id="bt-breasts"></div>
-          <div class="bt-row"><span>Ass:</span> <input type="text" class="bt-input bt-input-wide" id="bt-ass"></div>
-          <div class="bt-row"><span>Penis:</span> <input type="text" class="bt-input bt-input-wide" id="bt-penis"></div>
-          <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide" id="bt-vagina"></div>
-          <textarea class="bt-textarea" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
+          
+          <!-- Dynamic Breast ML to Cup -->
+          <div class="bt-row">
+            <span>Breasts (ml):</span> 
+            <div style="display:flex; align-items:center; width: 65%;">
+              <input type="number" class="bt-input" style="flex:1;" id="bt-breast-ml" value="0">
+              <span id="bt-breast-cup" style="width: 45px; text-align:right; font-weight:bold; color:#ff4444;">AA</span>
+            </div>
+          </div>
+          <input type="text" class="bt-input full" placeholder="Breast descriptor (e.g., firm, perky)" id="bt-breast-desc">
 
+          <!-- Ass Measurement -->
+          <div class="bt-row">
+            <span>Ass (Hips cm):</span>
+            <input type="number" class="bt-input bt-input-wide" id="bt-ass-cm" value="90">
+          </div>
+          <input type="text" class="bt-input full" placeholder="Ass descriptor (e.g., plump, wide)" id="bt-ass-desc">
+
+          <!-- Penis Measurement -->
+          <div class="bt-row">
+            <span>Penis (L/G cm):</span> 
+            <div style="display:flex; justify-content:space-between; width: 65%;">
+              <input type="number" class="bt-input bt-input-small" placeholder="Len" id="bt-penis-len">
+              <span style="color:#666; margin-top:5px;">x</span>
+              <input type="number" class="bt-input bt-input-small" placeholder="Girth" id="bt-penis-girth">
+            </div>
+          </div>
+          <input type="text" class="bt-input full" placeholder="Penis descriptor (e.g., uncut, veiny)" id="bt-penis-desc">
+          
+          <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide" placeholder="Descriptor..." id="bt-vagina"></div>
+          <textarea class="bt-textarea" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
         </div>
 
-        <!-- Skills & Traits Sub-Tab -->
         <div id="sub-skills" class="bt-sub-content">
           <div style="margin-bottom: 20px;">
             <div class="bt-row"><span style="font-weight:bold;">Skills</span> <button class="bt-add-btn" id="add-skill-btn">+ Add</button></div>
@@ -137,46 +156,41 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Mobility:</span> <span class="bt-value" style="color:#aaa;">Normal</span></div>
         <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
-        <button class="bt-action-btn danger" id="bt-empty-btn">🚽 Force Empty Stomach</button>
       </div>
 
     </div>
   `;
   document.body.appendChild(panel);
 
-  // 3. Floating Button with Draggable Logic
+  // Floating Button (Clipboard Icon)
   const floatingBtn = document.createElement('div');
-  floatingBtn.innerText = '🧬 BIO';
+  floatingBtn.innerText = '📋';
   Object.assign(floatingBtn.style, {
-    position: 'fixed', bottom: '80px', right: '20px', backgroundColor: '#ff4444', color: '#fff',
-    padding: '12px 18px', borderRadius: '30px', fontWeight: 'bold', cursor: 'pointer', zIndex: '9999',
-    userSelect: 'none', transition: 'opacity 0.3s ease', opacity: '0.4'
+    position: 'fixed', bottom: '80px', right: '20px', backgroundColor: '#333', color: '#fff',
+    padding: '12px', borderRadius: '50%', fontSize: '24px', cursor: 'pointer', zIndex: '9999',
+    userSelect: 'none', transition: 'opacity 0.3s ease', opacity: '0.4', border: '2px solid #555'
   });
   document.body.appendChild(floatingBtn);
 
-  // Auto-fade out when not in use
+  // Auto-fade
   let fadeTimeout: any;
   const resetFade = () => {
     floatingBtn.style.opacity = '1';
     clearTimeout(fadeTimeout);
     fadeTimeout = setTimeout(() => { floatingBtn.style.opacity = '0.4'; }, 3000);
   };
-  resetFade(); // Init
+  resetFade();
 
-  // Dragging variables
-  let isDragging = false;
-  let hasMoved = false;
+  // Dragging logic
+  let isDragging = false, hasMoved = false;
   let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
 
-  // Touch logic for mobile (Blackview BV8800)
   floatingBtn.addEventListener('touchstart', (e) => {
     isDragging = true; hasMoved = false; resetFade();
     const touch = e.touches[0];
     const rect = floatingBtn.getBoundingClientRect();
     startX = touch.clientX; startY = touch.clientY;
     initialLeft = rect.left; initialTop = rect.top;
-    
-    // Switch to absolute positioning for dragging
     floatingBtn.style.bottom = 'auto'; floatingBtn.style.right = 'auto';
     floatingBtn.style.left = initialLeft + 'px'; floatingBtn.style.top = initialTop + 'px';
   }, { passive: true });
@@ -184,16 +198,13 @@ export function setup(ctx: SpindleFrontendContext) {
   document.addEventListener('touchmove', (e) => {
     if (!isDragging) return;
     const touch = e.touches[0];
-    const dx = touch.clientX - startX;
-    const dy = touch.clientY - startY;
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasMoved = true; // threshold to prevent accidental drags
-    floatingBtn.style.left = (initialLeft + dx) + 'px';
-    floatingBtn.style.top = (initialTop + dy) + 'px';
+    if (Math.abs(touch.clientX - startX) > 5 || Math.abs(touch.clientY - startY) > 5) hasMoved = true;
+    floatingBtn.style.left = (initialLeft + (touch.clientX - startX)) + 'px';
+    floatingBtn.style.top = (initialTop + (touch.clientY - startY)) + 'px';
   }, { passive: true });
 
   document.addEventListener('touchend', () => { isDragging = false; resetFade(); });
 
-  // Open menu on tap (only if not dragged)
   floatingBtn.addEventListener('click', () => {
     if (!hasMoved) { panel.classList.add('open'); floatingBtn.style.display = 'none'; }
   });
@@ -202,16 +213,7 @@ export function setup(ctx: SpindleFrontendContext) {
     panel.classList.remove('open'); floatingBtn.style.display = 'block'; resetFade();
   });
 
-  // Attempt to hide on non-chat pages
-  setInterval(() => {
-    if (!panel.classList.contains('open')) {
-      // If URL doesn't look like a chat page, hide the button (Lumiverse check)
-      const isChat = window.location.href.includes('chat') || document.querySelector('.chat-messages, [data-chat-id]');
-      floatingBtn.style.display = isChat ? 'block' : 'none';
-    }
-  }, 2000);
-
-  // 4. Tab Switching & Dynamic Buttons (same as before)
+  // Tab Logic
   panel.querySelectorAll('.bt-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       panel.querySelectorAll('.bt-tab-btn, .bt-tab-content').forEach(el => el.classList.remove('active'));
@@ -226,6 +228,24 @@ export function setup(ctx: SpindleFrontendContext) {
       (e.target as HTMLElement).classList.add('active');
       document.getElementById((e.target as HTMLElement).dataset.sub!)?.classList.add('active');
     });
+  });
+
+  // Dynamic ML to Cup Calculator
+  const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
+  const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
+  
+  breastInput?.addEventListener('input', () => {
+    const ml = parseInt(breastInput.value) || 0;
+    let cup = "AA";
+    if (ml >= 1000) cup = "H+";
+    else if (ml >= 800) cup = "G";
+    else if (ml >= 650) cup = "F";
+    else if (ml >= 550) cup = "DD";
+    else if (ml >= 450) cup = "D";
+    else if (ml >= 350) cup = "C";
+    else if (ml >= 250) cup = "B";
+    else if (ml >= 150) cup = "A";
+    breastCup.innerText = cup;
   });
 
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
