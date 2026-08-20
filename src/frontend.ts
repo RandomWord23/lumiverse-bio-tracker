@@ -242,13 +242,29 @@ export function setup(ctx: SpindleFrontendContext) {
   `;
   document.body.appendChild(panel);
 
+  // NEW FLOATING BUTTON STYLES (SQUARE)
   const floatingBtn = document.createElement('div');
   floatingBtn.innerText = '📋';
   Object.assign(floatingBtn.style, {
     position: 'fixed', bottom: '80px', right: '20px', backgroundColor: '#333', color: '#fff',
-    padding: '12px', borderRadius: '50%', fontSize: '24px', cursor: 'pointer', zIndex: '9999',
-    userSelect: 'none', transition: 'opacity 0.3s ease', opacity: '0.4', border: '2px solid #555'
+    width: '45px', height: '45px', display: 'flex', justifyContent: 'center', alignItems: 'center',
+    borderRadius: '10px', fontSize: '22px', cursor: 'pointer', zIndex: '9999',
+    userSelect: 'none', transition: 'opacity 0.3s ease', opacity: '0.4', border: '2px solid #555',
+    boxSizing: 'border-box'
   });
+  
+  // LOAD SAVED POSITION
+  const savedPos = localStorage.getItem('bio-tracker-btn-pos');
+  if (savedPos) {
+    try {
+      const pos = JSON.parse(savedPos);
+      floatingBtn.style.bottom = 'auto';
+      floatingBtn.style.right = 'auto';
+      floatingBtn.style.left = pos.x + 'px';
+      floatingBtn.style.top = pos.y + 'px';
+    } catch(e) {}
+  }
+  
   document.body.appendChild(floatingBtn);
 
   let fadeTimeout: any;
@@ -280,14 +296,24 @@ export function setup(ctx: SpindleFrontendContext) {
     floatingBtn.style.top = (initialTop + (touch.clientY - startY)) + 'px';
   }, { passive: true });
 
-  document.addEventListener('touchend', () => { isDragging = false; resetFade(); });
+  document.addEventListener('touchend', () => { 
+    if (isDragging) {
+      // SAVE POSITION
+      localStorage.setItem('bio-tracker-btn-pos', JSON.stringify({
+        x: parseFloat(floatingBtn.style.left),
+        y: parseFloat(floatingBtn.style.top)
+      }));
+    }
+    isDragging = false; 
+    resetFade(); 
+  });
 
   floatingBtn.addEventListener('click', () => {
     if (!hasMoved) { panel.classList.add('open'); floatingBtn.style.display = 'none'; }
   });
   
   document.getElementById('bt-close-btn')?.addEventListener('click', () => { 
-    panel.classList.remove('open'); floatingBtn.style.display = 'block'; resetFade();
+    panel.classList.remove('open'); floatingBtn.style.display = 'flex'; resetFade();
   });
 
   panel.querySelectorAll('.bt-tab-btn').forEach(btn => {
@@ -348,7 +374,6 @@ export function setup(ctx: SpindleFrontendContext) {
       else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000'; }
     }
 
-    // FIXED MOBILITY LOGIC (Total payload vs. Base Carry Limit)
     let overCapPct = ((stomTotal + bowelTotal) / baseStomMax) * 100;
     let mobEl = document.getElementById('bt-mobility');
     if (mobEl) {
@@ -404,7 +429,7 @@ export function setup(ctx: SpindleFrontendContext) {
     div.innerHTML = `
       <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Prey Description...">
+        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Prey Name / Species...">
       </div>
       <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
         <span>Status: <strong class="prey-status" style="color:#4CAF50;">Fully Conscious</strong></span>
@@ -413,6 +438,7 @@ export function setup(ctx: SpindleFrontendContext) {
         <span>Vol (L): <input type="number" class="bt-input stomach-vol" style="width: 50px;" value="0"></span>
         <span>Dig %: <input type="number" class="bt-input prey-dig-input" style="width: 40px;" value="0"></span>
       </div>
+      <textarea class="bt-textarea" rows="2" style="margin-bottom: 5px;" placeholder="Flavor / Action (e.g. thrashing, whimpering)..."></textarea>
       <textarea class="bt-textarea" rows="2" style="margin-bottom: 0;" placeholder="Bound Gear / Items..."></textarea>
     `;
     document.getElementById('stomach-container')?.appendChild(div);
@@ -432,7 +458,6 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('bowel-container')?.appendChild(div);
   });
 
-  // Re-bind old dynamic buttons
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'bt-dynamic-item';
     div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
