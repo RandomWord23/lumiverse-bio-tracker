@@ -340,20 +340,25 @@ export function setup(ctx: SpindleFrontendContext) {
     let bellyEl = document.getElementById('bt-belly-status');
     if (bellyEl) {
       if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.style.color = '#aaa'; }
-      else if (stomPct <= 25) { bellyEl.innerText = 'Pudge'; bellyEl.style.color = '#fff'; }
-      else if (stomPct <= 50) { bellyEl.innerText = 'Distended'; bellyEl.style.color = '#ffeb3b'; }
-      else if (stomPct <= 75) { bellyEl.innerText = 'Stuffed'; bellyEl.style.color = '#ff9800'; }
-      else if (stomPct < 100) { bellyEl.innerText = 'Overstuffed'; bellyEl.style.color = '#ff5722'; }
-      else { bellyEl.innerText = 'Bursting / Critical'; bellyEl.style.color = '#ff4444'; }
+      else if (stomPct <= 12) { bellyEl.innerText = 'Potbelly'; bellyEl.style.color = '#fff'; }
+      else if (stomPct <= 20) { bellyEl.innerText = 'Bloated'; bellyEl.style.color = '#ffeb3b'; }
+      else if (stomPct <= 35) { bellyEl.innerText = 'Full-Term'; bellyEl.style.color = '#ff9800'; }
+      else if (stomPct <= 48) { bellyEl.innerText = 'Twins'; bellyEl.style.color = '#ff9800'; }
+      else if (stomPct <= 60) { bellyEl.innerText = 'Triplets'; bellyEl.style.color = '#ff5722'; }
+      else if (stomPct <= 95) { bellyEl.innerText = 'Same-Size'; bellyEl.style.color = '#ff5722'; }
+      else if (stomPct <= 125) { bellyEl.innerText = 'Double-Size'; bellyEl.style.color = '#ff4444'; }
+      else if (stomPct <= 160) { bellyEl.innerText = 'Room-Filling'; bellyEl.style.color = '#ff4444'; }
+      else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000'; }
     }
 
+    // Mobility is based on overcapacity effects (totalPct over 100)
     let totalPct = ((stomTotal + bowelTotal) / (baseStomMax + baseBowelMax)) * 100;
     let mobEl = document.getElementById('bt-mobility');
     if (mobEl) {
-      if (totalPct <= 20) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
-      else if (totalPct <= 50) { mobEl.innerText = 'Sluggish'; mobEl.style.color = '#ffeb3b'; }
-      else if (totalPct <= 75) { mobEl.innerText = 'Waddling'; mobEl.style.color = '#ff9800'; }
-      else if (totalPct < 100) { mobEl.innerText = 'Heavily Encumbered'; mobEl.style.color = '#ff5722'; }
+      if (totalPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
+      else if (totalPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b'; }
+      else if (totalPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800'; }
+      else if (totalPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722'; }
       else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444'; }
     }
   }
@@ -369,7 +374,7 @@ export function setup(ctx: SpindleFrontendContext) {
     if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
       updateCapacities();
     }
-    // Bug Fix: Use .closest('.vital-slot') to reliably target the Status span
+    // Fixed Targeting Logic for the Status span
     if (target.classList.contains('prey-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0;
       const statusSpan = target.closest('.vital-slot')?.querySelector('.prey-status') as HTMLElement;
