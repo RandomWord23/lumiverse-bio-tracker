@@ -32,15 +32,35 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-add-btn { background: #2a2a2a; color: #4CAF50; border: 1px solid #333; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; font-size: 11px; }
     .bt-dynamic-item { background: #222; border: 1px dashed #444; padding: 10px; border-radius: 6px; margin-bottom: 10px; position: relative; }
     .bt-remove-btn { position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; }
-    .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
+    .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; transition: background 0.2s; }
     
     .slot-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 2px; display: block; }
     .flex-row { display: flex; justify-content: space-between; align-items: center; }
     
     .vital-slot { background: #222; border: 1px dashed #555; border-radius: 6px; padding: 8px; margin-bottom: 8px; position: relative; }
     .vital-remove { position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ff4444; cursor: pointer; font-size: 14px; }
+    
+    /* MOBILE PREVIEW MODAL */
+    #bt-preview-modal { position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: #111; border: 2px solid #ff4444; border-radius: 8px; z-index: 100000; display: none; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+    #bt-preview-header { background: #222; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; color: #ff4444; border-bottom: 1px solid #444; }
+    #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+    #bt-preview-close { background: #ff4444; color: white; border: none; padding: 10px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
   `;
   document.head.appendChild(style);
+
+  // BUILD PREVIEW MODAL
+  const previewModal = document.createElement('div');
+  previewModal.id = 'bt-preview-modal';
+  previewModal.innerHTML = `
+    <div id="bt-preview-header"><span>XML Data Output</span></div>
+    <div id="bt-preview-content"></div>
+    <button id="bt-preview-close">Close Preview</button>
+  `;
+  document.body.appendChild(previewModal);
+
+  document.getElementById('bt-preview-close')?.addEventListener('click', () => {
+    previewModal.style.display = 'none';
+  });
 
   const panel = document.createElement('div');
   panel.id = 'bio-tracker-panel';
@@ -66,61 +86,59 @@ export function setup(ctx: SpindleFrontendContext) {
         
         <div id="sub-app" class="bt-sub-content active">
           <div class="bt-section-title" style="margin-top: 0;">IDENTITY & BASE</div>
-          <input type="text" class="bt-input full" placeholder="Character Name" id="bt-name">
-          <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide" id="bt-species"></div>
-          <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide" id="bt-age"></div>
-          
+          <input type="text" class="bt-input full bt-scrape" data-id="Name" placeholder="Character Name" id="bt-name">
+          <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Species" id="bt-species"></div>
+          <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Age" id="bt-age"></div>
           <div class="bt-row">
             <span>Gender:</span> 
             <div style="display:flex; align-items:center; width: 65%;">
-              <input type="text" class="bt-input" style="flex:1;" id="bt-gender">
+              <input type="text" class="bt-input bt-scrape" data-id="Gender" style="flex:1;" id="bt-gender">
               <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
             </div>
           </div>
-          
-          <div class="bt-row"><span>Pronouns:</span> <input type="text" class="bt-input bt-input-wide" id="bt-pronouns"></div>
-          <div class="bt-row"><span>Voice:</span> <input type="text" class="bt-input bt-input-wide" id="bt-voice"></div>
-          <div class="bt-row"><span>Scent:</span> <input type="text" class="bt-input bt-input-wide" id="bt-scent"></div>
+          <div class="bt-row"><span>Pronouns:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Pronouns" id="bt-pronouns"></div>
+          <div class="bt-row"><span>Voice:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Voice" id="bt-voice"></div>
+          <div class="bt-row"><span>Scent:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Scent" id="bt-scent"></div>
 
           <div class="bt-section-title">HEAD & FACE</div>
-          <div class="bt-row"><span>Hair:</span> <input type="text" class="bt-input bt-input-wide" id="bt-hair"></div>
-          <div class="bt-row"><span>Eyes:</span> <input type="text" class="bt-input bt-input-wide" id="bt-eyes"></div>
-          <div class="bt-row"><span>Mouth:</span> <input type="text" class="bt-input bt-input-wide" id="bt-mouth"></div>
-          <div class="bt-row"><span>Skin:</span> <input type="text" class="bt-input bt-input-wide" id="bt-skin"></div>
-          <div class="bt-row"><span>Makeup:</span> <input type="text" class="bt-input bt-input-wide" id="bt-makeup"></div>
-          <textarea class="bt-textarea" rows="2" placeholder="Distinct facial features..." id="bt-features"></textarea>
+          <div class="bt-row"><span>Hair:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Hair" id="bt-hair"></div>
+          <div class="bt-row"><span>Eyes:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Eyes" id="bt-eyes"></div>
+          <div class="bt-row"><span>Mouth:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Mouth" id="bt-mouth"></div>
+          <div class="bt-row"><span>Skin:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Skin" id="bt-skin"></div>
+          <div class="bt-row"><span>Makeup:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Makeup" id="bt-makeup"></div>
+          <textarea class="bt-textarea bt-scrape" data-id="Features" rows="2" placeholder="Distinct facial features..." id="bt-features"></textarea>
 
           <div class="bt-section-title">BODY & ANATOMY</div>
-          <div class="bt-row"><span>Build:</span> <input type="text" class="bt-input bt-input-wide" placeholder="e.g. athletic, slender" id="bt-build"></div>
-          <div class="bt-row"><span>Height (cm):</span> <input type="number" class="bt-input" id="bt-height" value="160"></div>
-          <div class="bt-row"><span>Weight (kg):</span> <input type="number" class="bt-input" id="bt-weight" value="60"></div>
+          <div class="bt-row"><span>Build:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Build" placeholder="e.g. athletic, slender" id="bt-build"></div>
+          <div class="bt-row"><span>Height (cm):</span> <input type="number" class="bt-input bt-scrape" data-id="Height_cm" id="bt-height" value="160"></div>
+          <div class="bt-row"><span>Weight (kg):</span> <input type="number" class="bt-input bt-scrape" data-id="Weight_kg" id="bt-weight" value="60"></div>
           
           <div class="bt-row">
             <span>Breasts (ml):</span> 
             <div style="display:flex; align-items:center; width: 65%;">
-              <input type="number" class="bt-input" style="flex:1;" id="bt-breast-ml" value="0">
+              <input type="number" class="bt-input bt-scrape" data-id="BreastVolume_ml" style="flex:1;" id="bt-breast-ml" value="0">
               <span id="bt-breast-cup" style="width: 45px; text-align:right; font-weight:bold; color:#ff4444;">AA</span>
             </div>
           </div>
-          <input type="text" class="bt-input full" placeholder="Breast descriptor (e.g., firm, perky)" id="bt-breast-desc">
+          <input type="text" class="bt-input full bt-scrape" data-id="BreastShape" placeholder="Breast descriptor (e.g., firm, perky)" id="bt-breast-desc">
 
-          <div class="bt-row"><span>Ass (Hips cm):</span> <input type="number" class="bt-input bt-input-wide" id="bt-ass-cm" value="90"></div>
-          <input type="text" class="bt-input full" placeholder="Ass descriptor (e.g., plump, wide)" id="bt-ass-desc">
+          <div class="bt-row"><span>Ass (Hips cm):</span> <input type="number" class="bt-input bt-input-wide bt-scrape" data-id="Hips_cm" id="bt-ass-cm" value="90"></div>
+          <input type="text" class="bt-input full bt-scrape" data-id="AssShape" placeholder="Ass descriptor (e.g., plump, wide)" id="bt-ass-desc">
 
           <div class="bt-row">
             <span>Penis (L/G cm):</span> 
             <div style="display:flex; justify-content:space-between; width: 65%;">
-              <input type="number" class="bt-input bt-input-small" placeholder="Len" id="bt-penis-len">
+              <input type="number" class="bt-input bt-input-small bt-scrape" data-id="PenisLength_cm" placeholder="Len" id="bt-penis-len">
               <span style="color:#666; margin-top:5px;">x</span>
-              <input type="number" class="bt-input bt-input-small" placeholder="Girth" id="bt-penis-girth">
+              <input type="number" class="bt-input bt-input-small bt-scrape" data-id="PenisGirth_cm" placeholder="Girth" id="bt-penis-girth">
             </div>
           </div>
-          <input type="text" class="bt-input full" placeholder="Penis descriptor (e.g., uncut, veiny)" id="bt-penis-desc">
+          <input type="text" class="bt-input full bt-scrape" data-id="PenisShape" placeholder="Penis descriptor (e.g., uncut, veiny)" id="bt-penis-desc">
           
-          <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide" placeholder="Descriptor..." id="bt-vagina"></div>
+          <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Vagina" placeholder="Descriptor..." id="bt-vagina"></div>
           
           <div style="font-size: 13px; margin-top: 15px; margin-bottom: 5px; color: #888;">Markings & Scars:</div>
-          <textarea class="bt-textarea" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
+          <textarea class="bt-textarea bt-scrape" data-id="ScarsMarkings" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
         </div>
 
         <div id="sub-skills" class="bt-sub-content">
@@ -139,53 +157,67 @@ export function setup(ctx: SpindleFrontendContext) {
       <div id="tab-inv" class="bt-tab-content">
         <div class="bt-row">
           <span style="font-weight:bold; color:#ff4444;">WEALTH</span>
-          <select id="bt-currency-type" class="bt-select" style="width: 100px;">
+          <select id="bt-currency-type" class="bt-select bt-scrape" data-id="CurrencySystem" style="width: 100px;">
             <option value="modern">Modern ($)</option>
             <option value="fantasy">Fantasy (G/S/C)</option>
           </select>
         </div>
-        <div id="currency-modern"><input type="number" class="bt-input full" id="bt-cash-modern" placeholder="Balance (e.g. 1500)"></div>
+        <div id="currency-modern"><input type="number" class="bt-input full bt-scrape" data-id="CashBalance" id="bt-cash-modern" placeholder="Balance (e.g. 1500)"></div>
         <div id="currency-fantasy" style="display:none; justify-content:space-between; gap:5px; margin-bottom:10px;">
-          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#ffd700; font-weight:bold;">G</span></div>
-          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#c0c0c0; font-weight:bold;">S</span></div>
-          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#cd7f32; font-weight:bold;">C</span></div>
+          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Gold" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#ffd700; font-weight:bold;">G</span></div>
+          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Silver" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#c0c0c0; font-weight:bold;">S</span></div>
+          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Copper" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#cd7f32; font-weight:bold;">C</span></div>
         </div>
         <hr style="border-color: #333; margin: 15px 0;">
         <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
           CLOTHING SLOTS
-          <select class="bt-select" id="bt-cloth-mode" style="width:110px; border-color:#ff4444;">
+          <select class="bt-select bt-scrape" data-id="ClothingMode" id="bt-cloth-mode" style="width:110px; border-color:#ff4444;">
             <option value="flavor">Mode: Flavor</option>
             <option value="hardcore">Mode: Hardcore</option>
           </select>
         </div>
-        <span class="slot-label">Head (Top)</span><input type="text" class="bt-input full" placeholder="Hats, Helmets, Hoods">
-        <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full" placeholder="Glasses, Goggles, Visors">
-        <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full" placeholder="Masks, Bandanas">
-        <span class="slot-label">Neck</span><input type="text" class="bt-input full" placeholder="Scarves, Gorgets, Chokers">
-        <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Bra, Binder, Undershirt">
-        <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Panties, Boxers, Loincloth">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="T-shirt, Blouse, Gambeson">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Sweater, Vest, Chainmail">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 3 - Outer)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Jacket, Coat, Cuirass">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Overcoat, Poncho, Power Armor">
-        <span class="slot-label">Hands (Layer 1)</span><input type="text" class="bt-input full" placeholder="Inner Gloves, Wraps">
-        <span class="slot-label">Hands (Layer 2)</span><input type="text" class="bt-input full" placeholder="Gauntlets, Thick Gloves">
-        <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Jeans, Leggings, Trousers">
-        <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Greaves, Chaps, Snow Pants">
-        <span class="slot-label">Feet (Layer 1)</span><input type="text" class="bt-input full" placeholder="Socks, Stockings">
-        <span class="slot-label">Feet (Layer 2)</span><input type="text" class="bt-input full" placeholder="Shoes, Boots, Sabatons">
-        <span class="slot-label">Jewelry</span><input type="text" class="bt-input full" placeholder="Rings, Amulets, Bracelets">
-        <span class="slot-label">Back</span><input type="text" class="bt-input full" placeholder="Backpack, Cape, Quiver">
-        <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
-        <input type="text" class="bt-input full" placeholder="Belt, Holster, Scabbard">
+        
+        <!-- We assign class 'bt-cloth-slot' to these items to group them -->
+        <span class="slot-label">Head (Top)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Top" placeholder="Hats, Helmets, Hoods">
+        <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Face" placeholder="Glasses, Goggles, Visors">
+        <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Lower" placeholder="Masks, Bandanas">
+        <span class="slot-label">Neck</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Neck" placeholder="Scarves, Gorgets, Chokers">
+        
+        <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Underwear Top" placeholder="Bra, Binder, Undershirt">
+        
+        <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Underwear Bottom" placeholder="Panties, Boxers, Loincloth">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Base" placeholder="T-shirt, Blouse, Gambeson">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Mid" placeholder="Sweater, Vest, Chainmail">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 3 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Outer" placeholder="Jacket, Coat, Cuirass">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Shell" placeholder="Overcoat, Poncho, Power Armor">
+        
+        <span class="slot-label">Hands (Layer 1)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Hands Base" placeholder="Inner Gloves, Wraps">
+        <span class="slot-label">Hands (Layer 2)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Hands Outer" placeholder="Gauntlets, Thick Gloves">
+        
+        <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs Base" placeholder="Jeans, Leggings, Trousers">
+        
+        <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs Outer" placeholder="Greaves, Chaps, Snow Pants">
+        
+        <span class="slot-label">Feet (Layer 1)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet Base" placeholder="Socks, Stockings">
+        <span class="slot-label">Feet (Layer 2)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet Outer" placeholder="Shoes, Boots, Sabatons">
+        <span class="slot-label">Jewelry</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Jewelry" placeholder="Rings, Amulets, Bracelets">
+        <span class="slot-label">Back</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Back" placeholder="Backpack, Cape, Quiver">
+        
+        <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Waist" placeholder="Belt, Holster, Scabbard">
+        
         <hr style="border-color: #333; margin: 15px 0;">
         <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
           <span>BACKPACK / POCKETS</span>
@@ -196,12 +228,11 @@ export function setup(ctx: SpindleFrontendContext) {
 
       <!-- VITALS TAB -->
       <div id="tab-vitals" class="bt-tab-content">
-        
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
-        <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input" id="bt-acid-level" value="0"></div>
-        <div class="bt-row"><span>Base Digestion (%/t):</span> <input type="number" class="bt-input" id="bt-dig-base" value="5"></div>
-        <div class="bt-row"><span>Acid Rise (%/t):</span> <input type="number" class="bt-input" id="bt-acid-rise" value="10"></div>
-        <div class="bt-row"><span>Capacity Multiplier:</span> <input type="number" class="bt-input" id="bt-cap-mult" step="0.1" value="1.0"></div>
+        <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input bt-scrape" data-id="CurrentAcidPct" id="bt-acid-level" value="0"></div>
+        <div class="bt-row"><span>Base Digestion (%/t):</span> <input type="number" class="bt-input bt-scrape" data-id="BaseDigestionRate" id="bt-dig-base" value="5"></div>
+        <div class="bt-row"><span>Acid Rise (%/t):</span> <input type="number" class="bt-input bt-scrape" data-id="AcidRiseRate" id="bt-acid-rise" value="10"></div>
+        <div class="bt-row"><span>Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="CapacityMultiplier" id="bt-cap-mult" step="0.1" value="1.0"></div>
 
         <hr style="border-color: #333; margin: 15px 0;">
 
@@ -242,7 +273,6 @@ export function setup(ctx: SpindleFrontendContext) {
   `;
   document.body.appendChild(panel);
 
-  // NEW FLOATING BUTTON STYLES (SQUARE)
   const floatingBtn = document.createElement('div');
   floatingBtn.innerText = '📋';
   Object.assign(floatingBtn.style, {
@@ -253,18 +283,14 @@ export function setup(ctx: SpindleFrontendContext) {
     boxSizing: 'border-box'
   });
   
-  // LOAD SAVED POSITION
   const savedPos = localStorage.getItem('bio-tracker-btn-pos');
   if (savedPos) {
     try {
       const pos = JSON.parse(savedPos);
-      floatingBtn.style.bottom = 'auto';
-      floatingBtn.style.right = 'auto';
-      floatingBtn.style.left = pos.x + 'px';
-      floatingBtn.style.top = pos.y + 'px';
+      floatingBtn.style.bottom = 'auto'; floatingBtn.style.right = 'auto';
+      floatingBtn.style.left = pos.x + 'px'; floatingBtn.style.top = pos.y + 'px';
     } catch(e) {}
   }
-  
   document.body.appendChild(floatingBtn);
 
   let fadeTimeout: any;
@@ -298,14 +324,11 @@ export function setup(ctx: SpindleFrontendContext) {
 
   document.addEventListener('touchend', () => { 
     if (isDragging) {
-      // SAVE POSITION
       localStorage.setItem('bio-tracker-btn-pos', JSON.stringify({
-        x: parseFloat(floatingBtn.style.left),
-        y: parseFloat(floatingBtn.style.top)
+        x: parseFloat(floatingBtn.style.left), y: parseFloat(floatingBtn.style.top)
       }));
     }
-    isDragging = false; 
-    resetFade(); 
+    isDragging = false; resetFade(); 
   });
 
   floatingBtn.addEventListener('click', () => {
@@ -332,6 +355,7 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
+  // UI UPDATE LOGIC
   function updateCapacities() {
     const height = parseFloat((document.getElementById('bt-height') as HTMLInputElement).value) || 160;
     const weight = parseFloat((document.getElementById('bt-weight') as HTMLInputElement).value) || 60;
@@ -391,9 +415,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
   panel.addEventListener('input', (e) => {
     const target = e.target as HTMLElement;
-    if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
-      updateCapacities();
-    }
+    if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) { updateCapacities(); }
     if (target.classList.contains('prey-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0;
       const statusSpan = target.closest('.vital-slot')?.querySelector('.prey-status') as HTMLElement;
@@ -403,89 +425,187 @@ export function setup(ctx: SpindleFrontendContext) {
         else if (val >= 80) { text = 'Unconscious'; color = '#999'; }
         else if (val >= 70) { text = 'Drowsy'; color = '#ffeb3b'; }
         else if (val >= 50) { text = 'Conscious'; color = '#ff9800'; }
-        statusSpan.innerText = text;
-        statusSpan.style.color = color;
+        statusSpan.innerText = text; statusSpan.style.color = color;
       }
     }
   });
 
+  // DYNAMIC ADD BUTTONS
   document.getElementById('add-food-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'vital-slot';
+    const div = document.createElement('div'); div.className = 'vital-slot is-food';
     div.innerHTML = `
       <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Food/Drink Name...">
+        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Food/Drink Name...">
       </div>
       <div class="flex-row">
-        <span>Vol (L): <input type="number" class="bt-input stomach-vol" style="width: 50px;" value="0"></span>
-        <span>Dig %: <input type="number" class="bt-input" style="width: 40px;" value="0"></span>
+        <span>Vol (L): <input type="number" class="bt-input stomach-vol v-vol" style="width: 50px;" value="0"></span>
+        <span>Dig %: <input type="number" class="bt-input v-dig" style="width: 40px;" value="0"></span>
       </div>
     `;
     document.getElementById('stomach-container')?.appendChild(div);
   });
 
   document.getElementById('add-prey-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'vital-slot'; div.style.borderColor = '#994444';
+    const div = document.createElement('div'); div.className = 'vital-slot is-prey'; div.style.borderColor = '#994444';
     div.innerHTML = `
       <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Prey Name / Species...">
+        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Prey Name / Species...">
       </div>
       <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
         <span>Status: <strong class="prey-status" style="color:#4CAF50;">Fully Conscious</strong></span>
       </div>
       <div class="flex-row" style="margin-bottom: 5px;">
-        <span>Vol (L): <input type="number" class="bt-input stomach-vol" style="width: 50px;" value="0"></span>
-        <span>Dig %: <input type="number" class="bt-input prey-dig-input" style="width: 40px;" value="0"></span>
+        <span>Vol (L): <input type="number" class="bt-input stomach-vol v-vol" style="width: 50px;" value="0"></span>
+        <span>Dig %: <input type="number" class="bt-input prey-dig-input v-dig" style="width: 40px;" value="0"></span>
       </div>
-      <textarea class="bt-textarea" rows="2" style="margin-bottom: 5px;" placeholder="Flavor / Action (e.g. thrashing, whimpering)..."></textarea>
-      <textarea class="bt-textarea" rows="2" style="margin-bottom: 0;" placeholder="Bound Gear / Items..."></textarea>
+      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Flavor / Action (e.g. thrashing, whimpering)..."></textarea>
+      <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0;" placeholder="Bound Gear / Items..."></textarea>
     `;
     document.getElementById('stomach-container')?.appendChild(div);
   });
 
   document.getElementById('add-remains-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'vital-slot'; div.style.borderColor = '#8b6b4a';
+    const div = document.createElement('div'); div.className = 'vital-slot is-remains'; div.style.borderColor = '#8b6b4a';
     div.innerHTML = `
       <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input" style="flex:1; text-align:left;" placeholder="Waste / Remains Name...">
+        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Waste / Remains Name...">
       </div>
       <div class="flex-row">
-        <span>Vol (L): <input type="number" class="bt-input bowel-vol" style="width: 50px;" value="0"></span>
+        <span>Vol (L): <input type="number" class="bt-input bowel-vol v-vol" style="width: 50px;" value="0"></span>
       </div>
     `;
     document.getElementById('bowel-container')?.appendChild(div);
   });
 
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'bt-dynamic-item';
-    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
+    const div = document.createElement('div'); div.className = 'bt-dynamic-item dyn-skill';
+    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full d-name" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input d-lvl" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea>`;
     document.getElementById('skills-container')?.appendChild(div);
   });
   document.getElementById('add-trait-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'bt-dynamic-item';
-    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
+    const div = document.createElement('div'); div.className = 'bt-dynamic-item dyn-trait';
+    div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full d-name" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea>`;
     document.getElementById('traits-container')?.appendChild(div);
   });
   document.getElementById('add-inv-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'bt-row'; div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;';
-    div.innerHTML = `<input type="number" class="bt-input" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1"><input type="text" class="bt-input full" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name..."><button style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;" onclick="this.parentElement.remove()">✖</button>`;
+    const div = document.createElement('div'); div.className = 'bt-row dyn-inv'; div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;';
+    div.innerHTML = `<input type="number" class="bt-input d-qty" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1"><input type="text" class="bt-input full d-name" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name..."><button style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;" onclick="this.parentElement.remove()">✖</button>`;
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-  const currencyType = document.getElementById('bt-currency-type') as HTMLSelectElement;
-  const currencyModern = document.getElementById('currency-modern');
-  const currencyFantasy = document.getElementById('currency-fantasy');
-  if (currencyType && currencyModern && currencyFantasy) {
-    currencyType.addEventListener('change', (e) => {
-      if ((e.target as HTMLSelectElement).value === 'fantasy') {
-        currencyModern.style.display = 'none'; currencyFantasy.style.display = 'flex';
-      } else {
-        currencyModern.style.display = 'block'; currencyFantasy.style.display = 'none';
+  // THE SCRAPER & XML GENERATOR
+  document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
+    
+    // 1. Gather all basic inputs with a 'bt-scrape' class
+    let xml = \`<CharacterSheet>\\n  <BaseStats>\\n\`;
+    document.querySelectorAll('.bt-scrape').forEach(el => {
+      const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      const val = input.value.trim();
+      const id = input.getAttribute('data-id');
+      if (val !== '' && val !== '0' && id) {
+        xml += \`    <\${id}>\${val}</\${id}>\\n\`;
       }
     });
-  }
+    xml += \`  </BaseStats>\\n\\n  <Clothing>\\n\`;
+    
+    // 2. Gather Clothing
+    document.querySelectorAll('.bt-cloth-slot').forEach(el => {
+      const input = el as HTMLInputElement;
+      const val = input.value.trim();
+      const slot = input.getAttribute('data-slot');
+      if (val !== '') {
+        // Find if there is a flex dropdown next to it
+        const flexEl = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement;
+        const flexStr = flexEl ? \` elasticity="\${flexEl.value}"\` : '';
+        xml += \`    <Equip slot="\${slot}"\${flexStr}>\${val}</Equip>\\n\`;
+      }
+    });
+    xml += \`  </Clothing>\\n\\n  <Backpack>\\n\`;
+    
+    // 3. Gather Backpack
+    document.querySelectorAll('.dyn-inv').forEach(el => {
+      const qty = (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() || '1';
+      const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
+      if(name) xml += \`    <Item qty="\${qty}">\${name}</Item>\\n\`;
+    });
+    xml += \`  </Backpack>\\n\\n  <SkillsAndTraits>\\n\`;
+    
+    // 4. Gather Skills
+    document.querySelectorAll('.dyn-skill').forEach(el => {
+      const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
+      const lvl = (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() || '1';
+      const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim();
+      if(name) xml += \`    <Skill name="\${name}" level="\${lvl}">\${desc}</Skill>\\n\`;
+    });
+    document.querySelectorAll('.dyn-trait').forEach(el => {
+      const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
+      const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim();
+      if(name) xml += \`    <Trait name="\${name}">\${desc}</Trait>\\n\`;
+    });
+    xml += \`  </SkillsAndTraits>\\n\\n  <DigestiveTract>\\n\`;
+    
+    // 5. Vital Status Logic (Read directly from the UI elements)
+    const bellyStatus = document.getElementById('bt-belly-status')?.innerText || 'Flat';
+    const mobility = document.getElementById('bt-mobility')?.innerText || 'Agile';
+    const stomFill = document.getElementById('bt-stom-fill')?.innerText || '0 L';
+    const stomMax = document.getElementById('bt-stom-max-disp')?.innerText || '0 L';
+    const bowFill = document.getElementById('bt-bowel-fill')?.innerText || '0 L';
+    
+    xml += \`    <Status belly="\${bellyStatus}" mobility="\${mobility}" />\\n\`;
+    xml += \`    <Stomach current="\${stomFill}" max="\${stomMax}">\\n\`;
+    
+    // Gather Stomach items
+    document.querySelectorAll('#stomach-container .vital-slot').forEach(el => {
+      const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown';
+      const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0';
+      const dig = (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() || '0';
+      
+      if (el.classList.contains('is-prey')) {
+        const status = (el.querySelector('.prey-status') as HTMLElement)?.innerText || 'Unknown';
+        const flavor = (el.querySelector('.v-flavor') as HTMLTextAreaElement)?.value.trim();
+        const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim();
+        xml += \`      <Prey name="\${name}" volume_L="\${vol}" digestion="\${dig}%" lifeStatus="\${status}">\\n\`;
+        if (flavor) xml += \`        <ActionFlavor>\${flavor}</ActionFlavor>\\n\`;
+        if (gear) xml += \`        <BoundGear>\${gear}</BoundGear>\\n\`;
+        xml += \`      </Prey>\\n\`;
+      } else if (el.classList.contains('is-food')) {
+        xml += \`      <Food name="\${name}" volume_L="\${vol}" digestion="\${dig}%" />\\n\`;
+      }
+    });
+    
+    xml += \`    </Stomach>\\n    <Bowels current="\${bowFill}">\\n\`;
+    
+    // Gather Bowel items
+    document.querySelectorAll('#bowel-container .vital-slot').forEach(el => {
+      const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Waste';
+      const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0';
+      xml += \`      <Remains volume_L="\${vol}">\${name}</Remains>\\n\`;
+    });
+    
+    xml += \`    </Bowels>\\n  </DigestiveTract>\\n</CharacterSheet>\`;
+
+    // Visual Confirmation
+    const btn = document.getElementById('bt-sync-btn');
+    if (btn) {
+      btn.innerText = '✅ Data Scraped!';
+      btn.style.background = '#4CAF50';
+      setTimeout(() => {
+        btn.innerText = '💾 Sync Changes to AI';
+        btn.style.background = '#333';
+      }, 2000);
+    }
+
+    // SHOW MOBILE PREVIEW MODAL
+    const previewContent = document.getElementById('bt-preview-content');
+    if (previewContent) {
+      // Escape HTML tags so they display as text
+      previewContent.innerText = xml;
+      previewModal.style.display = 'flex';
+    }
+  });
 
   const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
   const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
