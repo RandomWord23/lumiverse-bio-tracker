@@ -34,7 +34,6 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-remove-btn { position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; }
     .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; }
     
-    /* Small label for inventory slots */
     .slot-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 2px; display: block; }
     .flex-row { display: flex; justify-content: space-between; align-items: center; }
   `;
@@ -133,7 +132,7 @@ export function setup(ctx: SpindleFrontendContext) {
         </div>
       </div>
 
-      <!-- NEW INVENTORY TAB -->
+      <!-- INVENTORY TAB -->
       <div id="tab-inv" class="bt-tab-content">
         
         <!-- Wealth System -->
@@ -166,19 +165,19 @@ export function setup(ctx: SpindleFrontendContext) {
           </select>
         </div>
 
-        <!-- Head & Neck (No Elasticity needed) -->
+        <!-- Head & Neck -->
         <span class="slot-label">Head (Top)</span><input type="text" class="bt-input full" placeholder="Hats, Helmets, Hoods">
         <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full" placeholder="Glasses, Goggles, Visors">
         <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full" placeholder="Masks, Bandanas">
         <span class="slot-label">Neck</span><input type="text" class="bt-input full" placeholder="Scarves, Gorgets, Chokers">
 
-        <!-- Underwear (Needs Elasticity) -->
+        <!-- Underwear -->
         <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Bra, Binder, Undershirt">
         <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Panties, Boxers, Loincloth">
 
-        <!-- Torso Layers (Needs Elasticity) -->
+        <!-- Torso Layers -->
         <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="T-shirt, Blouse, Gambeson">
         <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
@@ -188,29 +187,34 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Overcoat, Poncho, Power Armor">
 
-        <!-- Hands (No Elasticity) -->
+        <!-- Hands -->
         <span class="slot-label">Hands (Layer 1)</span><input type="text" class="bt-input full" placeholder="Inner Gloves, Wraps">
         <span class="slot-label">Hands (Layer 2)</span><input type="text" class="bt-input full" placeholder="Gauntlets, Thick Gloves">
 
-        <!-- Legs (Needs Elasticity) -->
+        <!-- Legs -->
         <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Jeans, Leggings, Trousers">
         <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Greaves, Chaps, Snow Pants">
 
-        <!-- Feet (No Elasticity) -->
+        <!-- Feet -->
         <span class="slot-label">Feet (Layer 1)</span><input type="text" class="bt-input full" placeholder="Socks, Stockings">
         <span class="slot-label">Feet (Layer 2)</span><input type="text" class="bt-input full" placeholder="Shoes, Boots, Sabatons">
 
-        <!-- Accessories & Extras (Waist needs elasticity) -->
+        <!-- Accessories & Extras -->
         <span class="slot-label">Jewelry</span><input type="text" class="bt-input full" placeholder="Rings, Amulets, Bracelets">
         <span class="slot-label">Back</span><input type="text" class="bt-input full" placeholder="Backpack, Cape, Quiver">
         <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full" placeholder="Belt, Holster, Scabbard">
 
         <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title">BACKPACK / POCKETS</div>
-        <textarea class="bt-textarea" rows="5" id="bt-pocket" placeholder="List loose items, weapons, or ground loot here..."></textarea>
+        
+        <!-- NEW SLOTTED BACKPACK SYSTEM -->
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>BACKPACK / POCKETS</span>
+          <button class="bt-add-btn" id="add-inv-btn">+ Add Item</button>
+        </div>
+        <div id="inv-container" style="margin-top: 10px;"></div>
       </div>
 
       <!-- VITALS TAB -->
@@ -276,7 +280,6 @@ export function setup(ctx: SpindleFrontendContext) {
     panel.classList.remove('open'); floatingBtn.style.display = 'block'; resetFade();
   });
 
-  // Tab Logic
   panel.querySelectorAll('.bt-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       panel.querySelectorAll('.bt-tab-btn, .bt-tab-content').forEach(el => el.classList.remove('active'));
@@ -293,7 +296,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
-  // Currency Toggle Logic
   const currencyType = document.getElementById('bt-currency-type') as HTMLSelectElement;
   const currencyModern = document.getElementById('currency-modern');
   const currencyFantasy = document.getElementById('currency-fantasy');
@@ -310,7 +312,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   }
 
-  // Breast ML logic
   const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
   const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
   breastInput?.addEventListener('input', () => {
@@ -327,7 +328,6 @@ export function setup(ctx: SpindleFrontendContext) {
     breastCup.innerText = cup;
   });
 
-  // Color Map Logic
   const colorMap: Record<string, string> = {
     'blonde': '#e8c872', 'blond': '#e8c872', 'brunette': '#5c4033', 'brown': '#5c4033',
     'black': '#333333', 'red': '#cc3333', 'ginger': '#d95a2b', 'blue': '#3366cc',
@@ -349,40 +349,43 @@ export function setup(ctx: SpindleFrontendContext) {
   applyColorEffect('bt-eyes');
   applyColorEffect('bt-skin');
 
-  // Gender Icon Logic
   const genderInput = document.getElementById('bt-gender') as HTMLInputElement;
   const genderIcon = document.getElementById('bt-gender-icon');
   
   if (genderInput && genderIcon) {
     genderInput.addEventListener('input', () => {
       const val = genderInput.value.toLowerCase().trim();
-      let icon = '';
-      let color = '#fff';
-      
-      if (val === 'female' || val === 'woman' || val === 'girl' || val === 'f') {
-        icon = '♀️'; color = '#ff99cc';
-      } else if (val === 'male' || val === 'man' || val === 'boy' || val === 'm') {
-        icon = '♂️'; color = '#66b2ff';
-      } else if (val.includes('trans') || val.includes('non-binary') || val === 'nb' || val === 't') {
-        icon = '⚧️'; color = '#e0e0e0';
-      } else if (val.includes('futa') || val.includes('herm') || val.includes('intersex') || val === 'h' || val === 'i') {
-        icon = '⚥'; color = '#cc99ff';
-      }
-      
-      genderIcon.innerText = icon;
-      genderIcon.style.color = color;
+      let icon = ''; let color = '#fff';
+      if (val === 'female' || val === 'woman' || val === 'girl' || val === 'f') { icon = '♀️'; color = '#ff99cc'; } 
+      else if (val === 'male' || val === 'man' || val === 'boy' || val === 'm') { icon = '♂️'; color = '#66b2ff'; } 
+      else if (val.includes('trans') || val.includes('non-binary') || val === 'nb' || val === 't') { icon = '⚧️'; color = '#e0e0e0'; } 
+      else if (val.includes('futa') || val.includes('herm') || val.includes('intersex') || val === 'h' || val === 'i') { icon = '⚥'; color = '#cc99ff'; }
+      genderIcon.innerText = icon; genderIcon.style.color = color;
     });
   }
 
-  // Dynamic Traits/Skills
+  // Dynamic Add Buttons (Skills, Traits, and now Inventory!)
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'bt-dynamic-item';
     div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
     document.getElementById('skills-container')?.appendChild(div);
   });
+  
   document.getElementById('add-trait-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'bt-dynamic-item';
     div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
     document.getElementById('traits-container')?.appendChild(div);
+  });
+
+  document.getElementById('add-inv-btn')?.addEventListener('click', () => {
+    const div = document.createElement('div'); 
+    div.className = 'bt-row'; 
+    div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;';
+    div.innerHTML = `
+      <input type="number" class="bt-input" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1">
+      <input type="text" class="bt-input full" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name...">
+      <button style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;" onclick="this.parentElement.remove()">✖</button>
+    `;
+    document.getElementById('inv-container')?.appendChild(div);
   });
 }
