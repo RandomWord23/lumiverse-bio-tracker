@@ -61,7 +61,16 @@ export function setup(ctx: SpindleFrontendContext) {
           <input type="text" class="bt-input full" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide" id="bt-age"></div>
-          <div class="bt-row"><span>Gender:</span> <input type="text" class="bt-input bt-input-wide" id="bt-gender"></div>
+          
+          <!-- DYNAMIC GENDER ROW -->
+          <div class="bt-row">
+            <span>Gender:</span> 
+            <div style="display:flex; align-items:center; width: 65%;">
+              <input type="text" class="bt-input" style="flex:1;" id="bt-gender">
+              <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
+            </div>
+          </div>
+          
           <div class="bt-row"><span>Pronouns:</span> <input type="text" class="bt-input bt-input-wide" id="bt-pronouns"></div>
           <div class="bt-row"><span>Voice:</span> <input type="text" class="bt-input bt-input-wide" id="bt-voice"></div>
           <div class="bt-row"><span>Scent:</span> <input type="text" class="bt-input bt-input-wide" id="bt-scent"></div>
@@ -103,7 +112,6 @@ export function setup(ctx: SpindleFrontendContext) {
           
           <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide" placeholder="Descriptor..." id="bt-vagina"></div>
           
-          <!-- FIXED LABEL FOR SCARS -->
           <div style="font-size: 13px; margin-top: 15px; margin-bottom: 5px; color: #888;">Markings & Scars:</div>
           <textarea class="bt-textarea" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
         </div>
@@ -226,42 +234,55 @@ export function setup(ctx: SpindleFrontendContext) {
     breastCup.innerText = cup;
   });
 
-  // ==========================================
-  // NEW COLOR DETECTOR SCRIPT
-  // ==========================================
+  // Color logic
   const colorMap: Record<string, string> = {
     'blonde': '#e8c872', 'blond': '#e8c872', 'brunette': '#5c4033', 'brown': '#5c4033',
     'black': '#333333', 'red': '#cc3333', 'ginger': '#d95a2b', 'blue': '#3366cc',
     'green': '#339966', 'hazel': '#8e7618', 'purple': '#800080', 'pink': '#ff99cc',
     'white': '#ffffff', 'gray': '#808080', 'grey': '#808080', 'pale': '#ffe4e1', 'tan': '#d2b48c'
   };
-
   function applyColorEffect(inputId: string) {
     const el = document.getElementById(inputId);
     if(!el) return;
     el.addEventListener('input', (e) => {
       const val = (e.target as HTMLInputElement).value.toLowerCase();
       let foundColor = '';
-      for (const key in colorMap) {
-        if (val.includes(key)) {
-          foundColor = colorMap[key];
-          break;
-        }
-      }
-      if (foundColor) {
-        el.style.borderLeft = '4px solid ' + foundColor;
-        el.style.paddingLeft = '8px';
-      } else {
-        el.style.borderLeft = '1px solid #444';
-        el.style.paddingLeft = '6px';
-      }
+      for (const key in colorMap) { if (val.includes(key)) { foundColor = colorMap[key]; break; } }
+      if (foundColor) { el.style.borderLeft = '4px solid ' + foundColor; el.style.paddingLeft = '8px'; } 
+      else { el.style.borderLeft = '1px solid #444'; el.style.paddingLeft = '6px'; }
     });
   }
-
-  // Bind the color effect to specific fields!
   applyColorEffect('bt-hair');
   applyColorEffect('bt-eyes');
   applyColorEffect('bt-skin');
+
+  // ==========================================
+  // NEW GENDER ICON DETECTOR SCRIPT
+  // ==========================================
+  const genderInput = document.getElementById('bt-gender');
+  const genderIcon = document.getElementById('bt-gender-icon');
+  
+  if (genderInput && genderIcon) {
+    genderInput.addEventListener('input', (e) => {
+      const val = (e.target as HTMLInputElement).value.toLowerCase();
+      let icon = '';
+      let color = '#fff';
+      
+      // Order matters! "female" contains the word "male"
+      if (val.includes('female') || val.includes('woman') || val.includes('girl')) {
+        icon = '♀️'; color = '#ff99cc';
+      } else if (val.includes('male') || val.includes('man') || val.includes('boy') || val === 'm') {
+        icon = '♂️'; color = '#66b2ff';
+      } else if (val.includes('trans') || val.includes('non-binary') || val.includes('enby')) {
+        icon = '⚧️'; color = '#e0e0e0';
+      } else if (val.includes('futa') || val.includes('herm') || val.includes('intersex')) {
+        icon = '⚥'; color = '#cc99ff';
+      }
+      
+      genderIcon.innerText = icon;
+      genderIcon.style.color = color;
+    });
+  }
 
   // Add Dynamic Skills/Traits
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
