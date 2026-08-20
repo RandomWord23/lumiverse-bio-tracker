@@ -89,6 +89,7 @@ export function setup(ctx: SpindleFrontendContext) {
           <input type="text" class="bt-input full bt-scrape" data-id="Name" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Species" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Age" id="bt-age"></div>
+          
           <div class="bt-row">
             <span>Gender:</span> 
             <div style="display:flex; align-items:center; width: 65%;">
@@ -96,6 +97,7 @@ export function setup(ctx: SpindleFrontendContext) {
               <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
             </div>
           </div>
+          
           <div class="bt-row"><span>Pronouns:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Pronouns" id="bt-pronouns"></div>
           <div class="bt-row"><span>Voice:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Voice" id="bt-voice"></div>
           <div class="bt-row"><span>Scent:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Scent" id="bt-scent"></div>
@@ -177,7 +179,6 @@ export function setup(ctx: SpindleFrontendContext) {
           </select>
         </div>
         
-        <!-- We assign class 'bt-cloth-slot' to these items to group them -->
         <span class="slot-label">Head (Top)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Top" placeholder="Hats, Helmets, Hoods">
         <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Face" placeholder="Glasses, Goggles, Visors">
         <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Lower" placeholder="Masks, Bandanas">
@@ -355,7 +356,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
-  // UI UPDATE LOGIC
   function updateCapacities() {
     const height = parseFloat((document.getElementById('bt-height') as HTMLInputElement).value) || 160;
     const weight = parseFloat((document.getElementById('bt-weight') as HTMLInputElement).value) || 60;
@@ -496,10 +496,9 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-  // THE SCRAPER & XML GENERATOR
+  // 🚀 THE SCRAPER & XML GENERATOR
   document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
     
-    // 1. Gather all basic inputs with a 'bt-scrape' class
     let xml = \`<CharacterSheet>\\n  <BaseStats>\\n\`;
     document.querySelectorAll('.bt-scrape').forEach(el => {
       const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -511,13 +510,11 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     xml += \`  </BaseStats>\\n\\n  <Clothing>\\n\`;
     
-    // 2. Gather Clothing
     document.querySelectorAll('.bt-cloth-slot').forEach(el => {
       const input = el as HTMLInputElement;
       const val = input.value.trim();
       const slot = input.getAttribute('data-slot');
       if (val !== '') {
-        // Find if there is a flex dropdown next to it
         const flexEl = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement;
         const flexStr = flexEl ? \` elasticity="\${flexEl.value}"\` : '';
         xml += \`    <Equip slot="\${slot}"\${flexStr}>\${val}</Equip>\\n\`;
@@ -525,7 +522,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     xml += \`  </Clothing>\\n\\n  <Backpack>\\n\`;
     
-    // 3. Gather Backpack
     document.querySelectorAll('.dyn-inv').forEach(el => {
       const qty = (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() || '1';
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
@@ -533,7 +529,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     xml += \`  </Backpack>\\n\\n  <SkillsAndTraits>\\n\`;
     
-    // 4. Gather Skills
     document.querySelectorAll('.dyn-skill').forEach(el => {
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim();
       const lvl = (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() || '1';
@@ -547,7 +542,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
     xml += \`  </SkillsAndTraits>\\n\\n  <DigestiveTract>\\n\`;
     
-    // 5. Vital Status Logic (Read directly from the UI elements)
     const bellyStatus = document.getElementById('bt-belly-status')?.innerText || 'Flat';
     const mobility = document.getElementById('bt-mobility')?.innerText || 'Agile';
     const stomFill = document.getElementById('bt-stom-fill')?.innerText || '0 L';
@@ -557,7 +551,6 @@ export function setup(ctx: SpindleFrontendContext) {
     xml += \`    <Status belly="\${bellyStatus}" mobility="\${mobility}" />\\n\`;
     xml += \`    <Stomach current="\${stomFill}" max="\${stomMax}">\\n\`;
     
-    // Gather Stomach items
     document.querySelectorAll('#stomach-container .vital-slot').forEach(el => {
       const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown';
       const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0';
@@ -578,7 +571,6 @@ export function setup(ctx: SpindleFrontendContext) {
     
     xml += \`    </Stomach>\\n    <Bowels current="\${bowFill}">\\n\`;
     
-    // Gather Bowel items
     document.querySelectorAll('#bowel-container .vital-slot').forEach(el => {
       const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Waste';
       const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0';
@@ -587,10 +579,9 @@ export function setup(ctx: SpindleFrontendContext) {
     
     xml += \`    </Bowels>\\n  </DigestiveTract>\\n</CharacterSheet>\`;
 
-    // Visual Confirmation
     const btn = document.getElementById('bt-sync-btn');
     if (btn) {
-      btn.innerText = '✅ Data Scraped!';
+      btn.innerText = '✅ Data Synced to AI!';
       btn.style.background = '#4CAF50';
       setTimeout(() => {
         btn.innerText = '💾 Sync Changes to AI';
@@ -598,12 +589,16 @@ export function setup(ctx: SpindleFrontendContext) {
       }, 2000);
     }
 
-    // SHOW MOBILE PREVIEW MODAL
+    // SEND THE DATA TO THE BACKEND
+    ctx.sendToBackend({
+      type: 'SYNC_BIO_DATA',
+      xmlData: xml
+    });
+
     const previewContent = document.getElementById('bt-preview-content');
     if (previewContent) {
-      // Escape HTML tags so they display as text
       previewContent.innerText = xml;
-      previewModal.style.display = 'flex';
+      document.getElementById('bt-preview-modal')!.style.display = 'flex';
     }
   });
 
