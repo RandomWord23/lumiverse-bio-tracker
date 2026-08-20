@@ -194,7 +194,7 @@ export function setup(ctx: SpindleFrontendContext) {
         <div id="inv-container" style="margin-top: 10px;"></div>
       </div>
 
-      <!-- NEW VITALS TAB (BIOLOGICAL INVENTORY) -->
+      <!-- VITALS TAB -->
       <div id="tab-vitals" class="bt-tab-content">
         
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
@@ -205,7 +205,6 @@ export function setup(ctx: SpindleFrontendContext) {
 
         <hr style="border-color: #333; margin: 15px 0;">
 
-        <!-- Dynamic Belly & Mobility Display -->
         <div class="bt-row"><span>Belly Status:</span> <span class="bt-value" id="bt-belly-status" style="color:#aaa;">Flat</span></div>
         <div class="bt-row"><span>Mobility:</span> <span class="bt-value" id="bt-mobility" style="color:#4CAF50;">Agile / Normal</span></div>
 
@@ -307,7 +306,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
-  // Vitals Auto-Sum & Status Logic
   function updateCapacities() {
     const height = parseFloat((document.getElementById('bt-height') as HTMLInputElement).value) || 160;
     const weight = parseFloat((document.getElementById('bt-weight') as HTMLInputElement).value) || 60;
@@ -335,7 +333,6 @@ export function setup(ctx: SpindleFrontendContext) {
     const bowelFillEl = document.getElementById('bt-bowel-fill');
     if(bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L';
 
-    // Status Engine Updates
     let stomPct = (stomTotal / baseStomMax) * 100;
     let bellyEl = document.getElementById('bt-belly-status');
     if (bellyEl) {
@@ -351,30 +348,27 @@ export function setup(ctx: SpindleFrontendContext) {
       else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000'; }
     }
 
-    // Mobility is based on overcapacity effects (totalPct over 100)
-    let totalPct = ((stomTotal + bowelTotal) / (baseStomMax + baseBowelMax)) * 100;
+    // FIXED MOBILITY LOGIC (Total payload vs. Base Carry Limit)
+    let overCapPct = ((stomTotal + bowelTotal) / baseStomMax) * 100;
     let mobEl = document.getElementById('bt-mobility');
     if (mobEl) {
-      if (totalPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
-      else if (totalPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b'; }
-      else if (totalPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800'; }
-      else if (totalPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722'; }
+      if (overCapPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
+      else if (overCapPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b'; }
+      else if (overCapPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800'; }
+      else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722'; }
       else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444'; }
     }
   }
 
-  // Bind Height/Weight/Mult to calculation
   document.getElementById('bt-height')?.addEventListener('input', updateCapacities);
   document.getElementById('bt-weight')?.addEventListener('input', updateCapacities);
   document.getElementById('bt-cap-mult')?.addEventListener('input', updateCapacities);
 
-  // Event delegation for capacity inputs and prey digestion slider
   panel.addEventListener('input', (e) => {
     const target = e.target as HTMLElement;
     if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
       updateCapacities();
     }
-    // Fixed Targeting Logic for the Status span
     if (target.classList.contains('prey-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0;
       const statusSpan = target.closest('.vital-slot')?.querySelector('.prey-status') as HTMLElement;
