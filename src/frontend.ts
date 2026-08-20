@@ -20,8 +20,9 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-sub-content { display: none; }
     .bt-sub-content.active { display: block; }
     .bt-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 14px; }
-    .bt-input, .bt-textarea { background: #111; border: 1px solid #444; color: #fff; border-radius: 4px; padding: 6px; transition: border-left 0.2s ease; }
+    .bt-input, .bt-textarea, .bt-select { background: #111; border: 1px solid #444; color: #fff; border-radius: 4px; padding: 6px; transition: border-left 0.2s ease; }
     .bt-input { width: 90px; text-align: right; }
+    .bt-select { padding: 4px; font-size: 12px; }
     .bt-input-wide { width: 65%; text-align: left; }
     .bt-input-small { width: 50px; text-align: center; }
     .bt-input.full { width: 100%; text-align: left; margin-bottom: 10px; box-sizing: border-box; }
@@ -62,7 +63,6 @@ export function setup(ctx: SpindleFrontendContext) {
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide" id="bt-age"></div>
           
-          <!-- DYNAMIC GENDER ROW -->
           <div class="bt-row">
             <span>Gender:</span> 
             <div style="display:flex; align-items:center; width: 65%;">
@@ -84,7 +84,7 @@ export function setup(ctx: SpindleFrontendContext) {
           <textarea class="bt-textarea" rows="2" placeholder="Distinct facial features..." id="bt-features"></textarea>
 
           <div class="bt-section-title">BODY & ANATOMY</div>
-          <div class="bt-row"><span>Build:</span> <input type="text" class="bt-input bt-input-wide" id="bt-build"></div>
+          <div class="bt-row"><span>Build:</span> <input type="text" class="bt-input bt-input-wide" placeholder="e.g. athletic, slender" id="bt-build"></div>
           <div class="bt-row"><span>Height (cm):</span> <input type="number" class="bt-input" id="bt-height" value="160"></div>
           <div class="bt-row"><span>Weight (kg):</span> <input type="number" class="bt-input" id="bt-weight" value="60"></div>
           
@@ -128,13 +128,66 @@ export function setup(ctx: SpindleFrontendContext) {
         </div>
       </div>
 
+      <!-- NEW INVENTORY TAB LAYOUT -->
       <div id="tab-inv" class="bt-tab-content">
         <div class="bt-row"><span>Wallet / Cash:</span> <input type="number" class="bt-input" id="bt-cash" value="0"></div>
         <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title">CLOTHING & CONSTRAINTS</div>
-        <textarea class="bt-textarea" rows="3" id="bt-cloth" placeholder="Describe clothes and how tight they are..."></textarea>
+        
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          CLOTHING SLOTS
+          <select class="bt-select" id="bt-cloth-mode" style="width:110px; border-color:#ff4444;">
+            <option value="flavor">Mode: Flavor</option>
+            <option value="hardcore">Mode: Hardcore</option>
+          </select>
+        </div>
+
+        <div class="bt-row" style="margin-bottom:2px;">
+          <span>Top:</span> 
+          <select class="bt-select" id="bt-top-flex">
+            <option value="rigid">Rigid</option>
+            <option value="standard" selected>Standard</option>
+            <option value="stretchy">Stretchy</option>
+            <option value="magic">Magic</option>
+          </select>
+        </div>
+        <input type="text" class="bt-input full" id="bt-top-desc" placeholder="e.g. Cotton T-Shirt">
+
+        <div class="bt-row" style="margin-bottom:2px; margin-top:10px;">
+          <span>Bottom:</span> 
+          <select class="bt-select" id="bt-bot-flex">
+            <option value="rigid">Rigid</option>
+            <option value="standard" selected>Standard</option>
+            <option value="stretchy">Stretchy</option>
+            <option value="magic">Magic</option>
+          </select>
+        </div>
+        <input type="text" class="bt-input full" id="bt-bot-desc" placeholder="e.g. Denim Jeans">
+
+        <div class="bt-row" style="margin-bottom:2px; margin-top:10px;">
+          <span>Underwear:</span> 
+          <select class="bt-select" id="bt-und-flex">
+            <option value="rigid">Rigid</option>
+            <option value="standard">Standard</option>
+            <option value="stretchy" selected>Stretchy</option>
+            <option value="magic">Magic</option>
+          </select>
+        </div>
+        <input type="text" class="bt-input full" id="bt-und-desc" placeholder="e.g. Sports Bra & Panties">
+
+        <div class="bt-row" style="margin-bottom:2px; margin-top:10px;">
+          <span>Accessory:</span> 
+          <select class="bt-select" id="bt-acc-flex">
+            <option value="rigid" selected>Rigid</option>
+            <option value="standard">Standard</option>
+            <option value="stretchy">Stretchy</option>
+            <option value="magic">Magic</option>
+          </select>
+        </div>
+        <input type="text" class="bt-input full" id="bt-acc-desc" placeholder="e.g. Leather Belt or Armor">
+
+        <hr style="border-color: #333; margin: 15px 0;">
         <div class="bt-section-title">BACKPACK / POCKETS</div>
-        <textarea class="bt-textarea" rows="5" id="bt-pocket" placeholder="List items here..."></textarea>
+        <textarea class="bt-textarea" rows="4" id="bt-pocket" placeholder="List items, weapons, or ground loot here..."></textarea>
       </div>
 
       <div id="tab-vitals" class="bt-tab-content">
@@ -151,7 +204,6 @@ export function setup(ctx: SpindleFrontendContext) {
   `;
   document.body.appendChild(panel);
 
-  // Floating Button 
   const floatingBtn = document.createElement('div');
   floatingBtn.innerText = '📋';
   Object.assign(floatingBtn.style, {
@@ -200,7 +252,6 @@ export function setup(ctx: SpindleFrontendContext) {
     panel.classList.remove('open'); floatingBtn.style.display = 'block'; resetFade();
   });
 
-  // Tab Logic
   panel.querySelectorAll('.bt-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       panel.querySelectorAll('.bt-tab-btn, .bt-tab-content').forEach(el => el.classList.remove('active'));
@@ -217,7 +268,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
-  // Breast ML logic
   const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
   const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
   breastInput?.addEventListener('input', () => {
@@ -234,7 +284,6 @@ export function setup(ctx: SpindleFrontendContext) {
     breastCup.innerText = cup;
   });
 
-  // Color logic
   const colorMap: Record<string, string> = {
     'blonde': '#e8c872', 'blond': '#e8c872', 'brunette': '#5c4033', 'brown': '#5c4033',
     'black': '#333333', 'red': '#cc3333', 'ginger': '#d95a2b', 'blue': '#3366cc',
@@ -256,26 +305,22 @@ export function setup(ctx: SpindleFrontendContext) {
   applyColorEffect('bt-eyes');
   applyColorEffect('bt-skin');
 
-  // ==========================================
-  // NEW GENDER ICON DETECTOR SCRIPT
-  // ==========================================
-  const genderInput = document.getElementById('bt-gender');
+  const genderInput = document.getElementById('bt-gender') as HTMLInputElement;
   const genderIcon = document.getElementById('bt-gender-icon');
   
   if (genderInput && genderIcon) {
-    genderInput.addEventListener('input', (e) => {
-      const val = (e.target as HTMLInputElement).value.toLowerCase();
+    genderInput.addEventListener('input', () => {
+      const val = genderInput.value.toLowerCase().trim();
       let icon = '';
       let color = '#fff';
       
-      // Order matters! "female" contains the word "male"
-      if (val.includes('female') || val.includes('woman') || val.includes('girl')) {
+      if (val === 'female' || val === 'woman' || val === 'girl' || val === 'f') {
         icon = '♀️'; color = '#ff99cc';
-      } else if (val.includes('male') || val.includes('man') || val.includes('boy') || val === 'm') {
+      } else if (val === 'male' || val === 'man' || val === 'boy' || val === 'm') {
         icon = '♂️'; color = '#66b2ff';
-      } else if (val.includes('trans') || val.includes('non-binary') || val.includes('enby')) {
+      } else if (val.includes('trans') || val.includes('non-binary') || val === 'nb' || val === 't') {
         icon = '⚧️'; color = '#e0e0e0';
-      } else if (val.includes('futa') || val.includes('herm') || val.includes('intersex')) {
+      } else if (val.includes('futa') || val.includes('herm') || val.includes('intersex') || val === 'h' || val === 'i') {
         icon = '⚥'; color = '#cc99ff';
       }
       
@@ -284,7 +329,6 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   }
 
-  // Add Dynamic Skills/Traits
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'bt-dynamic-item';
     div.innerHTML = `<button class="bt-remove-btn" onclick="this.parentElement.remove()">✖</button><input type="text" class="bt-input full" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea" rows="2" placeholder="Description..."></textarea>`;
