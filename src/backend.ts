@@ -1,73 +1,40 @@
-declare const spindle: import('lumiverse-spindle-types').SpindleAPI;
+import type { SpindleBackendContext } from 'lumiverse-spindle-types';
 
-// The local memory map - this holds the stats for every chat!
-const chatStates = new Map<string, any>();
+// This variable will hold our XML string in memory
+let currentCharacterSheetXML = "";
 
-const defaultState = {
-  weight: 60,
-  height: 160,
-  stomach_current_ml: 0, 
-  bowel_current_ml: 0,
-  cash: 0,
-  inventory: []
-};
-
-let interceptorRegistered = false;
-
-function tryRegisterInterceptor() {
-  if (interceptorRegistered) return;
-  if (!spindle.permissions.has('interceptor')) return;
-
-  spindle.registerInterceptor(async (messages, ctx) => {
-    
-    // 1. Get the state for this specific chat, or create it if it's new
-    let state = chatStates.get(ctx.chatId);
-    if (!state) {
-      state = { ...defaultState };
-      chatStates.set(ctx.chatId, state);
-    }
-
-    // 2. The Math Engine
-    const capacity_L = ((state.height * state.weight) / 100) * 1.2;
-    const capacity_ml = capacity_L * 1000;
-    
-    let fill_percent = 0;
-    if (capacity_ml > 0) {
-      fill_percent = Math.round((state.stomach_current_ml / capacity_ml) * 100);
-    }
-
-    let belly_status = "Flat (0-5%)";
-    let mobility = "Normal";
-    if (fill_percent > 160) { belly_status = "Critical"; mobility = "Immobile"; }
-    else if (fill_percent >= 126) { belly_status = "Strained"; mobility = "Crawl only"; }
-    else if (fill_percent >= 96) { belly_status = "Overfull"; mobility = "Half speed, stumbles"; }
-    else if (fill_percent >= 61) { belly_status = "Same-Size"; mobility = "Slowed, clumsy"; }
-    else if (fill_percent >= 49) { belly_status = "Triplets"; }
-    else if (fill_percent >= 36) { belly_status = "Twins"; }
-    else if (fill_percent >= 21) { belly_status = "Full-Term"; }
-    else if (fill_percent >= 13) { belly_status = "Bloated"; }
-    else if (fill_percent >= 6) { belly_status = "Potbelly"; }
-    
-    const injection = `\n\n[OOC SYSTEM NOTE: The user's current physical state is -> Stomach Capacity: ${capacity_L.toFixed(2)}L | Current Volume: ${state.stomach_current_ml}ml | Status: ${belly_status} | Mobility: ${mobility} | Cash: ${state.cash}]`;
-
-    // 3. Attach it to your message
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage) {
-        lastMessage.content += injection;
-    }
-
-    spindle.toast.info("⚙️ Bio-Tracker math engine processed!");
-    return messages;
-  });
+export function setup(ctx: SpindleBackendContext) {
   
-  interceptorRegistered = true;
-  spindle.toast.info("✅ Bio-Tracker hooked into chat!");
+  // 1. Listen for the Frontend sending us the new XML data
+  ctx.onMessage((message) => {
+    if (message.type === 'SYNC_BIO_DATA') {
+      currentCharacterSheetXML = message.xmlData;
+      console.log("Backend received new Character Sheet XML!");
+    }
+  });
+
+  // 2. Intercept the chat request right before it goes to the AI
+  ctx.hooks.on('before_generate', async (request) => {
+    
+    // If we have data synced, inject it!
+    if (currentCharacterSheetXML !== "") {
+      
+      // We wrap it in a strict system instruction so the AI knows how to handle it
+      const injectionString = `
+[SYSTEM NOTE: Below is the absolute, current mechanical state of the user's character and digestive tract. You must strictly adhere to these physical limits, items, and capacities in your next response. Do not hallucinate items not in this inventory.]
+${currentCharacterSheetXML}
+`;
+
+      // Find the System Prompt (usually the first message in the array) and append our data
+      const systemMessage = request.messages.find(m => m.role === 'system');
+      if (systemMessage) {
+        systemMessage.content += '\n\n' + injectionString;
+      } else {
+        // If there isn't a system message for some reason, we add one
+        request.messages.unshift({ role: 'system', content: injectionString });
+      }
+    }
+    
+    return request;
+  });
 }
-
-tryRegisterInterceptor();
-
-spindle.permissions.onChanged(({ permission, granted }) => {
-  if (permission === 'interceptor' && granted) {
-    tryRegisterInterceptor();
-  }
-});
