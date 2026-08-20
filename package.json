@@ -1,0 +1,8 @@
+{
+  "name": "lumiverse-bio-tracker",
+  "version": "1.0.0",
+  "type": "module",
+  "devDependencies": {
+    "lumiverse-spindle-types": "latest"
+  }
+}
