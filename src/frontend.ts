@@ -1,4 +1,4 @@
-import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
+<button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 
 export function setup(ctx: SpindleFrontendContext) {
   const style = document.createElement('style');
@@ -262,7 +262,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
         <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
-        <button class="bt-action-btn" id="bt-sync-from-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
+        <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555; position: relative; z-index: 10;">🔄 Sync from Latest Message</button>
       </div>
     </div>
   `;
@@ -602,34 +602,37 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-    // ─── Sync from Latest Message Button ───────────────────────
-  document.getElementById('bt-sync-from-chat-btn')?.addEventListener('click', () => {
-    const latestId = ctx.messages.getLatestMessageId();
-    if (!latestId) {
-      ctx.toast.warning('No messages found in this chat.');
-      return;
-    }
-    
-    const bubble = ctx.dom.findMessageElement(latestId);
-    if (!bubble) {
-      ctx.toast.warning('Latest message is not rendered on screen. Scroll to it and try again.');
-      return;
-    }
-    
-    // Get text and un-escape HTML entities so we can find the XML tags
-    let text = bubble.innerText || bubble.textContent || '';
-    text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-    
-    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
-    
-    if (match && match[1]) {
-      const xml = match[1].trim();
-      populateFormFromXml(xml);
-      ctx.toast.success('Synced from latest message!');
-    } else {
-      ctx.toast.error('No <sheet_update> block found in the latest message.');
-    }
-  });
+     // ─── Sync from Latest Message Button ───────────────────────
+  const syncChatBtn = document.getElementById('bt-sync-chat-btn');
+  if (syncChatBtn) {
+    syncChatBtn.addEventListener('pointerdown', () => {
+      ctx.toast.info('Syncing...');
+      const latestId = ctx.messages.getLatestMessageId();
+      if (!latestId) {
+        ctx.toast.warning('No messages found in this chat.');
+        return;
+      }
+      
+      const bubble = ctx.dom.findMessageElement(latestId);
+      if (!bubble) {
+        ctx.toast.warning('Latest message is not rendered on screen. Scroll to it and try again.');
+        return;
+      }
+      
+      let text = bubble.innerText || bubble.textContent || '';
+      text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      
+      const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
+      
+      if (match && match[1]) {
+        const xml = match[1].trim();
+        populateFormFromXml(xml);
+        ctx.toast.success('Synced from latest message!');
+      } else {
+        ctx.toast.error('No <sheet_update> block found in the latest message.');
+      }
+    });
+  }
 
   const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
   const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
