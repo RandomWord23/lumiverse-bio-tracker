@@ -262,6 +262,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
         <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
+        <button class="bt-action-btn" id="bt-sync-from-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
       </div>
     </div>
   `;
@@ -504,16 +505,31 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-  document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
-    let xml = `<CharacterSheet>\n  <State>\n`;
-    document.querySelectorAll('.bt-scrape').forEach(el => {
-      const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-      const val = input.value.trim();
-      const id = input.getAttribute('data-id');
-      if (val !== '' && val !== '0' && id && ['Health', 'Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room'].includes(id)) {
-        xml += `    <${id}>${val}</${id}>\n`;
-      }
-    });
+    document.getElementById('bt-sync-from-chat-btn')?.addEventListener('click', () => {
+    const latestId = ctx.messages.getLatestMessageId();
+    if (!latestId) {
+      ctx.toast.warning('No messages found in this chat.');
+      return;
+    }
+    
+    const bubble = ctx.dom.findMessageElement(latestId);
+    if (!bubble) {
+      ctx.toast.warning('Latest message is not rendered on screen. Scroll to it and try again.');
+      return;
+    }
+    
+    // Get the text content of the latest message
+    const text = bubble.innerText || bubble.textContent || '';
+    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
+    
+    if (match && match[1]) {
+      const xml = match[1].trim();
+      populateFormFromXml(xml);
+      ctx.toast.success('Synced from latest message!');
+    } else {
+      ctx.toast.error('No <sheet_update> block found in the latest message.');
+    }
+  });
     xml += `  </State>\n\n  <BaseStats>\n`;
     document.querySelectorAll('.bt-scrape').forEach(el => {
       const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
