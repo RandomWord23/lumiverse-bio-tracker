@@ -40,11 +40,9 @@ export function setup(ctx: SpindleFrontendContext) {
     .vital-slot { background: #222; border: 1px dashed #555; border-radius: 6px; padding: 8px; margin-bottom: 8px; position: relative; }
     .vital-remove { position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ff4444; cursor: pointer; font-size: 14px; }
     
-    /* MOBILE PREVIEW MODAL */
     #bt-preview-modal { position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: #111; border: 2px solid #ff4444; border-radius: 8px; z-index: 100000; display: none; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
     #bt-preview-header { background: #222; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; color: #ff4444; border-bottom: 1px solid #444; }
     #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
-    #bt-preview-copy { background: #4CAF50; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0; }
     #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
   `;
   document.head.appendChild(style);
@@ -54,7 +52,6 @@ export function setup(ctx: SpindleFrontendContext) {
   previewModal.innerHTML = `
     <div id="bt-preview-header"><span>XML Data Output</span></div>
     <div id="bt-preview-content"></div>
-    <button id="bt-preview-copy">📋 Copy to Clipboard</button>
     <button id="bt-preview-close">✖ Close Preview</button>
   `;
   document.body.appendChild(previewModal);
@@ -590,19 +587,6 @@ export function setup(ctx: SpindleFrontendContext) {
     if (previewContent) {
       previewContent.innerText = xml;
       document.getElementById('bt-preview-modal')!.style.display = 'flex';
-      
-      // CLIPBOARD LOGIC
-      document.getElementById('bt-preview-copy')!.onclick = () => {
-        navigator.clipboard.writeText(xml).then(() => {
-          const copyBtn = document.getElementById('bt-preview-copy')!;
-          copyBtn.innerText = '✅ Copied!';
-          copyBtn.style.background = '#2e7d32';
-          setTimeout(() => {
-            copyBtn.innerText = '📋 Copy to Clipboard';
-            copyBtn.style.background = '#4CAF50';
-          }, 2000);
-        });
-      };
     }
   });
 
@@ -637,5 +621,160 @@ export function setup(ctx: SpindleFrontendContext) {
       else if (val.includes('futa') || val.includes('herm') || val.includes('intersex') || val === 'h' || val === 'i') { icon = '⚥'; color = '#cc99ff'; }
       genderIcon.innerText = icon; genderIcon.style.color = color;
     });
+  }
+
+  // ─── Listen for sheet updates from the backend ─────────────
+  //
+  // When the backend commits an update or switches chats, it sends
+  // the new XML here. We parse it and fill in the form fields.
+  
+  ctx.onBackendMessage((msg: any) => {
+    if (msg.type === 'SHEET_UPDATED' && msg.xml) {
+      populateFormFromXml(msg.xml);
+    }
+  });
+
+  function populateFormFromXml(xml: string) {
+    // Clear dynamic lists first so we don't duplicate items
+    document.querySelectorAll('.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot').forEach(el => el.remove());
+
+    if (!xml || xml.trim() === '') return;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'application/xml');
+
+    // Helper to safely get text content
+    const getText = (tag: string) => doc.querySelector(tag)?.textContent || '';
+    const getAttr = (el: Element | null, attr: string) => el?.getAttribute(attr) || '';
+
+    // 1. BaseStats (uses data-id matching)
+    const baseStats = doc.querySelector('BaseStats');
+    if (baseStats) {
+      document.querySelectorAll('.bt-scrape').forEach(el => {
+        const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+        const id = input.getAttribute('data-id');
+        if (id) {
+          const node = baseStats.querySelector(id);
+          if (node) input.value = node.textContent || '';
+        }
+      });
+    }
+
+    // Trigger manual UI updates that rely on BaseStats
+    document.getElementById('bt-height')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-weight')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-breast-ml')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-gender')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-hair')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-eyes')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-skin')?.dispatchEvent(new Event('input'));
+
+    // 2. Clothing
+    document.querySelectorAll('Equip').forEach(equipNode => {
+      const slot = equipNode.getAttribute('slot');
+      const elasticity = equipNode.getAttribute('elasticity') || 'standard';
+      const value = equipNode.textContent || '';
+      
+      const input = document.querySelector(`.bt-cloth-slot[data-slot="${slot}"]`) as HTMLInputElement;
+      if (input) {
+        input.value = value;
+        const flexSelect = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement;
+        if (flexSelect) flexSelect.value = elasticity;
+      }
+    });
+
+    // 3. Backpack
+    const invContainer = document.getElementById('inv-container');
+    document.querySelectorAll('Item').forEach(itemNode => {
+      const qty = itemNode.getAttribute('qty') || '1';
+      const name = itemNode.textContent || '';
+      
+      // Simulate clicking the add button to create the DOM structure
+      document.getElementById('add-inv-btn')?.click();
+      if (invContainer) {
+        const lastItem = invContainer.lastElementChild as HTMLElement;
+        if (lastItem) {
+          (lastItem.querySelector('.d-qty') as HTMLInputElement).value = qty;
+          (lastItem.querySelector('.d-name') as HTMLInputElement).value = name;
+        }
+      }
+    });
+
+    // 4. Skills & Traits
+    const skillsContainer = document.getElementById('skills-container');
+    document.querySelectorAll('Skill').forEach(skillNode => {
+      document.getElementById('add-skill-btn')?.click();
+      if (skillsContainer) {
+        const lastSkill = skillsContainer.lastElementChild as HTMLElement;
+        if (lastSkill) {
+          (lastSkill.querySelector('.d-name') as HTMLInputElement).value = skillNode.getAttribute('name') || '';
+          (lastSkill.querySelector('.d-lvl') as HTMLInputElement).value = skillNode.getAttribute('level') || '1';
+          (lastSkill.querySelector('.d-desc') as HTMLTextAreaElement).value = skillNode.textContent || '';
+        }
+      }
+    });
+
+    document.querySelectorAll('Trait').forEach(traitNode => {
+      document.getElementById('add-trait-btn')?.click();
+      const traitsContainer = document.getElementById('traits-container');
+      if (traitsContainer) {
+        const lastTrait = traitsContainer.lastElementChild as HTMLElement;
+        if (lastTrait) {
+          (lastTrait.querySelector('.d-name') as HTMLInputElement).value = traitNode.getAttribute('name') || '';
+          (lastTrait.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || '';
+        }
+      }
+    });
+
+    // 5. Digestive Tract
+    const stomachContainer = document.getElementById('stomach-container');
+    const bowelContainer = document.getElementById('bowel-container');
+
+    document.querySelectorAll('Prey').forEach(preyNode => {
+      document.getElementById('add-prey-btn')?.click();
+      if (stomachContainer) {
+        const lastPrey = stomachContainer.lastElementChild as HTMLElement;
+        if (lastPrey) {
+          (lastPrey.querySelector('.v-name') as HTMLInputElement).value = getAttr(preyNode, 'name');
+          (lastPrey.querySelector('.v-vol') as HTMLInputElement).value = getAttr(preyNode, 'volume_L');
+          (lastPrey.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(preyNode, 'digestion') || '').replace('%', '');
+          
+          const actionNode = preyNode.querySelector('ActionFlavor');
+          const gearNode = preyNode.querySelector('BoundGear');
+          (lastPrey.querySelector('.v-flavor') as HTMLTextAreaElement).value = actionNode?.textContent || '';
+          (lastPrey.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || '';
+          
+          // Trigger digestion status update
+          const digInput = lastPrey.querySelector('.prey-dig-input') as HTMLInputElement;
+          if (digInput) digInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+
+    document.querySelectorAll('Food').forEach(foodNode => {
+      document.getElementById('add-food-btn')?.click();
+      if (stomachContainer) {
+        const lastFood = stomachContainer.lastElementChild as HTMLElement;
+        if (lastFood) {
+          (lastFood.querySelector('.v-name') as HTMLInputElement).value = getAttr(foodNode, 'name');
+          (lastFood.querySelector('.v-vol') as HTMLInputElement).value = getAttr(foodNode, 'volume_L');
+          (lastFood.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(foodNode, 'digestion') || '').replace('%', '');
+        }
+      }
+    });
+
+    document.querySelectorAll('Remains').forEach(remainsNode => {
+      document.getElementById('add-remains-btn')?.click();
+      if (bowelContainer) {
+        const lastRemains = bowelContainer.lastElementChild as HTMLElement;
+        if (lastRemains) {
+          (lastRemains.querySelector('.v-name') as HTMLInputElement).value = remainsNode.textContent || '';
+          (lastRemains.querySelector('.v-vol') as HTMLInputElement).value = getAttr(remainsNode, 'volume_L');
+        }
+      }
+    });
+
+    // Recalculate capacities and totals after populating everything
+    document.getElementById('bt-cap-mult')?.dispatchEvent(new Event('input', { bubbles: true }));
   }
 }
