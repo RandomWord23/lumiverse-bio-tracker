@@ -180,7 +180,6 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     )
 
     // FIX: If the LLM forgot to output <CurrentAcidPct>, inject it
-    // back into <BaseStats> or <State> so the frontend doesn't blank out.
     if (!updatedXml.includes('<CurrentAcidPct>')) {
       if (updatedXml.includes('</BaseStats>')) {
         updatedXml = updatedXml.replace(
@@ -195,12 +194,36 @@ function runDigestionTick(newXml: string, oldXml: string): string {
       }
     }
 
+    // Extract Stomach and Bowels contents
+    const stomachMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+    const bowelMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
+    
+    let stomachContents = stomachMatch ? stomachMatch[2].trim() : ''
+    let bowelContents = bowelMatch ? bowelMatch[2].trim() : ''
     let itemCount = 0
+    let wasteCount = 0
+
+    // Helper to generate <Remains> XML
+    const createRemains = (type: string, name: string, vol: string, inner: string) => {
+      const numVol = parseFloat(vol) || 0
+      let remVol = numVol * 0.2 // 20% for food/liquid
+      let remName = 'Digestive Waste'
+      
+      if (type === 'Prey') {
+        remVol = numVol * 0.3 // 30% for prey (skeleton + gear)
+        remName = `Skeleton of ${name}`
+        const gearMatch = inner.match(/<BoundGear>([\s\S]*?)<\/BoundGear>/i)
+        const gear = gearMatch ? gearMatch[1].trim() : ''
+        if (gear) remName += `, ${gear}`
+      }
+      
+      wasteCount++
+      return `      <Remains volume_L="${remVol.toFixed(2)}">${remName}</Remains>`
+    }
 
     // Pass 1: Normal tags <Item ...>...</Item>
-    // [^>]*[^>\/] ensures we don't accidentally match self-closing tags
     const itemRegex1 = /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi
-    updatedXml = updatedXml.replace(
+    stomachContents = stomachContents.replace(
       itemRegex1,
       (match, attrs, inner) => {
         itemCount++
@@ -220,13 +243,19 @@ function runDigestionTick(newXml: string, oldXml: string): string {
           baseDigRate * speedMult * acidMultiplier * elapsed
         digNum = Math.min(100, digNum + digIncrease)
 
+        // If fully digested, move to bowels and remove from stomach
+        if (digNum >= 100) {
+          bowelContents += `\n${createRemains(type, name, vol, inner)}`
+          return '' // Remove from stomach
+        }
+
         return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
       },
     )
 
     // Pass 2: Self-closing tags <Item ... />
     const itemRegex2 = /<Item\s+([^>]+?)\s*\/>/gi
-    updatedXml = updatedXml.replace(itemRegex2, (match, attrs) => {
+    stomachContents = stomachContents.replace(itemRegex2, (match, attrs) => {
       itemCount++
       const type = getAttrFromString(attrs, 'type') || 'Food'
       const name = getAttrFromString(attrs, 'name')
@@ -244,12 +273,30 @@ function runDigestionTick(newXml: string, oldXml: string): string {
         baseDigRate * speedMult * acidMultiplier * elapsed
       digNum = Math.min(100, digNum + digIncrease)
 
+      // If fully digested, move to bowels and remove from stomach
+      if (digNum >= 100) {
+        bowelContents += `\n${createRemains(type, name, vol, '')}`
+        return '' // Remove from stomach
+      }
+
       return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%" />`
+    })
+
+    // Clean up empty lines in stomach contents
+    stomachContents = stomachContents.replace(/^\s*\n/gm, '').trim()
+
+    // Rebuild Stomach and Bowels in the XML
+    updatedXml = updatedXml.replace(/<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i, (match, attrs) => {
+      return `<Stomach${attrs}>\n${stomachContents}\n    </Stomach>`
+    })
+    
+    updatedXml = updatedXml.replace(/<Bowels([^>]*)>[\s\S]*?<\/Bowels>/i, (match, attrs) => {
+      return `<Bowels${attrs}>\n${bowelContents}\n    </Bowels>`
     })
 
     spindle.log.info(
       `Digestion tick: ${elapsed.toFixed(2)}h elapsed, ` +
-        `acid ${acidLevel.toFixed(1)}%, ${itemCount} items processed`,
+        `acid ${acidLevel.toFixed(1)}%, ${itemCount} items processed, ${wasteCount} moved to bowels`,
     )
 
     return updatedXml
