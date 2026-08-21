@@ -681,7 +681,7 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('bt-eyes')?.dispatchEvent(new Event('input'));
     document.getElementById('bt-skin')?.dispatchEvent(new Event('input'));
 
-    document.querySelectorAll('Equip').forEach(equipNode => {
+    doc.querySelectorAll('Equip').forEach(equipNode => {
       const slot = equipNode.getAttribute('slot');
       const elasticity = equipNode.getAttribute('elasticity') || 'standard';
       const value = equipNode.textContent || '';
@@ -693,7 +693,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     });
 
-    document.querySelectorAll('Backpack > Item').forEach(itemNode => {
+    doc.querySelectorAll('Backpack > Item').forEach(itemNode => {
       const qty = itemNode.getAttribute('qty') || '1';
       const name = itemNode.textContent || '';
       document.getElementById('add-inv-btn')?.click();
@@ -707,7 +707,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     });
 
-    document.querySelectorAll('Skill').forEach(skillNode => {
+    doc.querySelectorAll('Skill').forEach(skillNode => {
       document.getElementById('add-skill-btn')?.click();
       const skillsContainer = document.getElementById('skills-container');
       if (skillsContainer) {
@@ -720,7 +720,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     });
 
-    document.querySelectorAll('Trait').forEach(traitNode => {
+    doc.querySelectorAll('Trait').forEach(traitNode => {
       document.getElementById('add-trait-btn')?.click();
       const traitsContainer = document.getElementById('traits-container');
       if (traitsContainer) {
@@ -732,7 +732,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     });
 
-    document.querySelectorAll('Stomach > Item').forEach(itemNode => {
+    doc.querySelectorAll('Stomach > Item').forEach(itemNode => {
       document.getElementById('add-stomach-btn')?.click();
       const stomachContainer = document.getElementById('stomach-container');
       if (stomachContainer) {
@@ -761,7 +761,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     });
 
-    document.querySelectorAll('Remains').forEach(remainsNode => {
+    doc.querySelectorAll('Remains').forEach(remainsNode => {
       document.getElementById('add-remains-btn')?.click();
       const bowelContainer = document.getElementById('bowel-container');
       if (bowelContainer) {
