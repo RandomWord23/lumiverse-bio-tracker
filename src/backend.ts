@@ -7,16 +7,25 @@ interface Snapshot {
 }
 
 let activeChatId: string | null = null
+let pendingGenerationType: string = 'normal'
 const sheets: Map<string, string> = new Map()
 const snapshots: Map<string, Snapshot[]> = new Map()
+const committedMessageIds: Set<string> = new Set()
 
-function sheetPath(chatId: string) { return `sheets/${chatId}.xml` }
-function snapshotsPath(chatId: string) { return `snapshots/${chatId}.json` }
+function sheetPath(chatId: string) {
+  return `sheets/${chatId}.xml`
+}
+function snapshotsPath(chatId: string) {
+  return `snapshots/${chatId}.json`
+}
 
 async function loadChatSheet(chatId: string) {
   try {
     const data = await spindle.storage.read(sheetPath(chatId))
-    if (data) { sheets.set(chatId, data); return data }
+    if (data) {
+      sheets.set(chatId, data)
+      return data
+    }
   } catch (e) {}
   return null
 }
@@ -29,9 +38,14 @@ async function saveChatSheet(chatId: string, xml: string) {
 async function loadChatSnapshots(chatId: string) {
   try {
     const data = await spindle.storage.read(snapshotsPath(chatId))
-    if (data) { snapshots.set(chatId, JSON.parse(data)) } 
-    else { snapshots.set(chatId, []) }
-  } catch (e) { snapshots.set(chatId, []) }
+    if (data) {
+      snapshots.set(chatId, JSON.parse(data))
+    } else {
+      snapshots.set(chatId, [])
+    }
+  } catch (e) {
+    snapshots.set(chatId, [])
+  }
 }
 
 async function saveChatSnapshots(chatId: string) {
@@ -41,6 +55,7 @@ async function saveChatSnapshots(chatId: string) {
 
 async function switchToChat(chatId: string | null) {
   activeChatId = chatId
+  committedMessageIds.clear()
   if (!chatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
     return
@@ -54,13 +69,18 @@ async function switchToChat(chatId: string | null) {
 function extractTextContent(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
-    return content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
+    return content
+      .filter((p: any) => p.type === 'text')
+      .map((p: any) => p.text)
+      .join('\n')
   }
   return ''
 }
 
 function extractSheetUpdate(content: string): string | null {
-  const match = content.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i)
+  const match = content.match(
+    /<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i,
+  )
   return match ? match[1].trim() : null
 }
 
@@ -71,11 +91,6 @@ function findLastAssistantMessage(messages: any[]): any | null {
   }
   return null
 }
-
-// ─── Robust XML Tag Extractor ─────────────────────────────────
-//
-// Instead of relying on strict regex for the whole tag, we just find
-// <Item ...> and </Item> blocks, then parse the attributes out of them.
 
 function getAttrFromString(str: string, attr: string): string {
   const match = str.match(new RegExp(`${attr}="([^"]*)"`, 'i'))
@@ -89,8 +104,12 @@ function runDigestionTick(newXml: string, oldXml: string): string {
       if (!match) return null
       const timeStr = match[1].trim()
       const parts = timeStr.split(':').map(Number)
-      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        return parts[0] + (parts[1] / 60)
+      if (
+        parts.length === 2 &&
+        !isNaN(parts[0]) &&
+        !isNaN(parts[1])
+      ) {
+        return parts[0] + parts[1] / 60
       }
       const h = parseFloat(timeStr)
       return isNaN(h) ? null : h
@@ -106,7 +125,9 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     if (elapsed === 0) return newXml
 
     const getStat = (xml: string, tag: string) => {
-      const match = xml.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'))
+      const match = xml.match(
+        new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'),
+      )
       return match ? parseFloat(match[1]) : 0
     }
 
@@ -114,38 +135,57 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     const baseDigRate = getStat(newXml, 'BaseDigestionRate') || 25
     const acidRiseRate = getStat(newXml, 'AcidRiseRate') || 10
 
-    const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
-    const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
+    const stomachMatch = newXml.match(
+      /<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i,
+    )
+    const stomachContents = stomachMatch
+      ? stomachMatch[1].trim()
+      : ''
     const hasItems = stomachContents.includes('<Item')
 
     if (hasItems) {
-      acidLevel = Math.min(100, acidLevel + (acidRiseRate * elapsed))
+      acidLevel = Math.min(100, acidLevel + acidRiseRate * elapsed)
     } else {
-      acidLevel = Math.max(0, acidLevel - (acidRiseRate * elapsed))
+      acidLevel = Math.max(0, acidLevel - acidRiseRate * elapsed)
     }
 
-    const acidMultiplier = 1 + (acidLevel / 100)
+    const acidMultiplier = 1 + acidLevel / 100
 
-    // Update Acid Level in the XML string
-    let updatedXml = newXml.replace(/<CurrentAcidPct>.*?<\/CurrentAcidPct>/i, `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`)
+    let updatedXml = newXml.replace(
+      /<CurrentAcidPct>.*?<\/CurrentAcidPct>/i,
+      `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`,
+    )
 
-    // Process all <Item ...> tags inside the stomach
     const itemRegex = /<Item\s+([^>]+)>([\s\S]*?)<\/Item>/gi
-    updatedXml = updatedXml.replace(itemRegex, (match, attrs, inner) => {
-      const type = getAttrFromString(attrs, 'type') || 'Food'
-      const name = getAttrFromString(attrs, 'name')
-      const vol = getAttrFromString(attrs, 'volume_L')
-      
-      let speedMult = 1
-      if (type === 'Liquid') speedMult = 3
-      else if (type === 'Prey') speedMult = 0.5
+    let itemCount = 0
+    updatedXml = updatedXml.replace(
+      itemRegex,
+      (match, attrs, inner) => {
+        itemCount++
+        const type = getAttrFromString(attrs, 'type') || 'Food'
+        const name = getAttrFromString(attrs, 'name')
+        const vol = getAttrFromString(attrs, 'volume_L')
 
-      let digNum = parseFloat(getAttrFromString(attrs, 'digestion').replace('%', '')) || 0
-      const digIncrease = baseDigRate * speedMult * acidMultiplier * elapsed
-      digNum = Math.min(100, digNum + digIncrease)
+        let speedMult = 1
+        if (type === 'Liquid') speedMult = 3
+        else if (type === 'Prey') speedMult = 0.5
 
-      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
-    })
+        let digNum =
+          parseFloat(
+            getAttrFromString(attrs, 'digestion').replace('%', ''),
+          ) || 0
+        const digIncrease =
+          baseDigRate * speedMult * acidMultiplier * elapsed
+        digNum = Math.min(100, digNum + digIncrease)
+
+        return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
+      },
+    )
+
+    spindle.log.info(
+      `Digestion tick: ${elapsed.toFixed(2)}h elapsed, ` +
+        `acid ${acidLevel.toFixed(1)}%, ${itemCount} items processed`,
+    )
 
     return updatedXml
   } catch (e) {
@@ -154,9 +194,13 @@ function runDigestionTick(newXml: string, oldXml: string): string {
   }
 }
 
-async function commitUpdate(chatId: string, messageId: string, sheetXml: string, chatIndex: number) {
+async function commitUpdate(
+  chatId: string,
+  messageId: string,
+  sheetXml: string,
+  chatIndex: number,
+) {
   const oldSheet = sheets.get(chatId) || ''
-  
   const finalXml = runDigestionTick(sheetXml, oldSheet)
 
   await saveChatSheet(chatId, finalXml)
@@ -168,24 +212,32 @@ async function commitUpdate(chatId: string, messageId: string, sheetXml: string,
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
   }
-  spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
+  spindle.log.info(
+    `Sheet committed for message ${messageId} in chat ${chatId}`,
+  )
 }
 
 async function rollbackOnDelete(chatId: string, messageId: string) {
   const list = snapshots.get(chatId)
   if (!list) return
 
-  const hadSnapshot = list.some(s => s.messageId === messageId)
-  const newList = list.filter(s => s.messageId !== messageId)
+  const hadSnapshot = list.some((s) => s.messageId === messageId)
+  const newList = list.filter((s) => s.messageId !== messageId)
   snapshots.set(chatId, newList)
+  committedMessageIds.delete(messageId)
 
   if (!hadSnapshot) return
 
   if (newList.length > 0) {
-    const latest = newList.reduce((a, b) => a.chatIndex > b.chatIndex ? a : b)
+    const latest = newList.reduce((a, b) =>
+      a.chatIndex > b.chatIndex ? a : b,
+    )
     await saveChatSheet(chatId, latest.sheetXml)
     if (chatId === activeChatId) {
-      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
+      spindle.sendToFrontend({
+        type: 'SHEET_UPDATED',
+        xml: latest.sheetXml,
+      })
     }
   } else {
     await saveChatSheet(chatId, '')
@@ -195,7 +247,9 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
   }
 
   await saveChatSnapshots(chatId)
-  spindle.log.info(`Rolled back in chat ${chatId} after deletion of ${messageId}`)
+  spindle.log.info(
+    `Rolled back in chat ${chatId} after deletion of ${messageId}`,
+  )
 }
 
 function buildSheetPrompt(sheetXml: string): string {
@@ -212,8 +266,8 @@ ${sheetXml}
 When the character sheet changes during the scene, you MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of your response.
 
 CRITICAL XML RULES:
-1. You MUST copy the EXACT XML structure provided in <CurrentCharacterSheet>. Do NOT invent new tags, do NOT change tag names, do NOT change attributes. 
-2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format. 
+1. You MUST copy the EXACT XML structure provided in <CurrentCharacterSheet>. Do NOT invent new tags, do NOT change tag names, do NOT change attributes.
+2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format.
    VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist".
 3. The <Equip> tag MUST ALWAYS have an elasticity attribute. Valid values are "rigid", "standard", "stretchy", or "magic". Never omit it.
 4. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
@@ -228,7 +282,7 @@ CRITICAL XML RULES:
 <CharacterSheet>
   ...the complete updated sheet with ALL fields, not just changed ones...
 </CharacterSheet>
-</sheet_update>`
+</sheet_update>]`
 }
 
 spindle.onFrontendMessage(async (msg: any) => {
@@ -238,14 +292,19 @@ spindle.onFrontendMessage(async (msg: any) => {
       return
     }
     await saveChatSheet(activeChatId, msg.xmlData)
-    spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
+    spindle.log.info(
+      `Sheet synced from frontend for chat ${activeChatId}`,
+    )
     spindle.toast.success('Character sheet synced!')
   }
-  
+
   if (msg.type === 'GET_LATEST_SHEET') {
-    const lastId = spindle.chats.getActiveChat()?.lastMessageId
-    // Fallback to iterating messages if needed, though this is a placeholder 
-    // since frontend will parse the DOM directly for this specific action.
+    if (!activeChatId) {
+      spindle.toast.warning('Open a chat first.')
+      return
+    }
+    const sheet = sheets.get(activeChatId) || ''
+    spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
 })
 
@@ -253,6 +312,8 @@ spindle.registerInterceptor(async (messages, context) => {
   const ctx = context as any
   const chatId: string = ctx.chatId
   const genType: string = ctx.generationType
+
+  pendingGenerationType = genType
 
   let sheet = sheets.get(chatId)
   if (sheet === undefined) {
@@ -263,12 +324,22 @@ spindle.registerInterceptor(async (messages, context) => {
 
   if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
-    if (lastAssistant && lastAssistant.sourceMessageId) {
+    if (
+      lastAssistant &&
+      lastAssistant.sourceMessageId &&
+      !committedMessageIds.has(lastAssistant.sourceMessageId)
+    ) {
       const content = extractTextContent(lastAssistant.content)
       const update = extractSheetUpdate(content)
       if (update) {
         const chatIndex = lastAssistant.sourceIndexInChat ?? 0
-        await commitUpdate(chatId, lastAssistant.sourceMessageId, update, chatIndex)
+        await commitUpdate(
+          chatId,
+          lastAssistant.sourceMessageId,
+          update,
+          chatIndex,
+        )
+        committedMessageIds.add(lastAssistant.sourceMessageId)
         sheet = sheets.get(chatId) || sheet
       }
     }
@@ -285,6 +356,31 @@ spindle.registerInterceptor(async (messages, context) => {
   }
 }, 50)
 
+spindle.on('GENERATION_ENDED', async (payload: any) => {
+  if (payload.error) return
+
+  const { chatId, messageId, content } = payload
+  if (!chatId || !messageId || !content) return
+  if (chatId !== activeChatId) return
+  if (
+    pendingGenerationType === 'swipe' ||
+    pendingGenerationType === 'regenerate'
+  ) {
+    return
+  }
+  if (committedMessageIds.has(messageId)) return
+
+  const update = extractSheetUpdate(content)
+  if (!update) return
+
+  const list = snapshots.get(chatId) || []
+  const chatIndex = list.length
+  await commitUpdate(chatId, messageId, update, chatIndex)
+  committedMessageIds.add(messageId)
+
+  spindle.toast.success('Sheet updated — digestion tick applied')
+})
+
 spindle.on('CHAT_SWITCHED', async (payload: any) => {
   await switchToChat(payload.chatId)
 })
@@ -294,4 +390,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine enabled)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v2)')
