@@ -505,31 +505,16 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-    document.getElementById('bt-sync-from-chat-btn')?.addEventListener('click', () => {
-    const latestId = ctx.messages.getLatestMessageId();
-    if (!latestId) {
-      ctx.toast.warning('No messages found in this chat.');
-      return;
-    }
-    
-    const bubble = ctx.dom.findMessageElement(latestId);
-    if (!bubble) {
-      ctx.toast.warning('Latest message is not rendered on screen. Scroll to it and try again.');
-      return;
-    }
-    
-    // Get the text content of the latest message
-    const text = bubble.innerText || bubble.textContent || '';
-    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
-    
-    if (match && match[1]) {
-      const xml = match[1].trim();
-      populateFormFromXml(xml);
-      ctx.toast.success('Synced from latest message!');
-    } else {
-      ctx.toast.error('No <sheet_update> block found in the latest message.');
-    }
-  });
+  document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
+    let xml = `<CharacterSheet>\n  <State>\n`;
+    document.querySelectorAll('.bt-scrape').forEach(el => {
+      const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      const val = input.value.trim();
+      const id = input.getAttribute('data-id');
+      if (val !== '' && val !== '0' && id && ['Health', 'Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room'].includes(id)) {
+        xml += `    <${id}>${val}</${id}>\n`;
+      }
+    });
     xml += `  </State>\n\n  <BaseStats>\n`;
     document.querySelectorAll('.bt-scrape').forEach(el => {
       const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -617,6 +602,32 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
+  // ─── Sync from Latest Message Button ───────────────────────
+  document.getElementById('bt-sync-from-chat-btn')?.addEventListener('click', () => {
+    const latestId = ctx.messages.getLatestMessageId();
+    if (!latestId) {
+      ctx.toast.warning('No messages found in this chat.');
+      return;
+    }
+    
+    const bubble = ctx.dom.findMessageElement(latestId);
+    if (!bubble) {
+      ctx.toast.warning('Latest message is not rendered on screen. Scroll to it and try again.');
+      return;
+    }
+    
+    const text = bubble.innerText || bubble.textContent || '';
+    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
+    
+    if (match && match[1]) {
+      const xml = match[1].trim();
+      populateFormFromXml(xml);
+      ctx.toast.success('Synced from latest message!');
+    } else {
+      ctx.toast.error('No <sheet_update> block found in the latest message.');
+    }
+  });
+
   const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
   const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
   breastInput?.addEventListener('input', () => {
@@ -665,8 +676,6 @@ export function setup(ctx: SpindleFrontendContext) {
   }
 
   // ─── Live Preview on Swipe ─────────────────────────────────
-  // When the user browses swipes, instantly update the UI to show
-  // the sheet state from whichever swipe they are looking at.
   ctx.events.on('MESSAGE_SWIPED', (payload: any) => {
     if (payload.action === 'navigated' || payload.action === 'added') {
       const msg = payload.message;
@@ -683,8 +692,6 @@ export function setup(ctx: SpindleFrontendContext) {
   });
 
   // ─── Live Preview on Generation End ────────────────────────
-  // When the LLM finishes a response, instantly update the UI to
-  // show the pending sheet from that response.
   ctx.events.on('MESSAGE_SENT', (payload: any) => {
     const msg = payload.message;
     if (msg && msg.swipes && msg.swipe_id !== undefined) {
