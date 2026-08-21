@@ -136,7 +136,14 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     }
 
     let elapsed = newTime - oldTime
-    if (elapsed < 0) elapsed += 24
+    
+    // FIX: If time goes backwards, it's a rollback, not a midnight wrap.
+    // Return the new XML unchanged to preserve the historical digestion state.
+    if (elapsed < 0) {
+      spindle.log.info('Digestion tick skipped: time went backwards (rollback)')
+      return newXml
+    }
+    
     if (elapsed === 0) {
       spindle.log.info('Digestion tick skipped: 0 hours elapsed')
       return newXml
@@ -261,14 +268,22 @@ async function commitUpdate(
 
 async function rollbackOnDelete(chatId: string, messageId: string) {
   const list = snapshots.get(chatId)
-  if (!list) return
+  if (!list) {
+    spindle.toast.warning('Rollback: no snapshot list found')
+    return
+  }
 
   const hadSnapshot = list.some((s) => s.messageId === messageId)
   const newList = list.filter((s) => s.messageId !== messageId)
   snapshots.set(chatId, newList)
   committedMessageIds.delete(messageId)
 
-  if (!hadSnapshot) return
+  if (!hadSnapshot) {
+    spindle.toast.warning('Rollback: deleted message had no snapshot')
+    return
+  }
+
+  spindle.toast.info('Rollback: restoring previous sheet state...')
 
   if (newList.length > 0) {
     const latest = newList.reduce((a, b) =>
@@ -281,11 +296,13 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
         xml: latest.sheetXml,
       })
     }
+    spindle.toast.success('Rollback: restored previous sheet')
   } else {
     await saveChatSheet(chatId, '')
     if (chatId === activeChatId) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
     }
+    spindle.toast.success('Rollback: cleared sheet')
   }
 
   await saveChatSnapshots(chatId)
@@ -399,39 +416,21 @@ spindle.registerInterceptor(async (messages, context) => {
 }, 50)
 
 spindle.on('GENERATION_ENDED', async (payload: any) => {
-  spindle.toast.info(`GEN_ENDED: type=${pendingGenerationType}`)
-
-  if (payload.error) {
-    spindle.toast.warning('GEN_ENDED: had error')
-    return
-  }
+  if (payload.error) return
 
   const { chatId, messageId, content } = payload
-  if (!chatId || !messageId || !content) {
-    spindle.toast.warning('GEN_ENDED: missing fields')
-    return
-  }
-  if (chatId !== activeChatId) {
-    spindle.toast.warning('GEN_ENDED: wrong chat')
-    return
-  }
+  if (!chatId || !messageId || !content) return
+  if (chatId !== activeChatId) return
   if (
     pendingGenerationType === 'swipe' ||
     pendingGenerationType === 'regenerate'
   ) {
-    spindle.toast.info('GEN_ENDED: skipped (swipe/regenerate)')
     return
   }
-  if (committedMessageIds.has(messageId)) {
-    spindle.toast.info('GEN_ENDED: already committed')
-    return
-  }
+  if (committedMessageIds.has(messageId)) return
 
   const update = extractSheetUpdate(content)
-  if (!update) {
-    spindle.toast.warning('GEN_ENDED: no sheet_update found')
-    return
-  }
+  if (!update) return
 
   const list = snapshots.get(chatId) || []
   const chatIndex = list.length
@@ -450,4 +449,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v3)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v4)')
