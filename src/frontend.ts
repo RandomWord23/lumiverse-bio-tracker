@@ -1,4 +1,4 @@
-<button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
+import type { SpindleFrontendContext } from 'lumiverse-spindle-types';
 
 export function setup(ctx: SpindleFrontendContext) {
   const style = document.createElement('style');
@@ -31,7 +31,7 @@ export function setup(ctx: SpindleFrontendContext) {
     .bt-add-btn { background: #2a2a2a; color: #4CAF50; border: 1px solid #333; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; float: right; font-size: 11px; }
     .bt-dynamic-item { background: #222; border: 1px dashed #444; padding: 10px; border-radius: 6px; margin-bottom: 10px; position: relative; }
     .bt-remove-btn { position: absolute; top: 10px; right: 10px; background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; }
-    .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; transition: background 0.2s; }
+    .bt-action-btn { width: 100%; padding: 12px; background: #333; color: white; border: 1px solid #444; border-radius: 4px; cursor: pointer; margin-bottom: 10px; font-weight: bold; transition: background 0.2s; touch-action: manipulation; }
     .slot-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 2px; display: block; }
     .flex-row { display: flex; justify-content: space-between; align-items: center; }
     .vital-slot { background: #222; border: 1px dashed #555; border-radius: 6px; padding: 8px; margin-bottom: 8px; position: relative; }
@@ -602,11 +602,11 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-     // ─── Sync from Latest Message Button ───────────────────────
+  // ─── Sync from Latest Message Button ───────────────────────
   const syncChatBtn = document.getElementById('bt-sync-chat-btn');
   if (syncChatBtn) {
     syncChatBtn.addEventListener('pointerdown', () => {
-      ctx.toast.info('Syncing...');
+      ctx.toast.info('Syncing from chat...');
       const latestId = ctx.messages.getLatestMessageId();
       if (!latestId) {
         ctx.toast.warning('No messages found in this chat.');
@@ -615,7 +615,7 @@ export function setup(ctx: SpindleFrontendContext) {
       
       const bubble = ctx.dom.findMessageElement(latestId);
       if (!bubble) {
-        ctx.toast.warning('Latest message is not rendered on screen. Scroll to it and try again.');
+        ctx.toast.warning('Latest message is not on screen. Scroll to it and try again.');
         return;
       }
       
@@ -677,7 +677,8 @@ export function setup(ctx: SpindleFrontendContext) {
   // Helper to extract <sheet_update> XML from a text string
   function extractSheetUpdateFromText(text: string): string | null {
     if (!text) return null;
-    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
+    let cleanText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    const match = cleanText.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
     return match ? match[1].trim() : null;
   }
 
@@ -709,24 +710,16 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-    // ─── Live Preview on Generation Ended (Fallback) ───────────
+  // Fallback for generation ending
   ctx.events.on('GENERATION_ENDED', async () => {
-    // Wait a brief moment for the message to save in the UI
     await new Promise(r => setTimeout(r, 500));
-    
     const latestId = ctx.messages.getLatestMessageId();
     if (!latestId) return;
-    
     const bubble = ctx.dom.findMessageElement(latestId);
     if (!bubble) return;
-    
     let text = bubble.innerText || bubble.textContent || '';
-    text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-    
-    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
-    if (match && match[1]) {
-      populateFormFromXml(match[1].trim());
-    }
+    const xml = extractSheetUpdateFromText(text);
+    if (xml) populateFormFromXml(xml);
   });
 
   function populateFormFromXml(xml: string) {
