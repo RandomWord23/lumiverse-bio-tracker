@@ -1,81 +1,103 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
 // ═══════════════════════════════════════════════════════════════
-// BIO TRACKER — Backend
-// ═══════════════════════════════════════════════════════════════
-//
-// This file runs in an isolated Bun worker. It does three things:
-//
-//   1. Stores the character sheet XML received from the frontend
-//   2. Injects that XML into every LLM generation via an interceptor
-//   3. Parses <sheet_update> blocks from the LLM's previous response
-//      and commits them as the new current sheet — but ONLY when the
-//      user sends a new message, never on swipes or regenerations
-//
+// BIO TRACKER — Backend (per-chat edition)
 // ═══════════════════════════════════════════════════════════════
 
 // ─── Types ─────────────────────────────────────────────────────
 
-// A snapshot is a saved copy of the sheet at a specific point in the
-// chat. We use these for rollback when messages are deleted.
 interface Snapshot {
-  messageId: string       // which assistant message produced this sheet
-  sheetXml: string        // the full XML at that point
-  chatIndex: number       // position in the chat (for ordering)
+  messageId: string
+  sheetXml: string
+  chatIndex: number
 }
 
-// ─── In-memory state ───────────────────────────────────────────
+// ─── State ─────────────────────────────────────────────────────
 //
-// These variables hold the current state while the extension is
-// running. We also save them to disk so they survive restarts.
+// We keep a map of chatId -> sheet XML so the interceptor can
+// quickly look up the right sheet for whichever chat is generating.
+// We also keep the "active chatId" so the frontend sync button
+// knows which chat to save to.
 
-let currentSheetXml: string = ''         // the "live" sheet
-let snapshots: Snapshot[] = []           // history of committed sheets
+let activeChatId: string | null = null
+const sheets: Map<string, string> = new Map()
+const snapshots: Map<string, Snapshot[]> = new Map()
 
-// ─── Storage file names ────────────────────────────────────────
+// ─── Storage paths ─────────────────────────────────────────────
 //
-// spindle.storage gives us a private folder just for this extension.
-// We store two files: the current sheet and the snapshot history.
+// Each chat gets its own files inside our storage folder:
+//   sheets/<chatId>.xml      — the current sheet for that chat
+//   snapshots/<chatId>.json  — the snapshot history for that chat
 
-const SHEET_FILE = 'current_sheet.xml'
-const SNAPSHOTS_FILE = 'snapshots.json'
+function sheetPath(chatId: string) {
+  return `sheets/${chatId}.xml`
+}
 
-// ─── Load saved state on startup ───────────────────────────────
-//
-// When the extension starts, we read our files from storage so the
-// sheet survives restarts.
+function snapshotsPath(chatId: string) {
+  return `snapshots/${chatId}.json`
+}
 
-async function loadState() {
+// ─── Load / save per chat ──────────────────────────────────────
+
+async function loadChatSheet(chatId: string) {
   try {
-    const data = await spindle.storage.read(SHEET_FILE)
-    if (data) currentSheetXml = data
+    const data = await spindle.storage.read(sheetPath(chatId))
+    if (data) {
+      sheets.set(chatId, data)
+      return data
+    }
   } catch (e) {
-    spindle.log.warn(`Could not load sheet: ${e}`)
+    // File doesn't exist yet — that's fine, it's a new chat
+  }
+  return null
+}
+
+async function saveChatSheet(chatId: string, xml: string) {
+  sheets.set(chatId, xml)
+  await spindle.storage.write(sheetPath(chatId), xml)
+}
+
+async function loadChatSnapshots(chatId: string) {
+  try {
+    const data = await spindle.storage.read(snapshotsPath(chatId))
+    if (data) {
+      snapshots.set(chatId, JSON.parse(data))
+    } else {
+      snapshots.set(chatId, [])
+    }
+  } catch (e) {
+    snapshots.set(chatId, [])
+  }
+}
+
+async function saveChatSnapshots(chatId: string) {
+  const list = snapshots.get(chatId) || []
+  await spindle.storage.write(snapshotsPath(chatId), JSON.stringify(list))
+}
+
+// ─── Switch to a chat ──────────────────────────────────────────
+//
+// Called when the user opens a different chat. Loads that chat's
+// sheet and snapshots into memory, then tells the frontend to
+// refresh its form fields.
+
+async function switchToChat(chatId: string | null) {
+  activeChatId = chatId
+
+  if (!chatId) {
+    // User went to the home screen — clear the frontend
+    spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
+    return
   }
 
-  try {
-    const data = await spindle.storage.read(SNAPSHOTS_FILE)
-    if (data) snapshots = JSON.parse(data)
-  } catch (e) {
-    spindle.log.warn(`Could not load snapshots: ${e}`)
-  }
+  const sheet = await loadChatSheet(chatId)
+  await loadChatSnapshots(chatId)
+
+  spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: sheet || '' })
+  spindle.log.info(`Switched to chat ${chatId}`)
 }
 
-// ─── Save state to storage ─────────────────────────────────────
-
-async function saveSheet() {
-  await spindle.storage.write(SHEET_FILE, currentSheetXml)
-}
-
-async function saveSnapshots() {
-  await spindle.storage.write(SNAPSHOTS_FILE, JSON.stringify(snapshots))
-}
-
-// ─── Extract text from message content ─────────────────────────
-//
-// Message content can be a plain string OR an array of "parts"
-// (text, images, tool calls, etc.). This helper always returns
-// a plain string so we can search it with regex.
+// ─── Text extraction helpers ───────────────────────────────────
 
 function extractTextContent(content: unknown): string {
   if (typeof content === 'string') return content
@@ -88,29 +110,12 @@ function extractTextContent(content: unknown): string {
   return ''
 }
 
-// ─── Extract <sheet_update> block from a message ───────────────
-//
-// The LLM includes a block like:
-//   <sheet_update>
-//   <CharacterSheet>...full XML...</CharacterSheet>
-//   </sheet_update>
-//
-// This function finds it and returns the inner XML.
-// Returns null if the message has no update block.
-
 function extractSheetUpdate(content: string): string | null {
   const match = content.match(
     /<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i
   )
   return match ? match[1].trim() : null
 }
-
-// ─── Find the last assistant message in chat history ───────────
-//
-// The `messages` array passed to the interceptor contains all
-// messages that will be sent to the LLM. We walk backwards to find
-// the most recent assistant reply that came from stored chat history
-// (as opposed to something injected by another extension).
 
 function findLastAssistantMessage(messages: any[]): any | null {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -122,65 +127,55 @@ function findLastAssistantMessage(messages: any[]): any | null {
   return null
 }
 
-// ─── Commit a sheet update ─────────────────────────────────────
-//
-// "Committing" means: replace the current sheet with the new one
-// and save a snapshot so we can roll back later.
+// ─── Commit + rollback ─────────────────────────────────────────
 
 async function commitUpdate(
+  chatId: string,
   messageId: string,
   sheetXml: string,
   chatIndex: number
 ) {
-  currentSheetXml = sheetXml
+  await saveChatSheet(chatId, sheetXml)
 
-  // Save a snapshot — this is our restore point
-  snapshots.push({ messageId, sheetXml, chatIndex })
+  const list = snapshots.get(chatId) || []
+  list.push({ messageId, sheetXml, chatIndex })
+  snapshots.set(chatId, list)
 
-  await saveSheet()
-  await saveSnapshots()
+  await saveChatSnapshots(chatId)
 
-  // Tell the frontend to refresh its UI with the new values
-  spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: currentSheetXml })
+  if (chatId === activeChatId) {
+    spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: sheetXml })
+  }
 
-  spindle.log.info(`Sheet committed for message ${messageId}`)
+  spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
 }
 
-// ─── Rollback when a message is deleted ────────────────────────
-//
-// When the user deletes a message, we remove its snapshot and
-// restore the sheet to the most recent remaining snapshot.
+async function rollbackOnDelete(chatId: string, messageId: string) {
+  const list = snapshots.get(chatId)
+  if (!list) return
 
-async function rollbackOnDelete(messageId: string) {
-  const hadSnapshot = snapshots.some(s => s.messageId === messageId)
+  const hadSnapshot = list.some(s => s.messageId === messageId)
 
-  // Remove the deleted message's snapshot
-  snapshots = snapshots.filter(s => s.messageId !== messageId)
+  const newList = list.filter(s => s.messageId !== messageId)
+  snapshots.set(chatId, newList)
 
-  if (!hadSnapshot) return // nothing to roll back
+  if (!hadSnapshot) return
 
-  // Find the latest remaining snapshot (highest chatIndex = most recent)
-  if (snapshots.length > 0) {
-    const latest = snapshots.reduce((a, b) =>
+  if (newList.length > 0) {
+    const latest = newList.reduce((a, b) =>
       a.chatIndex > b.chatIndex ? a : b
     )
-    currentSheetXml = latest.sheetXml
+    await saveChatSheet(chatId, latest.sheetXml)
+    if (chatId === activeChatId) {
+      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
+    }
   }
-  // If no snapshots remain, keep the current sheet as-is.
-  // The user can re-sync from the UI if needed.
 
-  await saveSheet()
-  await saveSnapshots()
-
-  spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: currentSheetXml })
-  spindle.log.info(`Rolled back after deletion of ${messageId}`)
+  await saveChatSnapshots(chatId)
+  spindle.log.info(`Rolled back in chat ${chatId} after deletion of ${messageId}`)
 }
 
-// ─── Build the system prompt for sheet injection ───────────────
-//
-// This is the text that gets injected as a system message before
-// every generation. It tells the LLM what the current sheet looks
-// like and how to format updates.
+// ─── Build the injection prompt ────────────────────────────────
 
 function buildSheetPrompt(sheetXml: string): string {
   return `[CHARACTER SHEET SYSTEM
@@ -213,48 +208,39 @@ Rules:
 
 // ─── Frontend message handler ──────────────────────────────────
 //
-// The frontend sends { type: 'SYNC_BIO_DATA', xmlData: xml }
-// when the user clicks the "Sync" button. We store the XML.
+// The frontend sends SYNC_BIO_DATA when the user clicks sync.
+// We save it to the currently active chat.
 
 spindle.onFrontendMessage(async (msg: any) => {
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
-    currentSheetXml = msg.xmlData
-    await saveSheet()
-    spindle.log.info('Sheet synced from frontend')
-    spindle.toast.success('Character sheet synced to backend!')
+    if (!activeChatId) {
+      spindle.toast.warning('Open a chat first before syncing the sheet.')
+      return
+    }
+
+    await saveChatSheet(activeChatId, msg.xmlData)
+    spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
+    spindle.toast.success('Character sheet synced!')
   }
 })
 
 // ─── The Interceptor ───────────────────────────────────────────
-//
-// This is the core of the extension. It runs right before every LLM
-// generation. It does two things:
-//
-//   1. If this is a NEW message (not a swipe), it looks at the last
-//      assistant response in the chat, finds the <sheet_update> block,
-//      and commits it as the new current sheet.
-//
-//   2. It injects the current sheet as a system message so the LLM
-//      always knows the current state.
 
 spindle.registerInterceptor(async (messages, context) => {
-  // If the user hasn't synced a sheet yet, don't inject anything
-  if (!currentSheetXml) return messages
-
   const ctx = context as any
+  const chatId: string = ctx.chatId
   const genType: string = ctx.generationType
 
-  // ── Step 1: Commit the previous update (only on new messages) ──
-  //
-  // generationType tells us what kind of generation this is:
-  //   "normal"     — user sent a new message
-  //   "swipe"      — user swiped for a new response to the same message
-  //   "regenerate" — user regenerated the last response
-  //   "continue"   — user continued the last response
-  //
-  // We ONLY commit on "normal". Swipes and regenerations get the
-  // same injected sheet so the LLM tries again with the same state.
+  // Load this chat's sheet if we haven't already
+  let sheet = sheets.get(chatId)
+  if (sheet === undefined) {
+    sheet = (await loadChatSheet(chatId)) || ''
+  }
 
+  // No sheet for this chat yet — don't inject anything
+  if (!sheet) return messages
+
+  // ── Commit previous update on new messages only ──
   if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
 
@@ -265,55 +251,46 @@ spindle.registerInterceptor(async (messages, context) => {
       if (update) {
         const chatIndex = lastAssistant.sourceIndexInChat ?? 0
         await commitUpdate(
+          chatId,
           lastAssistant.sourceMessageId,
           update,
           chatIndex
         )
+        // Reload the sheet after commit
+        sheet = sheets.get(chatId) || sheet
       }
     }
   }
 
-  // ── Step 2: Inject the current sheet ──
-  //
-  // This happens for ALL generation types. The LLM always sees
-  // the current committed sheet state.
-
+  // ── Inject current sheet ──
   const injection = {
     role: 'system' as const,
-    content: buildSheetPrompt(currentSheetXml),
+    content: buildSheetPrompt(sheet),
   }
 
   return {
     messages: [injection, ...messages],
     breakdown: [{ messageIndex: 0, name: 'Character Sheet' }],
   }
-}, 50) // priority 50 = runs early, before most other interceptors
+}, 50)
 
-// ─── Message deleted handler ───────────────────────────────────
-//
-// When the user deletes a message, we remove its snapshot and
-// roll back to the most recent remaining one.
+// ─── Events ────────────────────────────────────────────────────
 
-spindle.on('MESSAGE_DELETED', async (payload: any) => {
-  const { messageId } = payload
-  await rollbackOnDelete(messageId)
+// User switched to a different chat
+spindle.on('CHAT_SWITCHED', async (payload: any) => {
+  await switchToChat(payload.chatId)
 })
 
-// ─── Chat switched handler ─────────────────────────────────────
-//
-// When the user switches to a different chat, we reload state
-// and tell the frontend to refresh.
-
-spindle.on('CHAT_SWITCHED', async (payload: any) => {
-  await loadState()
-  spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: currentSheetXml })
+// User deleted a message — roll back if needed
+spindle.on('MESSAGE_DELETED', async (payload: any) => {
+  const { chatId, messageId } = payload
+  if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
 // ─── Startup ───────────────────────────────────────────────────
 //
-// Load saved state and notify the frontend.
+// We don't know which chat is active yet, so we wait for the
+// first CHAT_SWITCHED event. The frontend will get a SHEET_UPDATED
+// message with the correct sheet at that point.
 
-loadState().then(() => {
-  spindle.log.info('Bio Tracker backend loaded')
-  spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: currentSheetXml })
-})
+spindle.log.info('Bio Tracker backend loaded (per-chat mode)')
