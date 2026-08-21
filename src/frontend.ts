@@ -1021,21 +1021,10 @@ export function setup(ctx: SpindleFrontendContext) {
   }
 
   // ─── Tag interceptor: hide sheet_update from chat ──────────
+  // Only used to hide the XML. Do not update the form here.
   const unsubTag = ctx.messages.registerTagInterceptor(
     { tagName: 'sheet_update', removeFromMessage: true },
-    (payload) => {
-      if (payload.isStreaming) return
-      const latestId = ctx.messages.getLatestMessageId()
-      if (payload.messageId && payload.messageId === latestId) {
-        if (payload.content) {
-          try {
-            populateFormFromXml(payload.content.trim())
-          } catch (e) {
-            // silent fail
-          }
-        }
-      }
-    },
+    () => {}
   )
 
   // ─── Backend message handler ───────────────────────────────
