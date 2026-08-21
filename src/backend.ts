@@ -175,7 +175,8 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     let itemCount = 0
 
     // Pass 1: Normal tags <Item ...>...</Item>
-    const itemRegex1 = /<Item\s+([^>]+)>([\s\S]*?)<\/Item>/gi
+    // [^>]*[^>\/] ensures we don't accidentally match self-closing tags
+    const itemRegex1 = /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi
     updatedXml = updatedXml.replace(
       itemRegex1,
       (match, attrs, inner) => {
