@@ -40,6 +40,7 @@ export function setup(ctx: SpindleFrontendContext) {
     #bt-preview-header { background: #222; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; color: #ff4444; border-bottom: 1px solid #444; }
     #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
     #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
+    .cloth-badge { margin-left: 6px; font-size: 11px; font-weight: bold; text-transform: none; }
   `)
 
   // ─── Preview Modal ─────────────────────────────────────────
@@ -1021,7 +1022,6 @@ export function setup(ctx: SpindleFrontendContext) {
   }
 
   // ─── Tag interceptor: hide sheet_update from chat ──────────
-  // Only used to hide the XML. Do not update the form here.
   const unsubTag = ctx.messages.registerTagInterceptor(
     { tagName: 'sheet_update', removeFromMessage: true },
     () => {}
@@ -1123,6 +1123,16 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   })
 
+  // ─── Clothing Condition Colors ─────────────────────────────
+  const condColors: Record<string, string> = {
+    intact: '#4CAF50',
+    snug: '#ffeb3b',
+    strained: '#ff9800',
+    tight: '#ff5722',
+    damaged: '#ff4444',
+    ruined: '#ff0000',
+  }
+
   // ─── XML to form parser ────────────────────────────────────
   function populateFormFromXml(xml: string) {
     // Clear all dynamic items
@@ -1132,24 +1142,16 @@ export function setup(ctx: SpindleFrontendContext) {
       )
       .forEach((el) => el.remove())
 
-    // Clear all dynamic items
+    // Clear clothing condition badges
     document
-      .querySelectorAll(
-        '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot',
-      )
+      .querySelectorAll('.cloth-badge')
       .forEach((el) => el.remove())
-
-    // NOTE: We intentionally do NOT clear static inputs (.bt-scrape, .bt-cloth-slot).
-    // The LLM often forgets to output every field. If we cleared them,
-    // omitted fields would wipe to blank. By leaving them, we preserve
-    // the last known value until the LLM explicitly provides a new one.
 
     if (!xml || xml.trim() === '') return
 
     const parser = new DOMParser()
     const doc = parser.parseFromString(xml, 'application/xml')
 
-    // Check for parse errors
     const parseError = doc.querySelector('parsererror')
     if (parseError) return
 
@@ -1235,6 +1237,7 @@ export function setup(ctx: SpindleFrontendContext) {
       const slot = equipNode.getAttribute('slot')
       const elasticity = equipNode.getAttribute('elasticity') || 'standard'
       const value = equipNode.textContent || ''
+      const condition = equipNode.getAttribute('condition') || 'intact'
       if (!slot) return
       const input = document.querySelector(
         `.bt-cloth-slot[data-slot="${slot}"]`,
@@ -1246,6 +1249,26 @@ export function setup(ctx: SpindleFrontendContext) {
             '.bt-cloth-flex',
           ) as HTMLSelectElement
         if (flexSelect) flexSelect.value = elasticity
+
+        // Inject condition badge
+        let labelEl: HTMLElement | null = input.previousElementSibling as HTMLElement
+        if (labelEl && labelEl.classList.contains('flex-row')) {
+          labelEl = labelEl.querySelector('.slot-label')
+        }
+        if (labelEl) {
+          let badge = labelEl.querySelector('.cloth-badge') as HTMLElement
+          if (!badge) {
+            badge = document.createElement('span')
+            badge.className = 'cloth-badge'
+            labelEl.appendChild(badge)
+          }
+          if (condition && condition !== 'intact') {
+            badge.innerText = `(${condition})`
+            badge.style.color = condColors[condition] || '#888'
+          } else {
+            badge.innerText = ''
+          }
+        }
       }
     })
 
