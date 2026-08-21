@@ -4,39 +4,45 @@ let currentCharacterSheetXML = "";
 
 export function setup(ctx: SpindleBackendContext) {
   
-  // 1. Listen for the Frontend sending us data
+  // Listen for the sync from the frontend
   ctx.onMessage((message) => {
     if (message.type === 'SYNC_BIO_DATA') {
       currentCharacterSheetXML = message.xmlData;
-      console.log("=== BACKEND: SUCCESSFULLY RECEIVED XML DATA ===");
-      console.log(currentCharacterSheetXML);
     }
   });
 
-  // 2. Intercept the chat request
+  // Intercept the chat request
   ctx.hooks.on('before_generate', async (request) => {
-    console.log("=== BACKEND: before_generate triggered ===");
     
-    if (currentCharacterSheetXML !== "") {
-      const injectionString = `\n\n[SYSTEM NOTE: Absolute mechanical state of the character. Strictly adhere to these values:]\n${currentCharacterSheetXML}`;
+    // If the XML is empty, just let the message go through normally
+    if (!currentCharacterSheetXML) return request;
 
-      // Let's check what properties request has and inject safely
-      if (request && request.messages && Array.isArray(request.messages)) {
-        const systemMessage = request.messages.find(m => m.role === 'system');
-        if (systemMessage) {
-          systemMessage.content += injectionString;
-          console.log("=== BACKEND: Injected into existing system message ===");
-        } else {
-          request.messages.unshift({ role: 'system', content: injectionString });
-          console.log("=== BACKEND: Created new system message and injected ===");
-        }
-      } else {
-        console.log("=== BACKEND ERROR: request.messages not found or invalid format ===");
-      }
-    } else {
-      console.log("=== BACKEND WARNING: currentCharacterSheetXML is empty! Did you press Sync? ===");
+    const injectionString = `\n\n[SYSTEM NOTE: The following is the absolute, mechanical state of the user's character, inventory, and biological vitals. You must strictly adhere to these limits and contents in your response.]\n${currentCharacterSheetXML}`;
+
+    // SCENARIO 1: OpenAI / API Format (request.body.messages)
+    if (request.body && Array.isArray(request.body.messages)) {
+      const sysMsg = request.body.messages.find((m: any) => m.role === 'system');
+      if (sysMsg) sysMsg.content += injectionString;
+      else request.body.messages.unshift({ role: 'system', content: injectionString });
+    }
+    // SCENARIO 2: Flat Array Format (request.messages)
+    else if (Array.isArray(request.messages)) {
+      const sysMsg = request.messages.find((m: any) => m.role === 'system');
+      if (sysMsg) sysMsg.content += injectionString;
+      else request.messages.unshift({ role: 'system', content: injectionString });
+    }
+    // SCENARIO 3: Raw Text Prompt (request.prompt)
+    else if (request.prompt) {
+      request.prompt = injectionString + "\n\n" + request.prompt;
+    }
+    // SCENARIO 4: Raw Text Prompt in Body (request.body.prompt)
+    else if (request.body && request.body.prompt) {
+      request.body.prompt = injectionString + "\n\n" + request.body.prompt;
     }
     
+    return request;
+  });
+}
     return request;
   });
 }
