@@ -602,7 +602,7 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-  // ─── Sync from Latest Message Button ───────────────────────
+    // ─── Sync from Latest Message Button ───────────────────────
   document.getElementById('bt-sync-from-chat-btn')?.addEventListener('click', () => {
     const latestId = ctx.messages.getLatestMessageId();
     if (!latestId) {
@@ -616,7 +616,10 @@ export function setup(ctx: SpindleFrontendContext) {
       return;
     }
     
-    const text = bubble.innerText || bubble.textContent || '';
+    // Get text and un-escape HTML entities so we can find the XML tags
+    let text = bubble.innerText || bubble.textContent || '';
+    text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    
     const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
     
     if (match && match[1]) {
@@ -700,6 +703,26 @@ export function setup(ctx: SpindleFrontendContext) {
       if (updateXml) {
         populateFormFromXml(updateXml);
       }
+    }
+  });
+
+    // ─── Live Preview on Generation Ended (Fallback) ───────────
+  ctx.events.on('GENERATION_ENDED', async () => {
+    // Wait a brief moment for the message to save in the UI
+    await new Promise(r => setTimeout(r, 500));
+    
+    const latestId = ctx.messages.getLatestMessageId();
+    if (!latestId) return;
+    
+    const bubble = ctx.dom.findMessageElement(latestId);
+    if (!bubble) return;
+    
+    let text = bubble.innerText || bubble.textContent || '';
+    text = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    
+    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
+    if (match && match[1]) {
+      populateFormFromXml(match[1].trim());
     }
   });
 
