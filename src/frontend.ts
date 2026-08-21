@@ -1132,13 +1132,17 @@ export function setup(ctx: SpindleFrontendContext) {
       )
       .forEach((el) => el.remove())
 
-    // Clear all static inputs
-    document.querySelectorAll('.bt-scrape').forEach((el) => {
-      ;(el as HTMLInputElement).value = ''
-    })
-    document.querySelectorAll('.bt-cloth-slot').forEach((el) => {
-      ;(el as HTMLInputElement).value = ''
-    })
+    // Clear all dynamic items
+    document
+      .querySelectorAll(
+        '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot',
+      )
+      .forEach((el) => el.remove())
+
+    // NOTE: We intentionally do NOT clear static inputs (.bt-scrape, .bt-cloth-slot).
+    // The LLM often forgets to output every field. If we cleared them,
+    // omitted fields would wipe to blank. By leaving them, we preserve
+    // the last known value until the LLM explicitly provides a new one.
 
     if (!xml || xml.trim() === '') return
 
