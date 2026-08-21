@@ -44,7 +44,8 @@ export function setup(ctx: SpindleFrontendContext) {
     #bt-preview-modal { position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: #111; border: 2px solid #ff4444; border-radius: 8px; z-index: 100000; display: none; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
     #bt-preview-header { background: #222; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; color: #ff4444; border-bottom: 1px solid #444; }
     #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
-    #bt-preview-close { background: #ff4444; color: white; border: none; padding: 10px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
+    #bt-preview-copy { background: #4CAF50; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0; }
+    #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
   `;
   document.head.appendChild(style);
 
@@ -53,7 +54,8 @@ export function setup(ctx: SpindleFrontendContext) {
   previewModal.innerHTML = `
     <div id="bt-preview-header"><span>XML Data Output</span></div>
     <div id="bt-preview-content"></div>
-    <button id="bt-preview-close">Close Preview</button>
+    <button id="bt-preview-copy">📋 Copy to Clipboard</button>
+    <button id="bt-preview-close">✖ Close Preview</button>
   `;
   document.body.appendChild(previewModal);
 
@@ -426,7 +428,6 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-  // DYNAMIC ADD BUTTONS
   document.getElementById('add-food-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot is-food';
     div.innerHTML = `
@@ -492,9 +493,7 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-  // THE SCRAPER & XML GENERATOR
   document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
-    
     let xml = `<CharacterSheet>\n  <BaseStats>\n`;
     document.querySelectorAll('.bt-scrape').forEach(el => {
       const input = el as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
@@ -585,16 +584,25 @@ export function setup(ctx: SpindleFrontendContext) {
       }, 2000);
     }
 
-    // SEND THE DATA TO THE BACKEND
-    ctx.sendToBackend({
-      type: 'SYNC_BIO_DATA',
-      xmlData: xml
-    });
+    ctx.sendToBackend({ type: 'SYNC_BIO_DATA', xmlData: xml });
 
     const previewContent = document.getElementById('bt-preview-content');
     if (previewContent) {
       previewContent.innerText = xml;
       document.getElementById('bt-preview-modal')!.style.display = 'flex';
+      
+      // CLIPBOARD LOGIC
+      document.getElementById('bt-preview-copy')!.onclick = () => {
+        navigator.clipboard.writeText(xml).then(() => {
+          const copyBtn = document.getElementById('bt-preview-copy')!;
+          copyBtn.innerText = '✅ Copied!';
+          copyBtn.style.background = '#2e7d32';
+          setTimeout(() => {
+            copyBtn.innerText = '📋 Copy to Clipboard';
+            copyBtn.style.background = '#4CAF50';
+          }, 2000);
+        });
+      };
     }
   });
 
