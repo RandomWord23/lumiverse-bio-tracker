@@ -426,6 +426,7 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
+  // DYNAMIC ADD BUTTONS
   document.getElementById('add-food-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot is-food';
     div.innerHTML = `
@@ -491,7 +492,7 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-  // 🚀 THE SCRAPER & XML GENERATOR
+  // THE SCRAPER & XML GENERATOR
   document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
     
     let xml = `<CharacterSheet>\n  <BaseStats>\n`;
