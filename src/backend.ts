@@ -179,6 +179,22 @@ function runDigestionTick(newXml: string, oldXml: string): string {
       `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`,
     )
 
+    // FIX: If the LLM forgot to output <CurrentAcidPct>, inject it
+    // back into <BaseStats> or <State> so the frontend doesn't blank out.
+    if (!updatedXml.includes('<CurrentAcidPct>')) {
+      if (updatedXml.includes('</BaseStats>')) {
+        updatedXml = updatedXml.replace(
+          /<\/BaseStats>/i,
+          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </BaseStats>`
+        )
+      } else if (updatedXml.includes('</State>')) {
+        updatedXml = updatedXml.replace(
+          /<\/State>/i,
+          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </State>`
+        )
+      }
+    }
+
     let itemCount = 0
 
     // Pass 1: Normal tags <Item ...>...</Item>
