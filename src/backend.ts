@@ -72,7 +72,15 @@ function findLastAssistantMessage(messages: any[]): any | null {
   return null
 }
 
-// ─── Digestion Tick Logic ──────────────────────────────────────
+// ─── Robust XML Tag Extractor ─────────────────────────────────
+//
+// Instead of relying on strict regex for the whole tag, we just find
+// <Item ...> and </Item> blocks, then parse the attributes out of them.
+
+function getAttrFromString(str: string, attr: string): string {
+  const match = str.match(new RegExp(`${attr}="([^"]*)"`, 'i'))
+  return match ? match[1] : ''
+}
 
 function runDigestionTick(newXml: string, oldXml: string): string {
   try {
@@ -118,38 +126,32 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
     const acidMultiplier = 1 + (acidLevel / 100)
 
+    // Update Acid Level in the XML string
     let updatedXml = newXml.replace(/<CurrentAcidPct>.*?<\/CurrentAcidPct>/i, `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`)
 
-    const itemRegex = /<Item\s+type="(Liquid|Food|Prey)"\s+name="([^"]*)"\s+volume_L="([^"]*)"\s+digestion="([^"]*)"\s*>([\s\S]*?)<\/Item>/gi
-    const selfClosingItemRegex = /<Item\s+type="(Liquid|Food|Prey)"\s+name="([^"]*)"\s+volume_L="([^"]*)"\s+digestion="([^"]*)"\s*\/>/gi
-    
-    const processedXml = updatedXml.replace(itemRegex, (match, type, name, vol, dig, inner) => {
-      return processItem(type, name, vol, dig, inner, baseDigRate, acidMultiplier, elapsed)
-    }).replace(selfClosingItemRegex, (match, type, name, vol, dig) => {
-      return processItem(type, name, vol, dig, '', baseDigRate, acidMultiplier, elapsed)
+    // Process all <Item ...> tags inside the stomach
+    const itemRegex = /<Item\s+([^>]+)>([\s\S]*?)<\/Item>/gi
+    updatedXml = updatedXml.replace(itemRegex, (match, attrs, inner) => {
+      const type = getAttrFromString(attrs, 'type') || 'Food'
+      const name = getAttrFromString(attrs, 'name')
+      const vol = getAttrFromString(attrs, 'volume_L')
+      
+      let speedMult = 1
+      if (type === 'Liquid') speedMult = 3
+      else if (type === 'Prey') speedMult = 0.5
+
+      let digNum = parseFloat(getAttrFromString(attrs, 'digestion').replace('%', '')) || 0
+      const digIncrease = baseDigRate * speedMult * acidMultiplier * elapsed
+      digNum = Math.min(100, digNum + digIncrease)
+
+      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
     })
 
-    return processedXml
+    return updatedXml
   } catch (e) {
     spindle.log.error(`Digestion tick failed: ${e}`)
     return newXml
   }
-}
-
-function processItem(type: string, name: string, vol: string, dig: string, inner: string, baseRate: number, acidMult: number, elapsed: number): string {
-  let speedMult = 1
-  if (type === 'Liquid') speedMult = 3
-  else if (type === 'Prey') speedMult = 0.5
-
-  let digNum = parseFloat(dig.replace('%', '')) || 0
-  const digIncrease = baseRate * speedMult * acidMult * elapsed
-  digNum = Math.min(100, digNum + digIncrease)
-
-  if (digNum >= 100) {
-    return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="100%">${inner}</Item>`
-  }
-
-  return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
 }
 
 async function commitUpdate(chatId: string, messageId: string, sheetXml: string, chatIndex: number) {
@@ -186,7 +188,6 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
     }
   } else {
-    // No snapshots left! Clear the sheet entirely.
     await saveChatSheet(chatId, '')
     if (chatId === activeChatId) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
@@ -213,14 +214,15 @@ When the character sheet changes during the scene, you MUST include an updated c
 CRITICAL XML RULES:
 1. You MUST copy the EXACT XML structure provided in <CurrentCharacterSheet>. Do NOT invent new tags, do NOT change tag names, do NOT change attributes. 
 2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format. 
-   VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist". Do not use slots like "Bra" or "Panties" — use "Underwear Top" and "Underwear Bottom".
-3. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
-4. Prey gear/flavor MUST go inside <Description> and <BoundGear> tags within the <Item type="Prey"> tag.
-5. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
-6. If prey is fully digested (reaches 100%), you may move their remains to the Bowels section in the next update using the <Remains volume_L="...">...</Remains> format.
-7. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
-8. If absolutely nothing on the sheet changed, you may omit the block.
-9. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
+   VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist".
+3. The <Equip> tag MUST ALWAYS have an elasticity attribute. Valid values are "rigid", "standard", "stretchy", or "magic". Never omit it.
+4. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
+5. Prey gear/flavor MUST go inside <Description> and <BoundGear> tags within the <Item type="Prey"> tag.
+6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
+7. If prey is fully digested (reaches 100%), you may move their remains to the Bowels section in the next update using the <Remains volume_L="...">...</Remains> format.
+8. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
+9. If absolutely nothing on the sheet changed, you may omit the block.
+10. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
 
 <sheet_update>
 <CharacterSheet>
@@ -238,6 +240,12 @@ spindle.onFrontendMessage(async (msg: any) => {
     await saveChatSheet(activeChatId, msg.xmlData)
     spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
     spindle.toast.success('Character sheet synced!')
+  }
+  
+  if (msg.type === 'GET_LATEST_SHEET') {
+    const lastId = spindle.chats.getActiveChat()?.lastMessageId
+    // Fallback to iterating messages if needed, though this is a placeholder 
+    // since frontend will parse the DOM directly for this specific action.
   }
 })
 
