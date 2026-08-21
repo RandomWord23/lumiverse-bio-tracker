@@ -77,8 +77,20 @@ function extractTextContent(content: unknown): string {
   return ''
 }
 
-function extractSheetUpdate(content: string): string | null {
-  const match = content.match(
+function extractSheetUpdate(content: unknown): string | null {
+  let text = ''
+  if (typeof content === 'string') {
+    text = content
+  } else if (Array.isArray(content)) {
+    text = content
+      .filter((p: any) => p.type === 'text')
+      .map((p: any) => p.text)
+      .join('\n')
+  } else {
+    return null
+  }
+
+  const match = text.match(
     /<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i,
   )
   return match ? match[1].trim() : null
@@ -118,11 +130,17 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     const oldTime = getTimeHours(oldXml)
     const newTime = getTimeHours(newXml)
 
-    if (oldTime === null || newTime === null) return newXml
+    if (oldTime === null || newTime === null) {
+      spindle.log.info('Digestion tick skipped: missing time')
+      return newXml
+    }
 
     let elapsed = newTime - oldTime
     if (elapsed < 0) elapsed += 24
-    if (elapsed === 0) return newXml
+    if (elapsed === 0) {
+      spindle.log.info('Digestion tick skipped: 0 hours elapsed')
+      return newXml
+    }
 
     const getStat = (xml: string, tag: string) => {
       const match = xml.match(
@@ -138,9 +156,7 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     const stomachMatch = newXml.match(
       /<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i,
     )
-    const stomachContents = stomachMatch
-      ? stomachMatch[1].trim()
-      : ''
+    const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
     const hasItems = stomachContents.includes('<Item')
 
     if (hasItems) {
@@ -156,10 +172,12 @@ function runDigestionTick(newXml: string, oldXml: string): string {
       `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`,
     )
 
-    const itemRegex = /<Item\s+([^>]+)>([\s\S]*?)<\/Item>/gi
     let itemCount = 0
+
+    // Pass 1: Normal tags <Item ...>...</Item>
+    const itemRegex1 = /<Item\s+([^>]+)>([\s\S]*?)<\/Item>/gi
     updatedXml = updatedXml.replace(
-      itemRegex,
+      itemRegex1,
       (match, attrs, inner) => {
         itemCount++
         const type = getAttrFromString(attrs, 'type') || 'Food'
@@ -181,6 +199,29 @@ function runDigestionTick(newXml: string, oldXml: string): string {
         return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
       },
     )
+
+    // Pass 2: Self-closing tags <Item ... />
+    const itemRegex2 = /<Item\s+([^>]+?)\s*\/>/gi
+    updatedXml = updatedXml.replace(itemRegex2, (match, attrs) => {
+      itemCount++
+      const type = getAttrFromString(attrs, 'type') || 'Food'
+      const name = getAttrFromString(attrs, 'name')
+      const vol = getAttrFromString(attrs, 'volume_L')
+
+      let speedMult = 1
+      if (type === 'Liquid') speedMult = 3
+      else if (type === 'Prey') speedMult = 0.5
+
+      let digNum =
+        parseFloat(
+          getAttrFromString(attrs, 'digestion').replace('%', ''),
+        ) || 0
+      const digIncrease =
+        baseDigRate * speedMult * acidMultiplier * elapsed
+      digNum = Math.min(100, digNum + digIncrease)
+
+      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%" />`
+    })
 
     spindle.log.info(
       `Digestion tick: ${elapsed.toFixed(2)}h elapsed, ` +
@@ -357,21 +398,39 @@ spindle.registerInterceptor(async (messages, context) => {
 }, 50)
 
 spindle.on('GENERATION_ENDED', async (payload: any) => {
-  if (payload.error) return
+  spindle.toast.info(`GEN_ENDED: type=${pendingGenerationType}`)
+
+  if (payload.error) {
+    spindle.toast.warning('GEN_ENDED: had error')
+    return
+  }
 
   const { chatId, messageId, content } = payload
-  if (!chatId || !messageId || !content) return
-  if (chatId !== activeChatId) return
+  if (!chatId || !messageId || !content) {
+    spindle.toast.warning('GEN_ENDED: missing fields')
+    return
+  }
+  if (chatId !== activeChatId) {
+    spindle.toast.warning('GEN_ENDED: wrong chat')
+    return
+  }
   if (
     pendingGenerationType === 'swipe' ||
     pendingGenerationType === 'regenerate'
   ) {
+    spindle.toast.info('GEN_ENDED: skipped (swipe/regenerate)')
     return
   }
-  if (committedMessageIds.has(messageId)) return
+  if (committedMessageIds.has(messageId)) {
+    spindle.toast.info('GEN_ENDED: already committed')
+    return
+  }
 
   const update = extractSheetUpdate(content)
-  if (!update) return
+  if (!update) {
+    spindle.toast.warning('GEN_ENDED: no sheet_update found')
+    return
+  }
 
   const list = snapshots.get(chatId) || []
   const chatIndex = list.length
@@ -390,4 +449,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v2)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v3)')
