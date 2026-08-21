@@ -4,42 +4,63 @@ let currentCharacterSheetXML = "";
 
 export function setup(ctx: SpindleBackendContext) {
   
-  // Listen for the sync from the frontend
+  // 1. Listen for the XML from the frontend
   ctx.onMessage((message) => {
     if (message.type === 'SYNC_BIO_DATA') {
       currentCharacterSheetXML = message.xmlData;
     }
   });
 
-  // Intercept the chat request safely
+  // 2. Intercept the chat request
   ctx.hooks.on('before_generate', async (request: any) => {
     
-    // If the XML is empty, let it pass normally
     if (!currentCharacterSheetXML || currentCharacterSheetXML === "") return request;
 
-    const injectionString = "\n\n[SYSTEM NOTE: The following is the absolute mechanical state of the user's character. You must adhere to these limits and contents.]\n" + currentCharacterSheetXML;
+    const injectionString = "\n\n[SYSTEM OVERRIDE: The following is the absolute mechanical state of the user's character. You MUST adhere to these limits, items, and biological states in your next response.]\n" + currentCharacterSheetXML;
 
-    // Check Format 1: request.messages (Flat Array)
-    if (request.messages && Array.isArray(request.messages)) {
-        let systemMessage = request.messages.find((m: any) => m.role === 'system');
-        if (systemMessage) {
-            systemMessage.content += injectionString;
-        } else {
-            request.messages.unshift({ role: 'system', content: injectionString });
+    // Recursive function to hunt down the messages array anywhere in the request
+    function injectIntoMessages(obj: any): boolean {
+      if (!obj || typeof obj !== 'object') return false;
+
+      // Did we find the messages array?
+      if (Array.isArray(obj.messages)) {
+        
+        // NUCLEAR OPTION: Find the LAST user message and attach it there so the AI cannot forget it.
+        const lastUserIndex = obj.messages.map((m: any) => m.role).lastIndexOf('user');
+        
+        if (lastUserIndex !== -1) {
+          obj.messages[lastUserIndex].content += injectionString;
+          return true;
         }
-    } 
-    // Check Format 2: request.body.messages (OpenAI/Anthropic Style)
-    else if (request.body && request.body.messages && Array.isArray(request.body.messages)) {
-        let systemMessage = request.body.messages.find((m: any) => m.role === 'system');
-        if (systemMessage) {
-            systemMessage.content += injectionString;
-        } else {
-            request.body.messages.unshift({ role: 'system', content: injectionString });
+        
+        // Fallback: Put it in the system prompt
+        const sysMsg = obj.messages.find((m: any) => m.role === 'system');
+        if (sysMsg) {
+          sysMsg.content += injectionString;
+          return true;
         }
-    } 
-    // Check Format 3: Raw text prompt
-    else if (typeof request.prompt === 'string') {
-        request.prompt = injectionString + "\n\n" + request.prompt;
+        
+        // Fallback 2: Make a new system prompt
+        obj.messages.unshift({ role: 'system', content: injectionString });
+        return true;
+      }
+
+      // Keep digging deeper into the object
+      for (const key of Object.keys(obj)) {
+        if (injectIntoMessages(obj[key])) return true;
+      }
+      return false;
+    }
+
+    const injected = injectIntoMessages(request);
+
+    // Ultimate fallback for raw text completion APIs
+    if (!injected) {
+      if (typeof request.prompt === 'string') {
+        request.prompt += injectionString;
+      } else if (request.body && typeof request.body.prompt === 'string') {
+        request.body.prompt += injectionString;
+      }
     }
 
     return request;
