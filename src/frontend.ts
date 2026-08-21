@@ -634,9 +634,49 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   }
 
+  // ─── Listen for sheet updates from the backend ─────────────
   ctx.onBackendMessage((msg: any) => {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       populateFormFromXml(msg.xml);
+    }
+  });
+
+  // Helper to extract <sheet_update> XML from a text string
+  function extractSheetUpdateFromText(text: string): string | null {
+    if (!text) return null;
+    const match = text.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i);
+    return match ? match[1].trim() : null;
+  }
+
+  // ─── Live Preview on Swipe ─────────────────────────────────
+  // When the user browses swipes, instantly update the UI to show
+  // the sheet state from whichever swipe they are looking at.
+  ctx.events.on('MESSAGE_SWIPED', (payload: any) => {
+    if (payload.action === 'navigated' || payload.action === 'added') {
+      const msg = payload.message;
+      const swipeId = payload.swipeId;
+      
+      if (msg && msg.swipes && msg.swipes[swipeId] !== undefined) {
+        const swipeText = msg.swipes[swipeId];
+        const updateXml = extractSheetUpdateFromText(swipeText);
+        if (updateXml) {
+          populateFormFromXml(updateXml);
+        }
+      }
+    }
+  });
+
+  // ─── Live Preview on Generation End ────────────────────────
+  // When the LLM finishes a response, instantly update the UI to
+  // show the pending sheet from that response.
+  ctx.events.on('MESSAGE_SENT', (payload: any) => {
+    const msg = payload.message;
+    if (msg && msg.swipes && msg.swipe_id !== undefined) {
+      const swipeText = msg.swipes[msg.swipe_id];
+      const updateXml = extractSheetUpdateFromText(swipeText);
+      if (updateXml) {
+        populateFormFromXml(updateXml);
+      }
     }
   });
 
