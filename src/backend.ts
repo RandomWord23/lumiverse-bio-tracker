@@ -109,6 +109,27 @@ function getAttrFromString(str: string, attr: string): string {
   return match ? match[1] : ''
 }
 
+function getStat(xml: string, tag: string): number {
+  const match = xml.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'))
+  return match ? parseFloat(match[1]) || 0 : 0
+}
+
+function setStat(xml: string, tag: string, value: number): string {
+  const regex = new RegExp(`<${tag}>.*?<\\/${tag}>`, 'i')
+  const replacement = `<${tag}>${value.toFixed(2)}</${tag}>`
+  if (regex.test(xml)) {
+    return xml.replace(regex, replacement)
+  }
+  // If tag doesn't exist, inject before </BaseStats>
+  if (xml.includes('</BaseStats>')) {
+    return xml.replace(
+      /<\/BaseStats>/i,
+      `    <${tag}>${value.toFixed(2)}</${tag}>\n  </BaseStats>`,
+    )
+  }
+  return xml
+}
+
 function runDigestionTick(newXml: string, oldXml: string): string {
   try {
     const getTimeHours = (xml: string) => {
@@ -137,23 +158,16 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
     let elapsed = newTime - oldTime
 
-    // FIX: If time goes backwards, it's a rollback, not a midnight wrap.
-    // Return the new XML unchanged to preserve the historical digestion state.
     if (elapsed < 0) {
-      spindle.log.info('Digestion tick skipped: time went backwards (rollback)')
+      spindle.log.info(
+        'Digestion tick skipped: time went backwards (rollback)',
+      )
       return newXml
     }
 
     if (elapsed === 0) {
       spindle.log.info('Digestion tick skipped: 0 hours elapsed')
       return newXml
-    }
-
-    const getStat = (xml: string, tag: string) => {
-      const match = xml.match(
-        new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'),
-      )
-      return match ? parseFloat(match[1]) : 0
     }
 
     let acidLevel = getStat(newXml, 'CurrentAcidPct')
@@ -163,7 +177,9 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     const stomachMatch = newXml.match(
       /<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i,
     )
-    const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
+    const stomachContents = stomachMatch
+      ? stomachMatch[1].trim()
+      : ''
     const hasItems = stomachContents.includes('<Item')
 
     if (hasItems) {
@@ -179,51 +195,36 @@ function runDigestionTick(newXml: string, oldXml: string): string {
       `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`,
     )
 
-    // FIX: If the LLM forgot to output <CurrentAcidPct>, inject it
-    // back into <BaseStats> or <State> so the frontend doesn't blank out.
     if (!updatedXml.includes('<CurrentAcidPct>')) {
       if (updatedXml.includes('</BaseStats>')) {
         updatedXml = updatedXml.replace(
           /<\/BaseStats>/i,
-          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </BaseStats>`
+          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </BaseStats>`,
         )
       } else if (updatedXml.includes('</State>')) {
         updatedXml = updatedXml.replace(
           /<\/State>/i,
-          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </State>`
+          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </State>`,
         )
       }
     }
 
-    // Extract Stomach and Bowels contents
-    const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
-    const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
-    
+    // ─── Extract Stomach and Bowels ──────────────────────────
+    const stomMatch = updatedXml.match(
+      /<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i,
+    )
+    const bowMatch = updatedXml.match(
+      /<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i,
+    )
+
     let stomContent = stomMatch ? stomMatch[2].trim() : ''
     let bowContent = bowMatch ? bowMatch[2].trim() : ''
     let itemCount = 0
     let wasteCount = 0
-
-    // Helper to generate <Remains> XML
-    const createRemains = (type: string, name: string, vol: string, inner: string) => {
-      const numVol = parseFloat(vol) || 0
-      let remVol = numVol * 0.2 // 20% for food/liquid
-      let remName = 'Digestive Waste'
-      
-      if (type === 'Prey') {
-        remVol = numVol * 0.3 // 30% for prey (skeleton + gear)
-        remName = `Skeleton of ${name}`
-        const gearMatch = inner.match(/<BoundGear>([\s\S]*?)<\/BoundGear>/i)
-        const gear = gearMatch ? gearMatch[1].trim() : ''
-        if (gear) remName += `, ${gear}`
-      }
-      
-      wasteCount++
-      return `      <Remains volume_L="${remVol.toFixed(2)}">${remName}</Remains>`
-    }
+    let accumulatedWasteVol = 0
+    let totalDigestedVol = 0 // Track total volume digested for growth
 
     // Pass 1: Normal tags <Item ...>...</Item>
-    // [^>]*[^>\/] ensures we don't accidentally match self-closing tags
     const itemRegex1 = /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi
     stomContent = stomContent.replace(
       itemRegex1,
@@ -245,10 +246,24 @@ function runDigestionTick(newXml: string, oldXml: string): string {
           baseDigRate * speedMult * acidMultiplier * elapsed
         digNum = Math.min(100, digNum + digIncrease)
 
-        // If fully digested, move to bowels and remove from stomach
         if (digNum >= 100) {
-          bowContent += `\n${createRemains(type, name, vol, inner)}`
-          return '' // Remove from stomach
+          const numVol = parseFloat(vol) || 0
+          totalDigestedVol += numVol
+
+          if (type === 'Prey') {
+            let remVol = numVol * 0.3
+            let remName = `Skeleton of ${name}`
+            const gearMatch = inner.match(
+              /<BoundGear>([\s\S]*?)<\/BoundGear>/i,
+            )
+            const gear = gearMatch ? gearMatch[1].trim() : ''
+            if (gear) remName += `, ${gear}`
+            bowContent += `\n      <Remains volume_L="${remVol.toFixed(2)}">${remName}</Remains>`
+            wasteCount++
+          } else {
+            accumulatedWasteVol += numVol * 0.2
+          }
+          return ''
         }
 
         return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
@@ -257,48 +272,134 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
     // Pass 2: Self-closing tags <Item ... />
     const itemRegex2 = /<Item\s+([^>]+?)\s*\/>/gi
-    stomContent = stomContent.replace(itemRegex2, (match, attrs) => {
-      itemCount++
-      const type = getAttrFromString(attrs, 'type') || 'Food'
-      const name = getAttrFromString(attrs, 'name')
-      const vol = getAttrFromString(attrs, 'volume_L')
+    stomContent = stomContent.replace(
+      itemRegex2,
+      (match, attrs) => {
+        itemCount++
+        const type = getAttrFromString(attrs, 'type') || 'Food'
+        const name = getAttrFromString(attrs, 'name')
+        const vol = getAttrFromString(attrs, 'volume_L')
 
-      let speedMult = 1
-      if (type === 'Liquid') speedMult = 3
-      else if (type === 'Prey') speedMult = 0.5
+        let speedMult = 1
+        if (type === 'Liquid') speedMult = 3
+        else if (type === 'Prey') speedMult = 0.5
 
-      let digNum =
-        parseFloat(
-          getAttrFromString(attrs, 'digestion').replace('%', ''),
-        ) || 0
-      const digIncrease =
-        baseDigRate * speedMult * acidMultiplier * elapsed
-      digNum = Math.min(100, digNum + digIncrease)
+        let digNum =
+          parseFloat(
+            getAttrFromString(attrs, 'digestion').replace('%', ''),
+          ) || 0
+        const digIncrease =
+          baseDigRate * speedMult * acidMultiplier * elapsed
+        digNum = Math.min(100, digNum + digIncrease)
 
-      // If fully digested, move to bowels and remove from stomach
-      if (digNum >= 100) {
-        bowContent += `\n${createRemains(type, name, vol, '')}`
-        return '' // Remove from stomach
+        if (digNum >= 100) {
+          const numVol = parseFloat(vol) || 0
+          totalDigestedVol += numVol
+
+          if (type === 'Prey') {
+            let remVol = numVol * 0.3
+            let remName = `Skeleton of ${name}`
+            bowContent += `\n      <Remains volume_L="${remVol.toFixed(2)}">${remName}</Remains>`
+            wasteCount++
+          } else {
+            accumulatedWasteVol += numVol * 0.2
+          }
+          return ''
+        }
+
+        return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%" />`
+      },
+    )
+
+    // ─── Process accumulated waste ───────────────────────────
+    if (accumulatedWasteVol > 0) {
+      wasteCount++
+      const wasteRegex =
+        /<Remains volume_L="([^"]+)">Digestive Waste<\/Remains>/i
+      const existingWaste = bowContent.match(wasteRegex)
+      if (existingWaste) {
+        const oldVol = parseFloat(existingWaste[1]) || 0
+        const newVol = oldVol + accumulatedWasteVol
+        bowContent = bowContent.replace(
+          wasteRegex,
+          `<Remains volume_L="${newVol.toFixed(2)}">Digestive Waste</Remains>`,
+        )
+      } else {
+        bowContent += `\n      <Remains volume_L="${accumulatedWasteVol.toFixed(2)}">Digestive Waste</Remains>`
       }
+    }
 
-      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%" />`
-    })
-
-    // Clean up empty lines in stomach contents
+    // Clean up empty lines
     stomContent = stomContent.replace(/^\s*\n/gm, '').trim()
+    bowContent = bowContent.trim()
 
-    // Rebuild Stomach and Bowels in the XML
-    updatedXml = updatedXml.replace(/<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i, (match, attrs) => {
-      return `<Stomach${attrs}>\n${stomContent}\n    </Stomach>`
-    })
-    
-    updatedXml = updatedXml.replace(/<Bowels([^>]*)>[\s\S]*?<\/Bowels>/i, (match, attrs) => {
-      return `<Bowels${attrs}>\n${bowContent}\n    </Bowels>`
-    })
+    // Rebuild Stomach and Bowels
+    updatedXml = updatedXml.replace(
+      /<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i,
+      (match, attrs) => {
+        return `<Stomach${attrs}>\n${stomContent}\n    </Stomach>`
+      },
+    )
+
+    updatedXml = updatedXml.replace(
+      /<Bowels([^>]*)>[\s\S]*?<\/Bowels>/i,
+      (match, attrs) => {
+        return `<Bowels${attrs}>\n${bowContent}\n    </Bowels>`
+      },
+    )
+
+    // ─── Nutrient Absorption (Growth) ────────────────────────
+    // When items are digested, the body absorbs nutrients and grows.
+    // Growth rates per liter digested:
+    //   Height:   +0.2 cm/L
+    //   Weight:   +0.8 kg/L (some mass lost as waste)
+    //   Breasts:  +5 ml/L
+    //   Hips:     +0.15 cm/L
+    //   Penis L:  +0.1 cm/L
+    //   Penis G:  +0.05 cm/L
+    if (totalDigestedVol > 0) {
+      const heightGrowth = totalDigestedVol * 0.035
+      const weightGrowth = totalDigestedVol * 0.035
+      const breastGrowth = totalDigestedVol * 1.0
+      const hipsGrowth = totalDigestedVol * 0.035
+      const penisLGrowth = totalDigestedVol * 0.014
+      const penisGGrowth = totalDigestedVol * 0.004
+
+      let height = getStat(updatedXml, 'Height_cm') || 160
+      let weight = getStat(updatedXml, 'Weight_kg') || 60
+      let breastVol = getStat(updatedXml, 'BreastVolume_ml') || 0
+      let hips = getStat(updatedXml, 'Hips_cm') || 90
+      let penisL = getStat(updatedXml, 'PenisLength_cm') || 0
+      let penisG = getStat(updatedXml, 'PenisGirth_cm') || 0
+
+      height += heightGrowth
+      weight += weightGrowth
+      breastVol += breastGrowth
+      hips += hipsGrowth
+      penisL += penisLGrowth
+      penisG += penisGGrowth
+
+      updatedXml = setStat(updatedXml, 'Height_cm', height)
+      updatedXml = setStat(updatedXml, 'Weight_kg', weight)
+      updatedXml = setStat(updatedXml, 'BreastVolume_ml', breastVol)
+      updatedXml = setStat(updatedXml, 'Hips_cm', hips)
+      updatedXml = setStat(updatedXml, 'PenisLength_cm', penisL)
+      updatedXml = setStat(updatedXml, 'PenisGirth_cm', penisG)
+
+      spindle.log.info(
+        `Nutrient absorption: +${heightGrowth.toFixed(2)}cm height, ` +
+          `+${weightGrowth.toFixed(2)}kg weight, ` +
+          `+${breastGrowth.toFixed(2)}ml breasts, ` +
+          `+${hipsGrowth.toFixed(2)}cm hips, ` +
+          `+${penisLGrowth.toFixed(2)}cm penis L, ` +
+          `+${penisGGrowth.toFixed(2)}cm penis G`,
+      )
+    }
 
     spindle.log.info(
       `Digestion tick: ${elapsed.toFixed(2)}h elapsed, ` +
-        `acid ${acidLevel.toFixed(1)}%, ${itemCount} items processed, ${wasteCount} moved to bowels`,
+        `acid ${acidLevel.toFixed(1)}%, ${itemCount} items processed, ` +
+        `${wasteCount} moved to bowels, ${totalDigestedVol.toFixed(2)}L digested`,
     )
 
     return updatedXml
@@ -397,10 +498,11 @@ CRITICAL XML RULES:
 4. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
 5. Prey gear/flavor MUST go inside <Description> and <BoundGear> tags within the <Item type="Prey"> tag.
 6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
-7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section in the next update. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
-8. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
-9. If absolutely nothing on the sheet changed, you may omit the block.
-10. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
+7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
+8. The extension AUTOMATICALLY handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions will increase proportionally. Do NOT manually adjust these stats based on digestion — the extension does it for you. Only adjust them if something else changes them (e.g. magic, transformation).
+9. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
+10. If absolutely nothing on the sheet changed, you may omit the block.
+11. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
 
 <sheet_update>
 <CharacterSheet>
@@ -514,4 +616,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v5)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v6)')
