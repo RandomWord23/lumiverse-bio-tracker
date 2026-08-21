@@ -208,24 +208,25 @@ ${sheetXml}
 
 ─── UPDATE INSTRUCTIONS ───
 
-When the character sheet changes during the scene (stats modified, items gained or lost, prey swallowed, clothing changed, time/weather changed, etc.), you MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of your response:
+When the character sheet changes during the scene, you MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of your response.
+
+CRITICAL XML RULES:
+1. You MUST copy the EXACT XML structure provided in <CurrentCharacterSheet>. Do NOT invent new tags, do NOT change tag names, do NOT change attributes. 
+2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format. Do not use <Item> for clothes.
+3. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
+4. Prey gear/flavor MUST go inside <Description> and <BoundGear> tags within the <Item type="Prey"> tag.
+5. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
+6. If prey is fully digested (reaches 100%), you may move their remains to the Bowels section in the next update using the <Remains volume_L="...">...</Remains> format.
+7. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
+8. If absolutely nothing on the sheet changed, you may omit the block.
+9. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
 
 <sheet_update>
 <CharacterSheet>
   ...the complete updated sheet with ALL fields, not just changed ones...
 </CharacterSheet>
-</sheet_update>
-
-Rules:
-- Output the COMPLETE sheet every time something changes, not just the changed fields
-- The <sheet_update> block is invisible to the user — do not mention it in your visible text
-- If absolutely nothing on the sheet changed, you may omit the block
-- Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty
-- DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
-- When adding items to the stomach, write a brief description of what's happening to them inside <Description> tags (e.g., <Description>Sloshing around</Description> or <Description>Kicking the walls</Description>)
-- If prey is fully digested (reaches 100%), you may move their remains to the Bowels section in the next update`
+</sheet_update>`
 }
-
 spindle.onFrontendMessage(async (msg: any) => {
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
     if (!activeChatId) {
