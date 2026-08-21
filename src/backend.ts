@@ -136,14 +136,14 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     }
 
     let elapsed = newTime - oldTime
-    
+
     // FIX: If time goes backwards, it's a rollback, not a midnight wrap.
     // Return the new XML unchanged to preserve the historical digestion state.
     if (elapsed < 0) {
       spindle.log.info('Digestion tick skipped: time went backwards (rollback)')
       return newXml
     }
-    
+
     if (elapsed === 0) {
       spindle.log.info('Digestion tick skipped: 0 hours elapsed')
       return newXml
@@ -180,6 +180,7 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     )
 
     // FIX: If the LLM forgot to output <CurrentAcidPct>, inject it
+    // back into <BaseStats> or <State> so the frontend doesn't blank out.
     if (!updatedXml.includes('<CurrentAcidPct>')) {
       if (updatedXml.includes('</BaseStats>')) {
         updatedXml = updatedXml.replace(
@@ -195,11 +196,11 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     }
 
     // Extract Stomach and Bowels contents
-    const stomachMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
-    const bowelMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
+    const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+    const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
     
-    let stomachContents = stomachMatch ? stomachMatch[2].trim() : ''
-    let bowelContents = bowelMatch ? bowelMatch[2].trim() : ''
+    let stomContent = stomMatch ? stomMatch[2].trim() : ''
+    let bowContent = bowMatch ? bowMatch[2].trim() : ''
     let itemCount = 0
     let wasteCount = 0
 
@@ -222,8 +223,9 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     }
 
     // Pass 1: Normal tags <Item ...>...</Item>
+    // [^>]*[^>\/] ensures we don't accidentally match self-closing tags
     const itemRegex1 = /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi
-    stomachContents = stomachContents.replace(
+    stomContent = stomContent.replace(
       itemRegex1,
       (match, attrs, inner) => {
         itemCount++
@@ -245,7 +247,7 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
         // If fully digested, move to bowels and remove from stomach
         if (digNum >= 100) {
-          bowelContents += `\n${createRemains(type, name, vol, inner)}`
+          bowContent += `\n${createRemains(type, name, vol, inner)}`
           return '' // Remove from stomach
         }
 
@@ -255,7 +257,7 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
     // Pass 2: Self-closing tags <Item ... />
     const itemRegex2 = /<Item\s+([^>]+?)\s*\/>/gi
-    stomachContents = stomachContents.replace(itemRegex2, (match, attrs) => {
+    stomContent = stomContent.replace(itemRegex2, (match, attrs) => {
       itemCount++
       const type = getAttrFromString(attrs, 'type') || 'Food'
       const name = getAttrFromString(attrs, 'name')
@@ -275,7 +277,7 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
       // If fully digested, move to bowels and remove from stomach
       if (digNum >= 100) {
-        bowelContents += `\n${createRemains(type, name, vol, '')}`
+        bowContent += `\n${createRemains(type, name, vol, '')}`
         return '' // Remove from stomach
       }
 
@@ -283,15 +285,15 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     })
 
     // Clean up empty lines in stomach contents
-    stomachContents = stomachContents.replace(/^\s*\n/gm, '').trim()
+    stomContent = stomContent.replace(/^\s*\n/gm, '').trim()
 
     // Rebuild Stomach and Bowels in the XML
     updatedXml = updatedXml.replace(/<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i, (match, attrs) => {
-      return `<Stomach${attrs}>\n${stomachContents}\n    </Stomach>`
+      return `<Stomach${attrs}>\n${stomContent}\n    </Stomach>`
     })
     
     updatedXml = updatedXml.replace(/<Bowels([^>]*)>[\s\S]*?<\/Bowels>/i, (match, attrs) => {
-      return `<Bowels${attrs}>\n${bowelContents}\n    </Bowels>`
+      return `<Bowels${attrs}>\n${bowContent}\n    </Bowels>`
     })
 
     spindle.log.info(
@@ -395,7 +397,7 @@ CRITICAL XML RULES:
 4. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
 5. Prey gear/flavor MUST go inside <Description> and <BoundGear> tags within the <Item type="Prey"> tag.
 6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
-7. If prey is fully digested (reaches 100%), you may move their remains to the Bowels section in the next update using the <Remains volume_L="...">...</Remains> format.
+7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section in the next update. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
 8. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
 9. If absolutely nothing on the sheet changed, you may omit the block.
 10. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
@@ -512,4 +514,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v4)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v5)')
