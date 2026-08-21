@@ -212,7 +212,8 @@ When the character sheet changes during the scene, you MUST include an updated c
 
 CRITICAL XML RULES:
 1. You MUST copy the EXACT XML structure provided in <CurrentCharacterSheet>. Do NOT invent new tags, do NOT change tag names, do NOT change attributes. 
-2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format. Do not use <Item> for clothes.
+2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format. 
+   VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist". Do not use slots like "Bra" or "Panties" — use "Underwear Top" and "Underwear Bottom".
 3. Stomach contents MUST be inside <Stomach> using the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag.
 4. Prey gear/flavor MUST go inside <Description> and <BoundGear> tags within the <Item type="Prey"> tag.
 5. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
