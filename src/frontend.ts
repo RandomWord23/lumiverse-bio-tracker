@@ -36,8 +36,22 @@ export function setup(ctx: SpindleFrontendContext) {
     .flex-row { display: flex; justify-content: space-between; align-items: center; }
     .vital-slot { background: #222; border: 1px dashed #555; border-radius: 6px; padding: 8px; margin-bottom: 8px; position: relative; }
     .vital-remove { position: absolute; top: 5px; right: 5px; background: none; border: none; color: #ff4444; cursor: pointer; font-size: 14px; }
+    #bt-preview-modal { position: fixed; top: 10%; left: 5%; width: 90%; height: 80%; background: #111; border: 2px solid #ff4444; border-radius: 8px; z-index: 100000; display: none; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+    #bt-preview-header { background: #222; padding: 10px; font-weight: bold; display: flex; justify-content: space-between; color: #ff4444; border-bottom: 1px solid #444; }
+    #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
+    #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
   `;
   document.head.appendChild(style);
+
+  const previewModal = document.createElement('div');
+  previewModal.id = 'bt-preview-modal';
+  previewModal.innerHTML = `
+    <div id="bt-preview-header"><span>XML Data Output</span></div>
+    <div id="bt-preview-content"></div>
+    <button id="bt-preview-close">✖ Close Preview</button>
+  `;
+  document.body.appendChild(previewModal);
+  document.getElementById('bt-preview-close')?.addEventListener('click', () => previewModal.style.display = 'none');
 
   const panel = document.createElement('div');
   panel.id = 'bio-tracker-panel';
@@ -52,6 +66,7 @@ export function setup(ctx: SpindleFrontendContext) {
       <button class="bt-tab-btn" data-tab="tab-state">State</button>
       <button class="bt-tab-btn" data-tab="tab-vitals">Vitals</button>
     </div>
+
     <div class="bt-content">
       <div id="tab-char" class="bt-tab-content active">
         <div class="bt-sub-tabs">
@@ -63,33 +78,134 @@ export function setup(ctx: SpindleFrontendContext) {
           <input type="text" class="bt-input full bt-scrape" data-id="Name" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Species" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Age" id="bt-age"></div>
-          <div class="bt-row"><span>Gender:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Gender" id="bt-gender"></div>
+          <div class="bt-row">
+            <span>Gender:</span> 
+            <div style="display:flex; align-items:center; width: 65%;">
+              <input type="text" class="bt-input bt-scrape" data-id="Gender" style="flex:1;" id="bt-gender">
+              <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
+            </div>
+          </div>
           <div class="bt-row"><span>Pronouns:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Pronouns" id="bt-pronouns"></div>
+          <div class="bt-row"><span>Voice:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Voice" id="bt-voice"></div>
+          <div class="bt-row"><span>Scent:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Scent" id="bt-scent"></div>
+
           <div class="bt-section-title">HEAD & FACE</div>
           <div class="bt-row"><span>Hair:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Hair" id="bt-hair"></div>
           <div class="bt-row"><span>Eyes:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Eyes" id="bt-eyes"></div>
+          <div class="bt-row"><span>Mouth:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Mouth" id="bt-mouth"></div>
           <div class="bt-row"><span>Skin:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Skin" id="bt-skin"></div>
+          <div class="bt-row"><span>Makeup:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Makeup" id="bt-makeup"></div>
+          <textarea class="bt-textarea bt-scrape" data-id="Features" rows="2" placeholder="Distinct facial features..." id="bt-features"></textarea>
+
           <div class="bt-section-title">BODY & ANATOMY</div>
+          <div class="bt-row"><span>Build:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Build" placeholder="e.g. athletic, slender" id="bt-build"></div>
           <div class="bt-row"><span>Height (cm):</span> <input type="number" class="bt-input bt-scrape" data-id="Height_cm" id="bt-height" value="160"></div>
           <div class="bt-row"><span>Weight (kg):</span> <input type="number" class="bt-input bt-scrape" data-id="Weight_kg" id="bt-weight" value="60"></div>
+          <div class="bt-row">
+            <span>Breasts (ml):</span> 
+            <div style="display:flex; align-items:center; width: 65%;">
+              <input type="number" class="bt-input bt-scrape" data-id="BreastVolume_ml" style="flex:1;" id="bt-breast-ml" value="0">
+              <span id="bt-breast-cup" style="width: 45px; text-align:right; font-weight:bold; color:#ff4444;">AA</span>
+            </div>
+          </div>
+          <input type="text" class="bt-input full bt-scrape" data-id="BreastShape" placeholder="Breast descriptor (e.g., firm, perky)" id="bt-breast-desc">
+          <div class="bt-row"><span>Ass (Hips cm):</span> <input type="number" class="bt-input bt-input-wide bt-scrape" data-id="Hips_cm" id="bt-ass-cm" value="90"></div>
+          <input type="text" class="bt-input full bt-scrape" data-id="AssShape" placeholder="Ass descriptor (e.g., plump, wide)" id="bt-ass-desc">
+          <div class="bt-row">
+            <span>Penis (L/G cm):</span> 
+            <div style="display:flex; justify-content:space-between; width: 65%;">
+              <input type="number" class="bt-input bt-input-small bt-scrape" data-id="PenisLength_cm" placeholder="Len" id="bt-penis-len">
+              <span style="color:#666; margin-top:5px;">x</span>
+              <input type="number" class="bt-input bt-input-small bt-scrape" data-id="PenisGirth_cm" placeholder="Girth" id="bt-penis-girth">
+            </div>
+          </div>
+          <input type="text" class="bt-input full bt-scrape" data-id="PenisShape" placeholder="Penis descriptor (e.g., uncut, veiny)" id="bt-penis-desc">
+          <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Vagina" placeholder="Descriptor..." id="bt-vagina"></div>
+          <div style="font-size: 13px; margin-top: 15px; margin-bottom: 5px; color: #888;">Markings & Scars:</div>
+          <textarea class="bt-textarea bt-scrape" data-id="ScarsMarkings" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
         </div>
+
         <div id="sub-skills" class="bt-sub-content">
-          <div class="bt-row"><span style="font-weight:bold;">Skills</span> <button class="bt-add-btn" id="add-skill-btn">+ Add</button></div>
-          <div id="skills-container"></div>
-          <div class="bt-row"><span style="font-weight:bold;">Traits</span> <button class="bt-add-btn" id="add-trait-btn">+ Add</button></div>
-          <div id="traits-container"></div>
+          <div style="margin-bottom: 20px;">
+            <div class="bt-row"><span style="font-weight:bold;">Skills</span> <button class="bt-add-btn" id="add-skill-btn">+ Add</button></div>
+            <div id="skills-container"></div>
+          </div>
+          <div>
+            <div class="bt-row"><span style="font-weight:bold;">Traits</span> <button class="bt-add-btn" id="add-trait-btn">+ Add</button></div>
+            <div id="traits-container"></div>
+          </div>
         </div>
       </div>
 
       <div id="tab-inv" class="bt-tab-content">
-        <div class="bt-section-title" style="margin-top:0;">CLOTHING</div>
-        <span class="slot-label">Torso</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso" placeholder="Shirt, Armor">
-        <span class="slot-label">Legs</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs" placeholder="Pants, Greaves">
-        <span class="slot-label">Feet</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet" placeholder="Boots">
+        <div class="bt-row">
+          <span style="font-weight:bold; color:#ff4444;">WEALTH</span>
+          <select id="bt-currency-type" class="bt-select bt-scrape" data-id="CurrencySystem" style="width: 100px;">
+            <option value="modern">Modern ($)</option>
+            <option value="fantasy">Fantasy (G/S/C)</option>
+          </select>
+        </div>
+        <div id="currency-modern"><input type="number" class="bt-input full bt-scrape" data-id="CashBalance" id="bt-cash-modern" placeholder="Balance (e.g. 1500)"></div>
+        <div id="currency-fantasy" style="display:none; justify-content:space-between; gap:5px; margin-bottom:10px;">
+          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Gold" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#ffd700; font-weight:bold;">G</span></div>
+          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Silver" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#c0c0c0; font-weight:bold;">S</span></div>
+          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Copper" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#cd7f32; font-weight:bold;">C</span></div>
+        </div>
         <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title">BACKPACK</div>
-        <div id="inv-container"></div>
-        <button class="bt-add-btn" id="add-inv-btn" style="float:none; width:100%; margin-top:5px;">+ Add Item</button>
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          CLOTHING SLOTS
+          <select class="bt-select bt-scrape" data-id="ClothingMode" id="bt-cloth-mode" style="width:110px; border-color:#ff4444;">
+            <option value="flavor">Mode: Flavor</option>
+            <option value="hardcore">Mode: Hardcore</option>
+          </select>
+        </div>
+        
+        <span class="slot-label">Head (Top)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Top" placeholder="Hats, Helmets, Hoods">
+        <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Face" placeholder="Glasses, Goggles, Visors">
+        <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Lower" placeholder="Masks, Bandanas">
+        <span class="slot-label">Neck</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Neck" placeholder="Scarves, Gorgets, Chokers">
+        
+        <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Underwear Top" placeholder="Bra, Binder, Undershirt">
+        
+        <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Underwear Bottom" placeholder="Panties, Boxers, Loincloth">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Base" placeholder="T-shirt, Blouse, Gambeson">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Mid" placeholder="Sweater, Vest, Chainmail">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 3 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Outer" placeholder="Jacket, Coat, Cuirass">
+        
+        <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Shell" placeholder="Overcoat, Poncho, Power Armor">
+        
+        <span class="slot-label">Hands (Layer 1)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Hands Base" placeholder="Inner Gloves, Wraps">
+        <span class="slot-label">Hands (Layer 2)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Hands Outer" placeholder="Gauntlets, Thick Gloves">
+        
+        <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs Base" placeholder="Jeans, Leggings, Trousers">
+        
+        <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs Outer" placeholder="Greaves, Chaps, Snow Pants">
+        
+        <span class="slot-label">Feet (Layer 1)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet Base" placeholder="Socks, Stockings">
+        <span class="slot-label">Feet (Layer 2)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet Outer" placeholder="Shoes, Boots, Sabatons">
+        <span class="slot-label">Jewelry</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Jewelry" placeholder="Rings, Amulets, Bracelets">
+        <span class="slot-label">Back</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Back" placeholder="Backpack, Cape, Quiver">
+        
+        <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Waist" placeholder="Belt, Holster, Scabbard">
+        
+        <hr style="border-color: #333; margin: 15px 0;">
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>BACKPACK / POCKETS</span>
+          <button class="bt-add-btn" id="add-inv-btn">+ Add Item</button>
+        </div>
+        <div id="inv-container" style="margin-top: 10px;"></div>
       </div>
 
       <div id="tab-state" class="bt-tab-content">
@@ -116,21 +232,32 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="CapacityMultiplier" id="bt-cap-mult" step="0.1" value="1.0"></div>
 
         <hr style="border-color: #333; margin: 15px 0;">
+
         <div class="bt-row"><span>Belly Status:</span> <span class="bt-value" id="bt-belly-status" style="color:#aaa;">Flat</span></div>
         <div class="bt-row"><span>Mobility:</span> <span class="bt-value" id="bt-mobility" style="color:#4CAF50;">Agile / Normal</span></div>
 
         <hr style="border-color: #333; margin: 15px 0;">
+
         <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
-          <span>STOMACH</span>
+          <span>STOMACH PIPELINE</span>
           <button class="bt-add-btn" id="add-stomach-btn">+ Add Item</button>
         </div>
+        
         <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-stom-max-disp">115.20 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-stom-fill">0.00 L</span></div>
+        
         <div id="stomach-container" style="margin-top: 10px;"></div>
 
         <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title">BOWELS</div>
+
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>BOWEL PIPELINE</span>
+          <button class="bt-add-btn" style="background: #4a3a2a; color: #d2b48c; border-color:#8b6b4a;" id="add-remains-btn">+ Remains</button>
+        </div>
+        
+        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-bowel-max-disp">40.32 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-bowel-fill">0.00 L</span></div>
+        
         <div id="bowel-container" style="margin-top: 10px;"></div>
 
         <hr style="border-color: #333; margin: 15px 0;">
@@ -140,7 +267,6 @@ export function setup(ctx: SpindleFrontendContext) {
   `;
   document.body.appendChild(panel);
 
-  // Floating Button
   const floatingBtn = document.createElement('div');
   floatingBtn.innerText = '📋';
   Object.assign(floatingBtn.style, {
@@ -150,6 +276,15 @@ export function setup(ctx: SpindleFrontendContext) {
     userSelect: 'none', transition: 'opacity 0.3s ease', opacity: '0.4', border: '2px solid #555',
     boxSizing: 'border-box'
   });
+  
+  const savedPos = localStorage.getItem('bio-tracker-btn-pos');
+  if (savedPos) {
+    try {
+      const pos = JSON.parse(savedPos);
+      floatingBtn.style.bottom = 'auto'; floatingBtn.style.right = 'auto';
+      floatingBtn.style.left = pos.x + 'px'; floatingBtn.style.top = pos.y + 'px';
+    } catch(e) {}
+  }
   document.body.appendChild(floatingBtn);
 
   let fadeTimeout: any;
@@ -160,10 +295,41 @@ export function setup(ctx: SpindleFrontendContext) {
   };
   resetFade();
 
-  floatingBtn.addEventListener('click', () => {
-    panel.classList.add('open'); floatingBtn.style.display = 'none'; resetFade();
+  let isDragging = false, hasMoved = false;
+  let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
+
+  floatingBtn.addEventListener('touchstart', (e) => {
+    isDragging = true; hasMoved = false; resetFade();
+    const touch = e.touches[0];
+    const rect = floatingBtn.getBoundingClientRect();
+    startX = touch.clientX; startY = touch.clientY;
+    initialLeft = rect.left; initialTop = rect.top;
+    floatingBtn.style.bottom = 'auto'; floatingBtn.style.right = 'auto';
+    floatingBtn.style.left = initialLeft + 'px'; floatingBtn.style.top = initialTop + 'px';
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    if (Math.abs(touch.clientX - startX) > 5 || Math.abs(touch.clientY - startY) > 5) hasMoved = true;
+    floatingBtn.style.left = (initialLeft + (touch.clientX - startX)) + 'px';
+    floatingBtn.style.top = (initialTop + (touch.clientY - startY)) + 'px';
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => { 
+    if (isDragging) {
+      localStorage.setItem('bio-tracker-btn-pos', JSON.stringify({
+        x: parseFloat(floatingBtn.style.left), y: parseFloat(floatingBtn.style.top)
+      }));
+    }
+    isDragging = false; resetFade(); 
   });
-  document.getElementById('bt-close-btn')?.addEventListener('click', () => {
+
+  floatingBtn.addEventListener('click', () => {
+    if (!hasMoved) { panel.classList.add('open'); floatingBtn.style.display = 'none'; }
+  });
+  
+  document.getElementById('bt-close-btn')?.addEventListener('click', () => { 
     panel.classList.remove('open'); floatingBtn.style.display = 'flex'; resetFade();
   });
 
@@ -183,6 +349,12 @@ export function setup(ctx: SpindleFrontendContext) {
     });
   });
 
+  const currencyType = document.getElementById('bt-currency-type') as HTMLSelectElement;
+  currencyType?.addEventListener('change', () => {
+    document.getElementById('currency-modern')!.style.display = currencyType.value === 'modern' ? 'block' : 'none';
+    document.getElementById('currency-fantasy')!.style.display = currencyType.value === 'fantasy' ? 'flex' : 'none';
+  });
+
   function updateCapacities() {
     const height = parseFloat((document.getElementById('bt-height') as HTMLInputElement).value) || 160;
     const weight = parseFloat((document.getElementById('bt-weight') as HTMLInputElement).value) || 60;
@@ -191,40 +363,49 @@ export function setup(ctx: SpindleFrontendContext) {
     const baseStomMax = (height * weight * 0.012) * mult;
     const baseBowelMax = baseStomMax * 0.35; 
 
-    document.getElementById('bt-stom-max-disp')!.innerText = baseStomMax.toFixed(2) + ' L';
+    const stomMaxDisp = document.getElementById('bt-stom-max-disp');
+    if (stomMaxDisp) stomMaxDisp.innerText = baseStomMax.toFixed(2) + ' L';
+    const bowelMaxDisp = document.getElementById('bt-bowel-max-disp');
+    if (bowelMaxDisp) bowelMaxDisp.innerText = baseBowelMax.toFixed(2) + ' L';
 
     let stomTotal = 0;
     document.querySelectorAll('.stomach-vol').forEach(el => {
       stomTotal += parseFloat((el as HTMLInputElement).value) || 0;
     });
-    document.getElementById('bt-stom-fill')!.innerText = stomTotal.toFixed(2) + ' L';
+    const stomFillEl = document.getElementById('bt-stom-fill');
+    if(stomFillEl) stomFillEl.innerText = stomTotal.toFixed(2) + ' L';
 
     let bowelTotal = 0;
     document.querySelectorAll('.bowel-vol').forEach(el => {
       bowelTotal += parseFloat((el as HTMLInputElement).value) || 0;
     });
-    document.getElementById('bt-bowel-fill')!.innerText = bowelTotal.toFixed(2) + ' L';
+    const bowelFillEl = document.getElementById('bt-bowel-fill');
+    if(bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L';
 
     let stomPct = (stomTotal / baseStomMax) * 100;
-    let bellyEl = document.getElementById('bt-belly-status')!;
-    if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.style.color = '#aaa'; }
-    else if (stomPct <= 12) { bellyEl.innerText = 'Potbelly'; bellyEl.style.color = '#fff'; }
-    else if (stomPct <= 20) { bellyEl.innerText = 'Bloated'; bellyEl.style.color = '#ffeb3b'; }
-    else if (stomPct <= 35) { bellyEl.innerText = 'Full-Term'; bellyEl.style.color = '#ff9800'; }
-    else if (stomPct <= 48) { bellyEl.innerText = 'Twins'; bellyEl.style.color = '#ff9800'; }
-    else if (stomPct <= 60) { bellyEl.innerText = 'Triplets'; bellyEl.style.color = '#ff5722'; }
-    else if (stomPct <= 95) { bellyEl.innerText = 'Same-Size'; bellyEl.style.color = '#ff5722'; }
-    else if (stomPct <= 125) { bellyEl.innerText = 'Double-Size'; bellyEl.style.color = '#ff4444'; }
-    else if (stomPct <= 160) { bellyEl.innerText = 'Room-Filling'; bellyEl.style.color = '#ff4444'; }
-    else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000'; }
+    let bellyEl = document.getElementById('bt-belly-status');
+    if (bellyEl) {
+      if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.style.color = '#aaa'; }
+      else if (stomPct <= 12) { bellyEl.innerText = 'Potbelly'; bellyEl.style.color = '#fff'; }
+      else if (stomPct <= 20) { bellyEl.innerText = 'Bloated'; bellyEl.style.color = '#ffeb3b'; }
+      else if (stomPct <= 35) { bellyEl.innerText = 'Full-Term'; bellyEl.style.color = '#ff9800'; }
+      else if (stomPct <= 48) { bellyEl.innerText = 'Twins'; bellyEl.style.color = '#ff9800'; }
+      else if (stomPct <= 60) { bellyEl.innerText = 'Triplets'; bellyEl.style.color = '#ff5722'; }
+      else if (stomPct <= 95) { bellyEl.innerText = 'Same-Size'; bellyEl.style.color = '#ff5722'; }
+      else if (stomPct <= 125) { bellyEl.innerText = 'Double-Size'; bellyEl.style.color = '#ff4444'; }
+      else if (stomPct <= 160) { bellyEl.innerText = 'Room-Filling'; bellyEl.style.color = '#ff4444'; }
+      else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000'; }
+    }
 
     let overCapPct = ((stomTotal + bowelTotal) / baseStomMax) * 100;
-    let mobEl = document.getElementById('bt-mobility')!;
-    if (overCapPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
-    else if (overCapPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b'; }
-    else if (overCapPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800'; }
-    else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722'; }
-    else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444'; }
+    let mobEl = document.getElementById('bt-mobility');
+    if (mobEl) {
+      if (overCapPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50'; }
+      else if (overCapPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b'; }
+      else if (overCapPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800'; }
+      else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722'; }
+      else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444'; }
+    }
   }
 
   document.getElementById('bt-height')?.addEventListener('input', updateCapacities);
@@ -237,7 +418,8 @@ export function setup(ctx: SpindleFrontendContext) {
     if (target.classList.contains('item-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0;
       const statusSpan = target.closest('.vital-slot')?.querySelector('.item-status') as HTMLElement;
-      if (statusSpan && !target.closest('.vital-slot')?.classList.contains('is-liquid')) {
+      const slot = target.closest('.vital-slot');
+      if (statusSpan && slot && !slot.classList.contains('is-liquid')) {
         let text = 'Fully Conscious'; let color = '#4CAF50';
         if (val >= 90) { text = 'Dead'; color = '#ff4444'; }
         else if (val >= 80) { text = 'Unconscious'; color = '#999'; }
@@ -248,7 +430,6 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   });
 
-  // Dynamic Add Buttons
   document.getElementById('add-stomach-btn')?.addEventListener('click', () => {
     const div = document.createElement('div'); div.className = 'vital-slot is-food';
     div.innerHTML = `
@@ -273,7 +454,6 @@ export function setup(ctx: SpindleFrontendContext) {
     `;
     document.getElementById('stomach-container')?.appendChild(div);
     
-    // Toggle gear field based on type
     const typeSelect = div.querySelector('.v-type') as HTMLSelectElement;
     const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement;
     const statusSpan = div.querySelector('.item-status') as HTMLElement;
@@ -296,12 +476,11 @@ export function setup(ctx: SpindleFrontendContext) {
   });
 
   document.getElementById('add-remains-btn')?.addEventListener('click', () => {
-    const div = document.createElement('div'); div.className = 'vital-slot is-remains';
+    const div = document.createElement('div'); div.className = 'vital-slot is-remains'; div.style.borderColor = '#8b6b4a';
     div.innerHTML = `
       <button class="vital-remove" onclick="this.parentElement.remove(); document.getElementById('bt-cap-mult').dispatchEvent(new Event('input', {bubbles:true}))">✖</button>
       <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Remains Name...">
-      </div>
+        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Waste / Remains Name..."></div>
       <div class="flex-row">
         <span>Vol (L): <input type="number" class="bt-input bowel-vol v-vol" style="width: 50px;" value="0"></span>
       </div>
@@ -325,7 +504,6 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('inv-container')?.appendChild(div);
   });
 
-  // Sync Button
   document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
     let xml = `<CharacterSheet>\n  <State>\n`;
     document.querySelectorAll('.bt-scrape').forEach(el => {
@@ -350,7 +528,11 @@ export function setup(ctx: SpindleFrontendContext) {
       const input = el as HTMLInputElement;
       const val = input.value.trim();
       const slot = input.getAttribute('data-slot');
-      if (val !== '') xml += `    <Equip slot="${slot}">${val}</Equip>\n`;
+      if (val !== '') {
+        const flexEl = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement;
+        const flexStr = flexEl ? ` elasticity="${flexEl.value}"` : '';
+        xml += `    <Equip slot="${slot}"${flexStr}>${val}</Equip>\n`;
+      }
     });
     xml += `  </Clothing>\n\n  <Backpack>\n`;
     document.querySelectorAll('.dyn-inv').forEach(el => {
@@ -406,14 +588,52 @@ export function setup(ctx: SpindleFrontendContext) {
 
     const btn = document.getElementById('bt-sync-btn');
     if (btn) {
-      btn.innerText = '✅ Synced!';
+      btn.innerText = '✅ Data Synced to AI!';
       btn.style.background = '#4CAF50';
       setTimeout(() => { btn.innerText = '💾 Sync Changes to AI'; btn.style.background = '#333'; }, 2000);
     }
     ctx.sendToBackend({ type: 'SYNC_BIO_DATA', xmlData: xml });
+
+    const previewContent = document.getElementById('bt-preview-content');
+    if (previewContent) {
+      previewContent.innerText = xml;
+      document.getElementById('bt-preview-modal')!.style.display = 'flex';
+    }
   });
 
-  // Backend Message Listener
+  const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement;
+  const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement;
+  breastInput?.addEventListener('input', () => {
+    const ml = parseInt(breastInput.value) || 0; let cup = "AA";
+    if (ml >= 1000) cup = "H+"; else if (ml >= 800) cup = "G"; else if (ml >= 650) cup = "F"; else if (ml >= 550) cup = "DD"; else if (ml >= 450) cup = "D"; else if (ml >= 350) cup = "C"; else if (ml >= 250) cup = "B"; else if (ml >= 150) cup = "A";
+    breastCup.innerText = cup;
+  });
+
+  const colorMap: Record<string, string> = { 'blonde': '#e8c872', 'blond': '#e8c872', 'brunette': '#5c4033', 'brown': '#5c4033', 'black': '#333333', 'red': '#cc3333', 'ginger': '#d95a2b', 'blue': '#3366cc', 'green': '#339966', 'hazel': '#8e7618', 'purple': '#800080', 'pink': '#ff99cc', 'white': '#ffffff', 'gray': '#808080', 'grey': '#808080', 'pale': '#ffe4e1', 'tan': '#d2b48c' };
+  function applyColorEffect(inputId: string) {
+    const el = document.getElementById(inputId); if(!el) return;
+    el.addEventListener('input', (e) => {
+      const val = (e.target as HTMLInputElement).value.toLowerCase(); let foundColor = '';
+      for (const key in colorMap) { if (val.includes(key)) { foundColor = colorMap[key]; break; } }
+      if (foundColor) { el.style.borderLeft = '4px solid ' + foundColor; el.style.paddingLeft = '8px'; } 
+      else { el.style.borderLeft = '1px solid #444'; el.style.paddingLeft = '6px'; }
+    });
+  }
+  applyColorEffect('bt-hair'); applyColorEffect('bt-eyes'); applyColorEffect('bt-skin');
+
+  const genderInput = document.getElementById('bt-gender') as HTMLInputElement;
+  const genderIcon = document.getElementById('bt-gender-icon');
+  if (genderInput && genderIcon) {
+    genderInput.addEventListener('input', () => {
+      const val = genderInput.value.toLowerCase().trim(); let icon = ''; let color = '#fff';
+      if (val === 'female' || val === 'woman' || val === 'girl' || val === 'f') { icon = '♀️'; color = '#ff99cc'; } 
+      else if (val === 'male' || val === 'man' || val === 'boy' || val === 'm') { icon = '♂️'; color = '#66b2ff'; } 
+      else if (val.includes('trans') || val.includes('non-binary') || val === 'nb' || val === 't') { icon = '⚧️'; color = '#e0e0e0'; } 
+      else if (val.includes('futa') || val.includes('herm') || val.includes('intersex') || val === 'h' || val === 'i') { icon = '⚥'; color = '#cc99ff'; }
+      genderIcon.innerText = icon; genderIcon.style.color = color;
+    });
+  }
+
   ctx.onBackendMessage((msg: any) => {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       populateFormFromXml(msg.xml);
@@ -454,23 +674,35 @@ export function setup(ctx: SpindleFrontendContext) {
     }
 
     document.getElementById('bt-height')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-weight')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-breast-ml')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-gender')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-hair')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-eyes')?.dispatchEvent(new Event('input'));
+    document.getElementById('bt-skin')?.dispatchEvent(new Event('input'));
 
     document.querySelectorAll('Equip').forEach(equipNode => {
       const slot = equipNode.getAttribute('slot');
+      const elasticity = equipNode.getAttribute('elasticity') || 'standard';
       const value = equipNode.textContent || '';
       const input = document.querySelector(`.bt-cloth-slot[data-slot="${slot}"]`) as HTMLInputElement;
-      if (input) input.value = value;
+      if (input) {
+        input.value = value;
+        const flexSelect = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement;
+        if (flexSelect) flexSelect.value = elasticity;
+      }
     });
 
-    document.querySelectorAll('Item').forEach(itemNode => {
-      // In Backpack
-      if (itemNode.getAttribute('qty')) {
-        document.getElementById('add-inv-btn')?.click();
-        const invContainer = document.getElementById('inv-container');
-        if (invContainer) {
-          const lastItem = invContainer.lastElementChild as HTMLElement;
-          (lastItem.querySelector('.d-qty') as HTMLInputElement).value = itemNode.getAttribute('qty') || '1';
-          (lastItem.querySelector('.d-name') as HTMLInputElement).value = itemNode.textContent || '';
+    document.querySelectorAll('Backpack > Item').forEach(itemNode => {
+      const qty = itemNode.getAttribute('qty') || '1';
+      const name = itemNode.textContent || '';
+      document.getElementById('add-inv-btn')?.click();
+      const invContainer = document.getElementById('inv-container');
+      if (invContainer) {
+        const lastItem = invContainer.lastElementChild as HTMLElement;
+        if (lastItem) {
+          (lastItem.querySelector('.d-qty') as HTMLInputElement).value = qty;
+          (lastItem.querySelector('.d-name') as HTMLInputElement).value = name;
         }
       }
     });
@@ -480,9 +712,11 @@ export function setup(ctx: SpindleFrontendContext) {
       const skillsContainer = document.getElementById('skills-container');
       if (skillsContainer) {
         const lastSkill = skillsContainer.lastElementChild as HTMLElement;
-        (lastSkill.querySelector('.d-name') as HTMLInputElement).value = skillNode.getAttribute('name') || '';
-        (lastSkill.querySelector('.d-lvl') as HTMLInputElement).value = skillNode.getAttribute('level') || '1';
-        (lastSkill.querySelector('.d-desc') as HTMLTextAreaElement).value = skillNode.textContent || '';
+        if (lastSkill) {
+          (lastSkill.querySelector('.d-name') as HTMLInputElement).value = skillNode.getAttribute('name') || '';
+          (lastSkill.querySelector('.d-lvl') as HTMLInputElement).value = skillNode.getAttribute('level') || '1';
+          (lastSkill.querySelector('.d-desc') as HTMLTextAreaElement).value = skillNode.textContent || '';
+        }
       }
     });
 
@@ -491,36 +725,39 @@ export function setup(ctx: SpindleFrontendContext) {
       const traitsContainer = document.getElementById('traits-container');
       if (traitsContainer) {
         const lastTrait = traitsContainer.lastElementChild as HTMLElement;
-        (lastTrait.querySelector('.d-name') as HTMLInputElement).value = traitNode.getAttribute('name') || '';
-        (lastTrait.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || '';
+        if (lastTrait) {
+          (lastTrait.querySelector('.d-name') as HTMLInputElement).value = traitNode.getAttribute('name') || '';
+          (lastTrait.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || '';
+        }
       }
     });
 
-    // Stomach Items
     document.querySelectorAll('Stomach > Item').forEach(itemNode => {
       document.getElementById('add-stomach-btn')?.click();
       const stomachContainer = document.getElementById('stomach-container');
       if (stomachContainer) {
         const lastItem = stomachContainer.lastElementChild as HTMLElement;
-        (lastItem.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name');
-        (lastItem.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L');
-        (lastItem.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'digestion') || '').replace('%', '');
-        
-        const type = getAttr(itemNode, 'type') || 'Food';
-        const typeSelect = lastItem.querySelector('.v-type') as HTMLSelectElement;
-        typeSelect.value = type;
-        typeSelect.dispatchEvent(new Event('change'));
-        
-        const descNode = itemNode.querySelector('Description');
-        (lastItem.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || '';
-        
-        if (type === 'Prey') {
-          const gearNode = itemNode.querySelector('BoundGear');
-          (lastItem.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || '';
+        if (lastItem) {
+          (lastItem.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name');
+          (lastItem.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L');
+          (lastItem.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'digestion') || '').replace('%', '');
+          
+          const type = getAttr(itemNode, 'type') || 'Food';
+          const typeSelect = lastItem.querySelector('.v-type') as HTMLSelectElement;
+          typeSelect.value = type;
+          typeSelect.dispatchEvent(new Event('change'));
+          
+          const descNode = itemNode.querySelector('Description');
+          (lastItem.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || '';
+          
+          if (type === 'Prey') {
+            const gearNode = itemNode.querySelector('BoundGear');
+            (lastItem.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || '';
+          }
+          
+          const digInput = lastItem.querySelector('.item-dig-input') as HTMLInputElement;
+          if (digInput) digInput.dispatchEvent(new Event('input', { bubbles: true }));
         }
-        
-        const digInput = lastItem.querySelector('.item-dig-input') as HTMLInputElement;
-        if (digInput) digInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
 
@@ -529,8 +766,10 @@ export function setup(ctx: SpindleFrontendContext) {
       const bowelContainer = document.getElementById('bowel-container');
       if (bowelContainer) {
         const lastRemains = bowelContainer.lastElementChild as HTMLElement;
-        (lastRemains.querySelector('.v-name') as HTMLInputElement).value = remainsNode.textContent || '';
-        (lastRemains.querySelector('.v-vol') as HTMLInputElement).value = getAttr(remainsNode, 'volume_L');
+        if (lastRemains) {
+          (lastRemains.querySelector('.v-name') as HTMLInputElement).value = remainsNode.textContent || '';
+          (lastRemains.querySelector('.v-vol') as HTMLInputElement).value = getAttr(remainsNode, 'volume_L');
+        }
       }
     });
 
