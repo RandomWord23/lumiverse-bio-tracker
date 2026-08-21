@@ -260,7 +260,6 @@ function processClothingStress(
       const elasticity =
         getAttrFromString(attrs, 'elasticity') || 'standard'
 
-      // Magic items never degrade
       if (elasticity === 'magic') {
         let cleanAttrs = attrs
           .replace(/\s+stress="[^"]*"/gi, '')
@@ -285,7 +284,6 @@ function processClothingStress(
       stress += stressChange
       stress = Math.max(0, stress)
 
-      // If was damaged/ruined, clamp to damaged threshold
       const thresholds =
         conditionThresholds[elasticity] ||
         conditionThresholds.standard
@@ -302,7 +300,6 @@ function processClothingStress(
         oldCondition,
       )
 
-      // Track damage events
       if (newCondition !== oldCondition) {
         const isDamage = ['damaged', 'ruined'].includes(
           newCondition,
@@ -314,7 +311,6 @@ function processClothingStress(
         }
       }
 
-      // Rebuild attrs
       let cleanAttrs = attrs
         .replace(/\s+stress="[^"]*"/gi, '')
         .replace(/\s+condition="[^"]*"/gi, '')
@@ -420,21 +416,37 @@ function runDigestionTick(
 
     if (oldTime === null || newTime === null) {
       spindle.log.info('Digestion tick skipped: missing time')
-      return newXml
+      // Still process clothing stress if body changed even without time
+      const clothingResult = processClothingStress(newXml, oldXml)
+      if (clothingResult.damageEvents.length > 0) {
+        spindle.log.info(
+          `Clothing damage: ${clothingResult.damageEvents.join(', ')}`,
+        )
+      }
+      return clothingResult.xml
     }
 
     let elapsed = newTime - oldTime
 
     if (elapsed < 0) {
-      spindle.log.info(
-        'Digestion tick skipped: time went backwards (rollback)',
-      )
-      return newXml
+      // If the backward jump is more than 12 hours, it's a midnight crossing
+      // (e.g., 22:00 → 03:00 = -19, add 24 = +5 hours)
+      // If it's less than 12 hours, it's a rollback (e.g., 15:00 → 14:00)
+      if (elapsed < -12) {
+        elapsed += 24
+        spindle.log.info(
+          `Midnight crossing detected: elapsed adjusted to ${elapsed.toFixed(2)}h`,
+        )
+      } else {
+        spindle.log.info(
+          'Digestion tick skipped: time went backwards (rollback)',
+        )
+        return newXml
+      }
     }
 
     if (elapsed === 0) {
       spindle.log.info('Digestion tick skipped: 0 hours elapsed')
-
       // Even with 0 time, process clothing stress if body changed
       const clothingResult = processClothingStress(newXml, oldXml)
       if (clothingResult.damageEvents.length > 0) {
@@ -500,6 +512,7 @@ function runDigestionTick(
     let totalDigestedVol = 0
 
     // Pass 1: Normal tags <Item ...>...</Item>
+    // [^>]*[^>\/] ensures we don't accidentally match self-closing tags
     const itemRegex1 = /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi
     stomContent = stomContent.replace(
       itemRegex1,
@@ -778,9 +791,10 @@ CRITICAL XML RULES:
 7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
 8. The extension AUTOMATICALLY handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions will increase proportionally. Do NOT manually adjust these stats based on digestion — the extension does it for you. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.
-10. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
-11. If absolutely nothing on the sheet changed, you may omit the block.
-12. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
+10. ABSOLUTE SOURCE OF TRUTH: The <CurrentCharacterSheet> provided above is the absolute source of truth. You MUST copy the values from it exactly, especially <ClothingMode>. If it says "hardcore", you MUST output "hardcore". Do NOT copy values from previous messages or your memory. Always look at the provided sheet first.
+11. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
+12. If absolutely nothing on the sheet changed, you may omit the block.
+13. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
 
 <sheet_update>
 <CharacterSheet>
@@ -894,4 +908,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v7)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v8)')
