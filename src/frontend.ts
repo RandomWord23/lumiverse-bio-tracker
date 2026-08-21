@@ -1134,31 +1134,6 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   })
 
-  // ─── Live preview on message sent ──────────────────────────
-  ctx.events.on('MESSAGE_SENT', (payload: any) => {
-    const msg = payload.message
-    if (!msg) return
-    let text = ''
-    if (msg.swipes && msg.swipe_id !== undefined) {
-      text = getSwipeText(msg.swipes[msg.swipe_id])
-    } else if (typeof msg.content === 'string') {
-      text = msg.content
-    } else if (Array.isArray(msg.content)) {
-      text = msg.content
-        .filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
-        .join('\n')
-    }
-    const updateXml = extractSheetUpdateFromText(text)
-    if (updateXml) {
-      try {
-        populateFormFromXml(updateXml)
-      } catch (e) {
-        // silent fail
-      }
-    }
-  })
-
   // ─── XML to form parser ────────────────────────────────────
   function populateFormFromXml(xml: string) {
     // Clear all dynamic items
