@@ -73,9 +73,6 @@ function findLastAssistantMessage(messages: any[]): any | null {
 }
 
 // ─── Digestion Tick Logic ──────────────────────────────────────
-//
-// This function takes the newly updated XML from the LLM, reads the
-// old and new time, and runs all the digestion math.
 
 function runDigestionTick(newXml: string, oldXml: string): string {
   try {
@@ -94,13 +91,12 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     const oldTime = getTimeHours(oldXml)
     const newTime = getTimeHours(newXml)
 
-    if (oldTime === null || newTime === null) return newXml // Can't calculate time
+    if (oldTime === null || newTime === null) return newXml
 
     let elapsed = newTime - oldTime
-    if (elapsed < 0) elapsed += 24 // Handle crossing midnight
-    if (elapsed === 0) return newXml // No time passed
+    if (elapsed < 0) elapsed += 24
+    if (elapsed === 0) return newXml
 
-    // Extract Acid Stats
     const getStat = (xml: string, tag: string) => {
       const match = xml.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'))
       return match ? parseFloat(match[1]) : 0
@@ -110,7 +106,6 @@ function runDigestionTick(newXml: string, oldXml: string): string {
     const baseDigRate = getStat(newXml, 'BaseDigestionRate') || 25
     const acidRiseRate = getStat(newXml, 'AcidRiseRate') || 10
 
-    // Check if stomach has items
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
     const hasItems = stomachContents.includes('<Item')
@@ -123,10 +118,8 @@ function runDigestionTick(newXml: string, oldXml: string): string {
 
     const acidMultiplier = 1 + (acidLevel / 100)
 
-    // Update CurrentAcidPct in XML
     let updatedXml = newXml.replace(/<CurrentAcidPct>.*?<\/CurrentAcidPct>/i, `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`)
 
-    // Update Items
     const itemRegex = /<Item\s+type="(Liquid|Food|Prey)"\s+name="([^"]*)"\s+volume_L="([^"]*)"\s+digestion="([^"]*)"\s*>([\s\S]*?)<\/Item>/gi
     const selfClosingItemRegex = /<Item\s+type="(Liquid|Food|Prey)"\s+name="([^"]*)"\s+volume_L="([^"]*)"\s+digestion="([^"]*)"\s*\/>/gi
     
@@ -153,8 +146,6 @@ function processItem(type: string, name: string, vol: string, dig: string, inner
   digNum = Math.min(100, digNum + digIncrease)
 
   if (digNum >= 100) {
-    // Item fully digested, this will be handled by moving it to bowels in a real implementation.
-    // For simplicity here, we just update the % to 100. A future update can auto-move it.
     return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="100%">${inner}</Item>`
   }
 
@@ -164,7 +155,6 @@ function processItem(type: string, name: string, vol: string, dig: string, inner
 async function commitUpdate(chatId: string, messageId: string, sheetXml: string, chatIndex: number) {
   const oldSheet = sheets.get(chatId) || ''
   
-  // Run digestion math before saving!
   const finalXml = runDigestionTick(sheetXml, oldSheet)
 
   await saveChatSheet(chatId, finalXml)
@@ -182,9 +172,11 @@ async function commitUpdate(chatId: string, messageId: string, sheetXml: string,
 async function rollbackOnDelete(chatId: string, messageId: string) {
   const list = snapshots.get(chatId)
   if (!list) return
+
   const hadSnapshot = list.some(s => s.messageId === messageId)
   const newList = list.filter(s => s.messageId !== messageId)
   snapshots.set(chatId, newList)
+
   if (!hadSnapshot) return
 
   if (newList.length > 0) {
@@ -193,8 +185,16 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
     if (chatId === activeChatId) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
     }
+  } else {
+    // No snapshots left! Clear the sheet entirely.
+    await saveChatSheet(chatId, '')
+    if (chatId === activeChatId) {
+      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
+    }
   }
+
   await saveChatSnapshots(chatId)
+  spindle.log.info(`Rolled back in chat ${chatId} after deletion of ${messageId}`)
 }
 
 function buildSheetPrompt(sheetXml: string): string {
@@ -228,6 +228,7 @@ CRITICAL XML RULES:
 </CharacterSheet>
 </sheet_update>`
 }
+
 spindle.onFrontendMessage(async (msg: any) => {
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
     if (!activeChatId) {
