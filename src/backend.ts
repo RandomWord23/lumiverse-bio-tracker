@@ -1,54 +1,23 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
-// ═══════════════════════════════════════════════════════════════
-// BIO TRACKER — Backend (per-chat edition)
-// ═══════════════════════════════════════════════════════════════
-
-// ─── Types ─────────────────────────────────────────────────────
-
 interface Snapshot {
   messageId: string
   sheetXml: string
   chatIndex: number
 }
 
-// ─── State ─────────────────────────────────────────────────────
-//
-// We keep a map of chatId -> sheet XML so the interceptor can
-// quickly look up the right sheet for whichever chat is generating.
-// We also keep the "active chatId" so the frontend sync button
-// knows which chat to save to.
-
 let activeChatId: string | null = null
 const sheets: Map<string, string> = new Map()
 const snapshots: Map<string, Snapshot[]> = new Map()
 
-// ─── Storage paths ─────────────────────────────────────────────
-//
-// Each chat gets its own files inside our storage folder:
-//   sheets/<chatId>.xml      — the current sheet for that chat
-//   snapshots/<chatId>.json  — the snapshot history for that chat
-
-function sheetPath(chatId: string) {
-  return `sheets/${chatId}.xml`
-}
-
-function snapshotsPath(chatId: string) {
-  return `snapshots/${chatId}.json`
-}
-
-// ─── Load / save per chat ──────────────────────────────────────
+function sheetPath(chatId: string) { return `sheets/${chatId}.xml` }
+function snapshotsPath(chatId: string) { return `snapshots/${chatId}.json` }
 
 async function loadChatSheet(chatId: string) {
   try {
     const data = await spindle.storage.read(sheetPath(chatId))
-    if (data) {
-      sheets.set(chatId, data)
-      return data
-    }
-  } catch (e) {
-    // File doesn't exist yet — that's fine, it's a new chat
-  }
+    if (data) { sheets.set(chatId, data); return data }
+  } catch (e) {}
   return null
 }
 
@@ -60,14 +29,9 @@ async function saveChatSheet(chatId: string, xml: string) {
 async function loadChatSnapshots(chatId: string) {
   try {
     const data = await spindle.storage.read(snapshotsPath(chatId))
-    if (data) {
-      snapshots.set(chatId, JSON.parse(data))
-    } else {
-      snapshots.set(chatId, [])
-    }
-  } catch (e) {
-    snapshots.set(chatId, [])
-  }
+    if (data) { snapshots.set(chatId, JSON.parse(data)) } 
+    else { snapshots.set(chatId, []) }
+  } catch (e) { snapshots.set(chatId, []) }
 }
 
 async function saveChatSnapshots(chatId: string) {
@@ -75,107 +39,163 @@ async function saveChatSnapshots(chatId: string) {
   await spindle.storage.write(snapshotsPath(chatId), JSON.stringify(list))
 }
 
-// ─── Switch to a chat ──────────────────────────────────────────
-//
-// Called when the user opens a different chat. Loads that chat's
-// sheet and snapshots into memory, then tells the frontend to
-// refresh its form fields.
-
 async function switchToChat(chatId: string | null) {
   activeChatId = chatId
-
   if (!chatId) {
-    // User went to the home screen — clear the frontend
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
     return
   }
-
   const sheet = await loadChatSheet(chatId)
   await loadChatSnapshots(chatId)
-
   spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: sheet || '' })
   spindle.log.info(`Switched to chat ${chatId}`)
 }
 
-// ─── Text extraction helpers ───────────────────────────────────
-
 function extractTextContent(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
-    return content
-      .filter((part: any) => part.type === 'text')
-      .map((part: any) => part.text)
-      .join('\n')
+    return content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
   }
   return ''
 }
 
 function extractSheetUpdate(content: string): string | null {
-  const match = content.match(
-    /<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i
-  )
+  const match = content.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i)
   return match ? match[1].trim() : null
 }
 
 function findLastAssistantMessage(messages: any[]): any | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
-    if (msg.role === 'assistant' && msg.__isChatHistory) {
-      return msg
-    }
+    if (msg.role === 'assistant' && msg.__isChatHistory) return msg
   }
   return null
 }
 
-// ─── Commit + rollback ─────────────────────────────────────────
+// ─── Digestion Tick Logic ──────────────────────────────────────
+//
+// This function takes the newly updated XML from the LLM, reads the
+// old and new time, and runs all the digestion math.
 
-async function commitUpdate(
-  chatId: string,
-  messageId: string,
-  sheetXml: string,
-  chatIndex: number
-) {
-  await saveChatSheet(chatId, sheetXml)
+function runDigestionTick(newXml: string, oldXml: string): string {
+  try {
+    const getTimeHours = (xml: string) => {
+      const match = xml.match(/<Time>(.*?)<\/Time>/i)
+      if (!match) return null
+      const timeStr = match[1].trim()
+      const parts = timeStr.split(':').map(Number)
+      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        return parts[0] + (parts[1] / 60)
+      }
+      const h = parseFloat(timeStr)
+      return isNaN(h) ? null : h
+    }
 
+    const oldTime = getTimeHours(oldXml)
+    const newTime = getTimeHours(newXml)
+
+    if (oldTime === null || newTime === null) return newXml // Can't calculate time
+
+    let elapsed = newTime - oldTime
+    if (elapsed < 0) elapsed += 24 // Handle crossing midnight
+    if (elapsed === 0) return newXml // No time passed
+
+    // Extract Acid Stats
+    const getStat = (xml: string, tag: string) => {
+      const match = xml.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'))
+      return match ? parseFloat(match[1]) : 0
+    }
+
+    let acidLevel = getStat(newXml, 'CurrentAcidPct')
+    const baseDigRate = getStat(newXml, 'BaseDigestionRate') || 25
+    const acidRiseRate = getStat(newXml, 'AcidRiseRate') || 10
+
+    // Check if stomach has items
+    const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
+    const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
+    const hasItems = stomachContents.includes('<Item')
+
+    if (hasItems) {
+      acidLevel = Math.min(100, acidLevel + (acidRiseRate * elapsed))
+    } else {
+      acidLevel = Math.max(0, acidLevel - (acidRiseRate * elapsed))
+    }
+
+    const acidMultiplier = 1 + (acidLevel / 100)
+
+    // Update CurrentAcidPct in XML
+    let updatedXml = newXml.replace(/<CurrentAcidPct>.*?<\/CurrentAcidPct>/i, `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`)
+
+    // Update Items
+    const itemRegex = /<Item\s+type="(Liquid|Food|Prey)"\s+name="([^"]*)"\s+volume_L="([^"]*)"\s+digestion="([^"]*)"\s*>([\s\S]*?)<\/Item>/gi
+    const selfClosingItemRegex = /<Item\s+type="(Liquid|Food|Prey)"\s+name="([^"]*)"\s+volume_L="([^"]*)"\s+digestion="([^"]*)"\s*\/>/gi
+    
+    const processedXml = updatedXml.replace(itemRegex, (match, type, name, vol, dig, inner) => {
+      return processItem(type, name, vol, dig, inner, baseDigRate, acidMultiplier, elapsed)
+    }).replace(selfClosingItemRegex, (match, type, name, vol, dig) => {
+      return processItem(type, name, vol, dig, '', baseDigRate, acidMultiplier, elapsed)
+    })
+
+    return processedXml
+  } catch (e) {
+    spindle.log.error(`Digestion tick failed: ${e}`)
+    return newXml
+  }
+}
+
+function processItem(type: string, name: string, vol: string, dig: string, inner: string, baseRate: number, acidMult: number, elapsed: number): string {
+  let speedMult = 1
+  if (type === 'Liquid') speedMult = 3
+  else if (type === 'Prey') speedMult = 0.5
+
+  let digNum = parseFloat(dig.replace('%', '')) || 0
+  const digIncrease = baseRate * speedMult * acidMult * elapsed
+  digNum = Math.min(100, digNum + digIncrease)
+
+  if (digNum >= 100) {
+    // Item fully digested, this will be handled by moving it to bowels in a real implementation.
+    // For simplicity here, we just update the % to 100. A future update can auto-move it.
+    return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="100%">${inner}</Item>`
+  }
+
+  return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
+}
+
+async function commitUpdate(chatId: string, messageId: string, sheetXml: string, chatIndex: number) {
+  const oldSheet = sheets.get(chatId) || ''
+  
+  // Run digestion math before saving!
+  const finalXml = runDigestionTick(sheetXml, oldSheet)
+
+  await saveChatSheet(chatId, finalXml)
   const list = snapshots.get(chatId) || []
-  list.push({ messageId, sheetXml, chatIndex })
+  list.push({ messageId, sheetXml: finalXml, chatIndex })
   snapshots.set(chatId, list)
-
   await saveChatSnapshots(chatId)
 
   if (chatId === activeChatId) {
-    spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: sheetXml })
+    spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
   }
-
   spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
 }
 
 async function rollbackOnDelete(chatId: string, messageId: string) {
   const list = snapshots.get(chatId)
   if (!list) return
-
   const hadSnapshot = list.some(s => s.messageId === messageId)
-
   const newList = list.filter(s => s.messageId !== messageId)
   snapshots.set(chatId, newList)
-
   if (!hadSnapshot) return
 
   if (newList.length > 0) {
-    const latest = newList.reduce((a, b) =>
-      a.chatIndex > b.chatIndex ? a : b
-    )
+    const latest = newList.reduce((a, b) => a.chatIndex > b.chatIndex ? a : b)
     await saveChatSheet(chatId, latest.sheetXml)
     if (chatId === activeChatId) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
     }
   }
-
   await saveChatSnapshots(chatId)
-  spindle.log.info(`Rolled back in chat ${chatId} after deletion of ${messageId}`)
 }
-
-// ─── Build the injection prompt ────────────────────────────────
 
 function buildSheetPrompt(sheetXml: string): string {
   return `[CHARACTER SHEET SYSTEM
@@ -188,7 +208,7 @@ ${sheetXml}
 
 ─── UPDATE INSTRUCTIONS ───
 
-When the character sheet changes during the scene (stats modified, items gained or lost, prey swallowed or digested, clothing changed, etc.), you MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of your response:
+When the character sheet changes during the scene (stats modified, items gained or lost, prey swallowed, clothing changed, time/weather changed, etc.), you MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of your response:
 
 <sheet_update>
 <CharacterSheet>
@@ -200,16 +220,11 @@ Rules:
 - Output the COMPLETE sheet every time something changes, not just the changed fields
 - The <sheet_update> block is invisible to the user — do not mention it in your visible text
 - If absolutely nothing on the sheet changed, you may omit the block
-- Always include all sections (BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty
-- For the DigestiveTract, update digestion percentages, prey life status, volumes, and belly/mobility status based on what happened in the scene
-- Remove prey or food that has been fully digested or has left the body
-- When prey is fully digested, move their remains to the Bowels section`
+- Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty
+- DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach when eaten, and update the <Time> tag.
+- When adding items to the stomach, write a brief description of what's happening to them inside <Description> tags (e.g., <Description>Sloshing around</Description> or <Description>Kicking the walls</Description>)
+- If prey is fully digested (reaches 100%), you may move their remains to the Bowels section in the next update`
 }
-
-// ─── Frontend message handler ──────────────────────────────────
-//
-// The frontend sends SYNC_BIO_DATA when the user clicks sync.
-// We save it to the currently active chat.
 
 spindle.onFrontendMessage(async (msg: any) => {
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
@@ -217,52 +232,37 @@ spindle.onFrontendMessage(async (msg: any) => {
       spindle.toast.warning('Open a chat first before syncing the sheet.')
       return
     }
-
     await saveChatSheet(activeChatId, msg.xmlData)
     spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
     spindle.toast.success('Character sheet synced!')
   }
 })
 
-// ─── The Interceptor ───────────────────────────────────────────
-
 spindle.registerInterceptor(async (messages, context) => {
   const ctx = context as any
   const chatId: string = ctx.chatId
   const genType: string = ctx.generationType
 
-  // Load this chat's sheet if we haven't already
   let sheet = sheets.get(chatId)
   if (sheet === undefined) {
     sheet = (await loadChatSheet(chatId)) || ''
   }
 
-  // No sheet for this chat yet — don't inject anything
   if (!sheet) return messages
 
-  // ── Commit previous update on new messages only ──
   if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
-
     if (lastAssistant && lastAssistant.sourceMessageId) {
       const content = extractTextContent(lastAssistant.content)
       const update = extractSheetUpdate(content)
-
       if (update) {
         const chatIndex = lastAssistant.sourceIndexInChat ?? 0
-        await commitUpdate(
-          chatId,
-          lastAssistant.sourceMessageId,
-          update,
-          chatIndex
-        )
-        // Reload the sheet after commit
+        await commitUpdate(chatId, lastAssistant.sourceMessageId, update, chatIndex)
         sheet = sheets.get(chatId) || sheet
       }
     }
   }
 
-  // ── Inject current sheet ──
   const injection = {
     role: 'system' as const,
     content: buildSheetPrompt(sheet),
@@ -274,23 +274,13 @@ spindle.registerInterceptor(async (messages, context) => {
   }
 }, 50)
 
-// ─── Events ────────────────────────────────────────────────────
-
-// User switched to a different chat
 spindle.on('CHAT_SWITCHED', async (payload: any) => {
   await switchToChat(payload.chatId)
 })
 
-// User deleted a message — roll back if needed
 spindle.on('MESSAGE_DELETED', async (payload: any) => {
   const { chatId, messageId } = payload
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-// ─── Startup ───────────────────────────────────────────────────
-//
-// We don't know which chat is active yet, so we wait for the
-// first CHAT_SWITCHED event. The frontend will get a SHEET_UPDATED
-// message with the correct sheet at that point.
-
-spindle.log.info('Bio Tracker backend loaded (per-chat mode)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine enabled)')
