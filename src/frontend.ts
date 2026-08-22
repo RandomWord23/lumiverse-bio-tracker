@@ -42,10 +42,9 @@ export function setup(ctx: SpindleFrontendContext) {
     #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
     .cloth-badge { margin-left: 6px; font-size: 11px; font-weight: bold; text-transform: none; }
     /* ─── Visual Belly SVG ─── */
-    #bt-belly-visual { width: 100%; height: 200px; background: #111; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; display: flex; justify-content: center; align-items: center; }
+    #bt-belly-visual { width: 100%; height: 180px; background: #111; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; display: flex; justify-content: center; align-items: center; }
     #bt-belly-svg { height: 100%; width: auto; }
-    .bt-silhouette { fill: #333; stroke: #555; stroke-width: 1; }
-    .bt-belly-shape { fill: url(#belly-gradient); stroke: #ff4444; stroke-width: 1; filter: drop-shadow(0 0 4px rgba(255, 68, 68, 0.3)); transition: all 0.3s ease; }
+    .bt-torso { stroke: #555; stroke-width: 1.5; transition: d 0.3s ease; }
   `)
 
   // ─── Preview Modal ─────────────────────────────────────────
@@ -215,21 +214,15 @@ export function setup(ctx: SpindleFrontendContext) {
       </div>
       <div id="tab-vitals" class="bt-tab-content">
         <div id="bt-belly-visual">
-          <svg id="bt-belly-svg" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet">
+          <svg id="bt-belly-svg" viewBox="0 0 120 200" preserveAspectRatio="xMidYMid meet">
             <defs>
-              <radialGradient id="belly-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                <stop offset="0%" stop-color="#ff4444" stop-opacity="0.8" />
-                <stop offset="100%" stop-color="#8b0000" stop-opacity="0.9" />
-              </radialGradient>
+              <linearGradient id="torso-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#2a2a2a" />
+                <stop offset="55%" stop-color="#2a2a2a" />
+                <stop offset="100%" id="belly-color-stop" stop-color="#2a2a2a" />
+              </linearGradient>
             </defs>
-            <!-- Head -->
-            <circle cx="50" cy="20" r="12" class="bt-silhouette" />
-            <!-- Torso -->
-            <path d="M 30 40 Q 30 80 40 100 Q 50 110 60 100 Q 70 80 70 40 Z" class="bt-silhouette" />
-            <!-- Hips/Legs -->
-            <path d="M 40 100 Q 40 150 35 180 L 45 180 Q 50 150 50 120 Q 50 150 55 180 L 65 180 Q 60 150 60 100 Z" class="bt-silhouette" />
-            <!-- Belly (Dynamic) -->
-            <ellipse id="bt-belly-shape" cx="50" cy="90" rx="0" ry="0" class="bt-belly-shape" />
+            <path id="bt-torso-path" d="M 30 15 L 32 170 C 32 190 55 190 58 170 C 58 140, 55 80, 38 15 Z" class="bt-torso" fill="url(#torso-grad)" />
           </svg>
         </div>
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
@@ -537,34 +530,37 @@ export function setup(ctx: SpindleFrontendContext) {
     bowelVol: number,
     bowelMax: number,
   ) {
-    const bellyShape = document.getElementById('bt-belly-shape')
-    if (!bellyShape) return
+    const torsoPath = document.getElementById('bt-torso-path')
+    const bellyStop = document.getElementById('belly-color-stop')
+    if (!torsoPath || !bellyStop) return
 
-    // Calculate fill percentages (0 to 1)
-    const stomPct = Math.min(1.5, stomVol / stomMax) // Allow bulging slightly past 100%
+    const stomPct = Math.min(1.5, stomVol / stomMax)
     const bowelPct = Math.min(1.5, bowelVol / bowelMax)
     const totalPct = Math.min(1.5, (stomVol + bowelVol) / stomMax)
 
-    // Base size of the torso is roughly rx=20, ry=60 centered at 50, 90
-    // We scale the belly ellipse based on fill.
-    // At 0%, rx=0, ry=0. At 100%, rx=25, ry=70.
-    const rx = Math.max(0, totalPct * 25)
-    const ry = Math.max(0, totalPct * 70)
+    // Bulge amounts (0 = flat, higher = pushes the front wall outward)
+    const stomachBulge = stomPct * 45
+    const bowelBulge = bowelPct * 35
 
-    // Shift the belly down slightly as it gets heavier (sagging)
-    const cy = 90 + Math.max(0, (totalPct - 0.5) * 20)
+    // Build path: back is static, front wall curves outward based on fill
+    // The two control points in the C curve handle bowel (lower) and stomach (upper)
+    const path = `M 30 15 L 32 170 C 32 190 55 190 58 170 C ${58 + bowelBulge} 140, ${55 + stomachBulge} 80, 38 15 Z`
+    torsoPath.setAttribute('d', path)
 
-    bellyShape.setAttribute('cx', '50')
-    bellyShape.setAttribute('cy', cy.toString())
-    bellyShape.setAttribute('rx', rx.toString())
-    bellyShape.setAttribute('ry', ry.toString())
-
-    // Change color based on stress level
-    if (totalPct > 1.2) {
-      bellyShape.setAttribute('fill', 'url(#belly-gradient-critical)')
-    } else {
-      bellyShape.setAttribute('fill', 'url(#belly-gradient)')
+    // Color shift: neutral gray → warm → red as it fills
+    let color = '#2a2a2a'
+    if (totalPct > 0.05) {
+      if (totalPct < 0.5) {
+        color = '#3a2a20'
+      } else if (totalPct < 0.9) {
+        color = '#4a2a15'
+      } else if (totalPct < 1.2) {
+        color = '#5a1a10'
+      } else {
+        color = '#6a0a05'
+      }
     }
+    bellyStop.setAttribute('stop-color', color)
   }
 
   document
