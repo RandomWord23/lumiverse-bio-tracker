@@ -217,15 +217,12 @@ export function setup(ctx: SpindleFrontendContext) {
         <div id="bt-belly-visual">
           <button id="bt-mirror-btn">⟺</button>
           <svg id="bt-belly-svg" viewBox="0 0 120 200" preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <radialGradient id="belly-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                <stop offset="0%" stop-color="#ff4444" stop-opacity="0.8" />
-                <stop offset="100%" stop-color="#8b0000" stop-opacity="0.9" />
-              </radialGradient>
-            </defs>
-            <path id="bt-torso-path" d="M 30 15 L 32 170 C 32 190 55 190 58 170 C 58 140, 55 80, 38 15 Z" class="bt-torso" fill="#2a2a2a" />
-            <path id="bt-breast-path" d="M 38 15 C 45 40 50 60 55 80 Q 47 50 38 15 Z" class="bt-torso" fill="#2a2a2a" />
-            <path id="bt-belly-shape" d="M 38 15 C 55 80 58 140 58 170 C 58 140 55 80 38 15 Z" fill="url(#belly-gradient)" stroke="#ff4444" stroke-width="1.5" style="transition: d 0.3s ease;" />
+            <!-- Static Torso (Back/Hips/Neck) -->
+            <path id="bt-torso-path" d="M 30 15 L 32 170 C 32 190 55 190 58 170 L 58 65 Q 58 30 48 15 Z" class="bt-torso" fill="#2a2a2a" />
+            <!-- Dynamic Breasts (Upper Front) -->
+            <path id="bt-breast-path" d="M 48 15 C 50 35 55 60 58 65 Q 53 35 48 15 Z" class="bt-torso" fill="#2a2a2a" />
+            <!-- Dynamic Belly (Lower Front) -->
+            <path id="bt-belly-shape" d="M 58 65 C 55 100 55 140 58 170 C 58 190 32 190 32 170 L 32 65 Q 45 65 58 65 Z" class="bt-torso" fill="#2a2a2a" />
           </svg>
         </div>
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
@@ -576,23 +573,28 @@ export function setup(ctx: SpindleFrontendContext) {
     }
     torsoPath.setAttribute('fill', skinColor)
     breastPath.setAttribute('fill', skinColor)
+    bellyShape.setAttribute('fill', skinColor)
 
-    // 2. Belly Bulge
+    // 2. Belly Bulge (Lower Front, starts at Y=65)
     const stomPct = Math.min(1.5, stomVol / stomMax)
     const bowelPct = Math.min(1.5, bowelVol / bowelMax)
-    const totalPct = Math.min(1.5, (stomVol + bowelVol) / stomMax)
-
+    
+    // Increased bulge amounts for visibility
     const stomachBulge = stomPct * 60
     const bowelBulge = bowelPct * 50
 
-    const bellyPath = `M 38 15 C 55 80 58 140 58 170 C ${58 + bowelBulge} 140, ${55 + stomachBulge} 80, 38 15 Z`
+    // Path starts at chest (58, 65), curves down to hips (58, 170)
+    const bellyPath = `M 58 65 C ${58 + stomachBulge} 100 ${58 + bowelBulge} 140 58 170 C 58 190 32 190 32 170 L 32 65 Q 45 65 58 65 Z`
     bellyShape.setAttribute('d', bellyPath)
 
-    // 3. Breast Bulge & Sag
-    const breastBulge = Math.min(20, breastVol / 50) // 0ml = 0, 1000ml = 20
-    const breastSag = Math.min(15, Math.sqrt(breastVol) / 2) // 0ml = 0, 1000ml = ~15
+    // 3. Breast Bulge & Sag (Upper Front, starts at Neck 48,15, ends at Chest 58,65)
+    // Increased bulge limit to 40 for larger sizes
+    const breastBulge = Math.min(40, breastVol / 25) 
+    // Increased sag limit to 20
+    const breastSag = Math.min(20, Math.sqrt(breastVol) / 1.5) 
 
-    const bPath = `M 38 15 C ${45 + breastBulge} ${40 + breastSag} ${50 + breastBulge} ${60 + breastSag} 55 80 Q 47 ${50 + breastSag} 38 15 Z`
+    // Path starts at neck (48,15), curves outward to chest (58,65)
+    const bPath = `M 48 15 C ${50 + breastBulge} ${35 + breastSag} ${58 + breastBulge} ${60 + breastSag} 58 65 Q ${53 + breastBulge / 2} ${35 + breastSag} 48 15 Z`
     breastPath.setAttribute('d', bPath)
   }
 
