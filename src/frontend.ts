@@ -41,6 +41,11 @@ export function setup(ctx: SpindleFrontendContext) {
     #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
     #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
     .cloth-badge { margin-left: 6px; font-size: 11px; font-weight: bold; text-transform: none; }
+    /* ─── Visual Belly SVG ─── */
+    #bt-belly-visual { width: 100%; height: 200px; background: #111; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; display: flex; justify-content: center; align-items: center; }
+    #bt-belly-svg { height: 100%; width: auto; }
+    .bt-silhouette { fill: #333; stroke: #555; stroke-width: 1; }
+    .bt-belly-shape { fill: url(#belly-gradient); stroke: #ff4444; stroke-width: 1; filter: drop-shadow(0 0 4px rgba(255, 68, 68, 0.3)); transition: all 0.3s ease; }
   `)
 
   // ─── Preview Modal ─────────────────────────────────────────
@@ -70,7 +75,7 @@ export function setup(ctx: SpindleFrontendContext) {
       <button class="bt-tab-btn active" data-tab="tab-char">Character</button>
       <button class="bt-tab-btn" data-tab="tab-inv">Inventory</button>
       <button class="bt-tab-btn" data-tab="tab-state">State</button>
-      <button class="bt-tab-btn" data-tab="tab-vitals">Vitals</button>
+      <button class="bt-tab-btn" data-tab="tab-vitals">Metabolism</button>
     </div>
     <div class="bt-content">
       <div id="tab-char" class="bt-tab-content active">
@@ -209,6 +214,24 @@ export function setup(ctx: SpindleFrontendContext) {
         <input type="text" class="bt-input full bt-scrape" data-id="Room" placeholder="Room (e.g. Back Alley)" id="bt-room">
       </div>
       <div id="tab-vitals" class="bt-tab-content">
+        <div id="bt-belly-visual">
+          <svg id="bt-belly-svg" viewBox="0 0 100 200" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <radialGradient id="belly-gradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                <stop offset="0%" stop-color="#ff4444" stop-opacity="0.8" />
+                <stop offset="100%" stop-color="#8b0000" stop-opacity="0.9" />
+              </radialGradient>
+            </defs>
+            <!-- Head -->
+            <circle cx="50" cy="20" r="12" class="bt-silhouette" />
+            <!-- Torso -->
+            <path d="M 30 40 Q 30 80 40 100 Q 50 110 60 100 Q 70 80 70 40 Z" class="bt-silhouette" />
+            <!-- Hips/Legs -->
+            <path d="M 40 100 Q 40 150 35 180 L 45 180 Q 50 150 50 120 Q 50 150 55 180 L 65 180 Q 60 150 60 100 Z" class="bt-silhouette" />
+            <!-- Belly (Dynamic) -->
+            <ellipse id="bt-belly-shape" cx="50" cy="90" rx="0" ry="0" class="bt-belly-shape" />
+          </svg>
+        </div>
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
         <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input bt-scrape" data-id="CurrentAcidPct" id="bt-acid-level" value="0"></div>
         <div class="bt-row"><span>Base Digestion (%/h):</span> <input type="number" class="bt-input bt-scrape" data-id="BaseDigestionRate" id="bt-dig-base" value="25"></div>
@@ -502,6 +525,45 @@ export function setup(ctx: SpindleFrontendContext) {
         mobEl.innerText = 'Immobile'
         mobEl.style.color = '#ff4444'
       }
+    }
+
+    updateBellyVisual(stomTotal, baseStomMax, bowelTotal, baseBowelMax)
+  }
+
+  // ─── Visual Belly Updater ──────────────────────────────────
+  function updateBellyVisual(
+    stomVol: number,
+    stomMax: number,
+    bowelVol: number,
+    bowelMax: number,
+  ) {
+    const bellyShape = document.getElementById('bt-belly-shape')
+    if (!bellyShape) return
+
+    // Calculate fill percentages (0 to 1)
+    const stomPct = Math.min(1.5, stomVol / stomMax) // Allow bulging slightly past 100%
+    const bowelPct = Math.min(1.5, bowelVol / bowelMax)
+    const totalPct = Math.min(1.5, (stomVol + bowelVol) / stomMax)
+
+    // Base size of the torso is roughly rx=20, ry=60 centered at 50, 90
+    // We scale the belly ellipse based on fill.
+    // At 0%, rx=0, ry=0. At 100%, rx=25, ry=70.
+    const rx = Math.max(0, totalPct * 25)
+    const ry = Math.max(0, totalPct * 70)
+
+    // Shift the belly down slightly as it gets heavier (sagging)
+    const cy = 90 + Math.max(0, (totalPct - 0.5) * 20)
+
+    bellyShape.setAttribute('cx', '50')
+    bellyShape.setAttribute('cy', cy.toString())
+    bellyShape.setAttribute('rx', rx.toString())
+    bellyShape.setAttribute('ry', ry.toString())
+
+    // Change color based on stress level
+    if (totalPct > 1.2) {
+      bellyShape.setAttribute('fill', 'url(#belly-gradient-critical)')
+    } else {
+      bellyShape.setAttribute('fill', 'url(#belly-gradient)')
     }
   }
 
