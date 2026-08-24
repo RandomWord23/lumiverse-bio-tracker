@@ -871,18 +871,28 @@ spindle.onFrontendMessage(async (msg: any) => {
     spindle.toast.success('Character sheet synced!')
   }
 
+spindle.onFrontendMessage(async (msg: any) => {
+  if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
+    // ... existing sync code ...
+  }
+
   if (msg.type === 'GET_LATEST_SHEET') {
+    // ... existing get latest code ...
+  }
+
+  if (msg.type === 'POPULATE_FIELDS' && msg.fields && msg.xml) {
     if (!activeChatId) {
       spindle.toast.warning('Open a chat first.')
       return
     }
-    // Clear the flag — re-enables normal interceptor behavior
-    await spindle.variables.chat.delete(
-      activeChatId,
-      'manualSyncPending',
-    )
-    const sheet = sheets.get(activeChatId) || ''
-    spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
+
+    const fields = msg.fields as string[]
+    const fieldsList = fields.join(', ')
+
+    await saveChatSheet(activeChatId, msg.xml)
+
+    const prompt = `You are a character sheet auto-population assistant. Fill in ONLY the specified blank fields with sensible defaults.
+// ... rest of the populate snippet ...
   }
 })
 
