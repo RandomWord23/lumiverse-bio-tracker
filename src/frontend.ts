@@ -523,29 +523,36 @@ export function setup(ctx: SpindleFrontendContext) {
     .getElementById('bt-cap-mult')
     ?.addEventListener('input', updateCapacities)
 
-    // ─── Arousal & Climax Sliders ─────────────────────────────
+  // ─── Arousal & Climax Sliders ─────────────────────────────
   const arousalSlot = document.getElementById('bt-arousal-slot')
   const climaxSlot = document.getElementById('bt-climax-slot')
 
-  const arousalSlider = ctx.components.mountRangeSlider(arousalSlot!, {
-    label: 'Arousal',
-    min: 0,
-    max: 100,
-    step: 1,
-    integer: true,
-    value: 0,
-    onCommit: (v: number) => updateCurrentPenisSize(v),
-  })
+  let arousalSlider: any = null
+  let climaxSlider: any = null
 
-  const climaxSlider = ctx.components.mountRangeSlider(climaxSlot!, {
-    label: 'Climax',
-    min: 0,
-    max: 100,
-    step: 1,
-    integer: true,
-    value: 0,
-    disabled: true,
-  })
+  if (arousalSlot) {
+    arousalSlider = ctx.components.mountRangeSlider(arousalSlot, {
+      label: 'Arousal',
+      min: 0,
+      max: 100,
+      step: 1,
+      integer: true,
+      value: 0,
+      onCommit: (v: number) => updateCurrentPenisSize(v),
+    })
+  }
+
+  if (climaxSlot) {
+    climaxSlider = ctx.components.mountRangeSlider(climaxSlot, {
+      label: 'Climax',
+      min: 0,
+      max: 100,
+      step: 1,
+      integer: true,
+      value: 0,
+      disabled: true,
+    })
+  }
 
   function updateCurrentPenisSize(arousalVal: number) {
     const maxL = parseFloat(
@@ -564,10 +571,10 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // Update current penis size when max L/G changes
   document.getElementById('bt-penis-len')?.addEventListener('input', () => {
-    updateCurrentPenisSize(arousalSlider.getValue())
+    if (arousalSlider) updateCurrentPenisSize(arousalSlider.getValue())
   })
   document.getElementById('bt-penis-girth')?.addEventListener('input', () => {
-    updateCurrentPenisSize(arousalSlider.getValue())
+    if (arousalSlider) updateCurrentPenisSize(arousalSlider.getValue())
   })
 
   // ─── Input delegation for dynamic items ────────────────────
