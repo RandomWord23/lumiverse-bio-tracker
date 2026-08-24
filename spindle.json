@@ -5,6 +5,7 @@
   "author": "RandomWord23",
   "github": "https://github.com/RandomWord23/lumiverse-bio-tracker",
   "description": "Dynamic stomach capacity, digestion, and inventory tracker.",
+  "install_scope": "user",
   "permissions": [
     "interceptor",
     "chat_mutation",
