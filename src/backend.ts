@@ -833,7 +833,7 @@ CRITICAL XML RULES:
 </sheet_update>]`
 }
 
-spindle.onFrontendMessage(async (msg: any) => {
+spindle.onFrontendMessage(async (msg: any, userId: string) => {
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
     if (!activeChatId) {
       spindle.toast.warning('Open a chat first before syncing the sheet.')
@@ -898,7 +898,6 @@ Rules:
 ...the complete updated sheet...
 </sheet_update>`
 
-    try {
       const result = await spindle.generate.quiet({
         messages: [
           {
@@ -908,6 +907,7 @@ Rules:
           },
           { role: 'user', content: prompt },
         ],
+        userId: userId,
       })
 
       const update = extractSheetUpdate(result.content)
