@@ -129,6 +129,8 @@ function setStat(xml: string, tag: string, value: number): string {
   return xml
 }
 
+// ─── Clothing Condition System ────────────────────────────────
+
 const conditionThresholds: Record<string, number[]> = {
   rigid: [5, 10, 20, 30, 40],
   standard: [10, 20, 35, 50, 70],
@@ -174,20 +176,28 @@ function deriveCondition(
   lockedCondition?: string,
 ): string {
   if (elasticity === 'magic') return 'intact'
-  const thresholds = conditionThresholds[elasticity] || conditionThresholds.standard
+
+  const thresholds =
+    conditionThresholds[elasticity] || conditionThresholds.standard
+
   let newCondition = 'intact'
   for (let i = 0; i < thresholds.length; i++) {
     if (stress >= thresholds[i]) {
       newCondition = conditionNames[i]
     }
   }
-  if (lockedCondition === 'damaged' || lockedCondition === 'ruined') {
+
+  if (
+    lockedCondition === 'damaged' ||
+    lockedCondition === 'ruined'
+  ) {
     const lockedIdx = conditionNames.indexOf(lockedCondition)
     const newIdx = conditionNames.indexOf(newCondition)
     if (newIdx < lockedIdx) {
       return lockedCondition
     }
   }
+
   return newCondition
 }
 
@@ -196,15 +206,19 @@ function processClothingStress(
   oldXml: string,
 ): { xml: string; damageEvents: string[] } {
   const damageEvents: string[] = []
+
   const getMode = (x: string) => {
     const m = x.match(/<ClothingMode>(.*?)<\/ClothingMode>/i)
     return (m && m[1].trim().toLowerCase()) || 'flavor'
   }
+
   const oldMode = getMode(oldXml)
   const newMode = getMode(xml)
 
   if (oldMode !== newMode) {
-    spindle.log.info(`Clothing mode changed: ${oldMode} → ${newMode}, wiping stress/condition`)
+    spindle.log.info(
+      `Clothing mode changed: ${oldMode} → ${newMode}, wiping stress/condition`,
+    )
     xml = xml.replace(/<Equip\s+([^>]*?)>/gi, (match, attrs) => {
       let cleanAttrs = attrs
         .replace(/\s+stress="[^"]*"/gi, '')
@@ -239,7 +253,8 @@ function processClothingStress(
     /<Equip\s+([^>]*?)>([\s\S]*?)<\/Equip>/gi,
     (match, attrs, inner) => {
       const slot = getAttrFromString(attrs, 'slot') || ''
-      const elasticity = getAttrFromString(attrs, 'elasticity') || 'standard'
+      const elasticity =
+        getAttrFromString(attrs, 'elasticity') || 'standard'
 
       if (elasticity === 'magic') {
         let cleanAttrs = attrs
@@ -248,8 +263,10 @@ function processClothingStress(
         return `<Equip ${cleanAttrs.trim()}>${inner}</Equip>`
       }
 
-      let stress = parseFloat(getAttrFromString(attrs, 'stress')) || 0
-      const oldCondition = getAttrFromString(attrs, 'condition') || 'intact'
+      let stress =
+        parseFloat(getAttrFromString(attrs, 'stress')) || 0
+      const oldCondition =
+        getAttrFromString(attrs, 'condition') || 'intact'
 
       const affectedParts = slotBodyMap[slot] || ['weight']
 
@@ -263,17 +280,30 @@ function processClothingStress(
       stress += stressChange
       stress = Math.max(0, stress)
 
-      const thresholds = conditionThresholds[elasticity] || conditionThresholds.standard
-      if (oldCondition === 'damaged' || oldCondition === 'ruined') {
+      const thresholds =
+        conditionThresholds[elasticity] ||
+        conditionThresholds.standard
+      if (
+        oldCondition === 'damaged' ||
+        oldCondition === 'ruined'
+      ) {
         stress = Math.max(stress, thresholds[3])
       }
 
-      const newCondition = deriveCondition(stress, elasticity, oldCondition)
+      const newCondition = deriveCondition(
+        stress,
+        elasticity,
+        oldCondition,
+      )
 
       if (newCondition !== oldCondition) {
-        const isDamage = ['damaged', 'ruined'].includes(newCondition)
+        const isDamage = ['damaged', 'ruined'].includes(
+          newCondition,
+        )
         if (isDamage) {
-          damageEvents.push(`${slot}: ${oldCondition}→${newCondition}`)
+          damageEvents.push(
+            `${slot}: ${oldCondition}→${newCondition}`,
+          )
         }
       }
 
@@ -290,7 +320,8 @@ function processClothingStress(
     /<Equip\s+([^>]+?)\s*\/>/gi,
     (match, attrs) => {
       const slot = getAttrFromString(attrs, 'slot') || ''
-      const elasticity = getAttrFromString(attrs, 'elasticity') || 'standard'
+      const elasticity =
+        getAttrFromString(attrs, 'elasticity') || 'standard'
 
       if (elasticity === 'magic') {
         let cleanAttrs = attrs
@@ -299,8 +330,10 @@ function processClothingStress(
         return `<Equip ${cleanAttrs.trim()} />`
       }
 
-      let stress = parseFloat(getAttrFromString(attrs, 'stress')) || 0
-      const oldCondition = getAttrFromString(attrs, 'condition') || 'intact'
+      let stress =
+        parseFloat(getAttrFromString(attrs, 'stress')) || 0
+      const oldCondition =
+        getAttrFromString(attrs, 'condition') || 'intact'
 
       const affectedParts = slotBodyMap[slot] || ['weight']
 
@@ -314,16 +347,27 @@ function processClothingStress(
       stress += stressChange
       stress = Math.max(0, stress)
 
-      const thresholds = conditionThresholds[elasticity] || conditionThresholds.standard
-      if (oldCondition === 'damaged' || oldCondition === 'ruined') {
+      const thresholds =
+        conditionThresholds[elasticity] ||
+        conditionThresholds.standard
+      if (
+        oldCondition === 'damaged' ||
+        oldCondition === 'ruined'
+      ) {
         stress = Math.max(stress, thresholds[3])
       }
 
-      const newCondition = deriveCondition(stress, elasticity, oldCondition)
+      const newCondition = deriveCondition(
+        stress,
+        elasticity,
+        oldCondition,
+      )
 
       if (newCondition !== oldCondition) {
         if (['damaged', 'ruined'].includes(newCondition)) {
-          damageEvents.push(`${slot}: ${oldCondition}→${newCondition}`)
+          damageEvents.push(
+            `${slot}: ${oldCondition}→${newCondition}`,
+          )
         }
       }
 
@@ -338,6 +382,8 @@ function processClothingStress(
 
   return { xml, damageEvents }
 }
+
+// ─── Digestion Engine ─────────────────────────────────────────
 
 function digestItemsInContent(
   content: string,
@@ -374,8 +420,12 @@ function digestItemsInContent(
     if (type === 'Liquid') speedMult = 3
     else if (type === 'Prey') speedMult = 0.5
 
-    let digNum = parseFloat(getAttrFromString(attrs, 'digestion').replace('%', '')) || 0
-    const digIncrease = ctx.baseDigRate * speedMult * ctx.acidMultiplier * ctx.elapsed
+    let digNum =
+      parseFloat(
+        getAttrFromString(attrs, 'digestion').replace('%', ''),
+      ) || 0
+    const digIncrease =
+      ctx.baseDigRate * speedMult * ctx.acidMultiplier * ctx.elapsed
     digNum = Math.min(100, digNum + digIncrease)
 
     if (digNum >= 100) {
@@ -386,11 +436,15 @@ function digestItemsInContent(
         let remVol = numVol * 0.3
         let remName = `Skeleton of ${name}`
         if (inner) {
-          const gearMatch = inner.match(/<BoundGear>([\s\S]*?)<\/BoundGear>/i)
+          const gearMatch = inner.match(
+            /<BoundGear>([\s\S]*?)<\/BoundGear>/i,
+          )
           const gear = gearMatch ? gearMatch[1].trim() : ''
           if (gear) remName += `, ${gear}`
         }
-        newRemains.push(`      <Remains volume_L="${remVol.toFixed(2)}">${remName}</Remains>`)
+        newRemains.push(
+          `      <Remains volume_L="${remVol.toFixed(2)}">${remName}</Remains>`,
+        )
         wasteCount++
       } else {
         accumulatedWasteVol += numVol * 0.2
@@ -434,7 +488,11 @@ function runDigestionTick(
       if (!match) return null
       const timeStr = match[1].trim()
       const parts = timeStr.split(':').map(Number)
-      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      if (
+        parts.length === 2 &&
+        !isNaN(parts[0]) &&
+        !isNaN(parts[1])
+      ) {
         return parts[0] + parts[1] / 60
       }
       const h = parseFloat(timeStr)
@@ -448,7 +506,9 @@ function runDigestionTick(
       spindle.log.info('Digestion tick skipped: missing time')
       const clothingResult = processClothingStress(newXml, oldXml)
       if (clothingResult.damageEvents.length > 0) {
-        spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+        spindle.log.info(
+          `Clothing damage: ${clothingResult.damageEvents.join(', ')}`,
+        )
       }
       return clothingResult.xml
     }
@@ -458,9 +518,13 @@ function runDigestionTick(
     if (elapsed < 0) {
       if (elapsed < -12) {
         elapsed += 24
-        spindle.log.info(`Midnight crossing detected: elapsed adjusted to ${elapsed.toFixed(2)}h`)
+        spindle.log.info(
+          `Midnight crossing detected: elapsed adjusted to ${elapsed.toFixed(2)}h`,
+        )
       } else {
-        spindle.log.info('Digestion tick skipped: time went backwards (rollback)')
+        spindle.log.info(
+          'Digestion tick skipped: time went backwards (rollback)',
+        )
         return newXml
       }
     }
@@ -469,7 +533,9 @@ function runDigestionTick(
       spindle.log.info('Digestion tick skipped: 0 hours elapsed')
       const clothingResult = processClothingStress(newXml, oldXml)
       if (clothingResult.damageEvents.length > 0) {
-        spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+        spindle.log.info(
+          `Clothing damage: ${clothingResult.damageEvents.join(', ')}`,
+        )
       }
       return clothingResult.xml
     }
@@ -478,8 +544,12 @@ function runDigestionTick(
     const baseDigRate = getStat(newXml, 'BaseDigestionRate') || 25
     const acidRiseRate = getStat(newXml, 'AcidRiseRate') || 10
 
-    const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
-    const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
+    const stomachMatch = newXml.match(
+      /<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i,
+    )
+    const stomachContents = stomachMatch
+      ? stomachMatch[1].trim()
+      : ''
     const hasItems = stomachContents.includes('<Item')
 
     if (hasItems) {
@@ -509,8 +579,12 @@ function runDigestionTick(
       }
     }
 
-    const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
-    const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
+    const stomMatch = updatedXml.match(
+      /<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i,
+    )
+    const bowMatch = updatedXml.match(
+      /<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i,
+    )
 
     let stomContent = stomMatch ? stomMatch[2].trim() : ''
     let bowContent = bowMatch ? bowMatch[2].trim() : ''
@@ -529,9 +603,11 @@ function runDigestionTick(
     })
     bowContent = bowResult.content
 
-    const totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
+    const totalDigestedVol =
+      stomResult.totalDigestedVol + bowResult.totalDigestedVol
     let wasteCount = stomResult.wasteCount + bowResult.wasteCount
-    const accumulatedWasteVol = stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
+    const accumulatedWasteVol =
+      stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
     const totalItemCount = stomResult.itemCount + bowResult.itemCount
 
     if (stomResult.newRemains.length > 0) {
@@ -543,7 +619,8 @@ function runDigestionTick(
 
     if (accumulatedWasteVol > 0) {
       wasteCount++
-      const wasteRegex = /<Remains volume_L="([^"]+)">Digestive Waste<\/Remains>/i
+      const wasteRegex =
+        /<Remains volume_L="([^"]+)">Digestive Waste<\/Remains>/i
       const existingWaste = bowContent.match(wasteRegex)
       if (existingWaste) {
         const oldVol = parseFloat(existingWaste[1]) || 0
@@ -617,7 +694,9 @@ function runDigestionTick(
     updatedXml = clothingResult.xml
 
     if (clothingResult.damageEvents.length > 0) {
-      spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+      spindle.log.info(
+        `Clothing damage: ${clothingResult.damageEvents.join(', ')}`,
+      )
     }
 
     spindle.log.info(
@@ -651,7 +730,9 @@ async function commitUpdate(
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
   }
-  spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
+  spindle.log.info(
+    `Sheet committed for message ${messageId} in chat ${chatId}`,
+  )
 }
 
 async function rollbackOnDelete(chatId: string, messageId: string) {
@@ -674,10 +755,15 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
   spindle.toast.info('Rollback: restoring previous sheet state...')
 
   if (newList.length > 0) {
-    const latest = newList.reduce((a, b) => (a.chatIndex > b.chatIndex ? a : b))
+    const latest = newList.reduce((a, b) =>
+      a.chatIndex > b.chatIndex ? a : b,
+    )
     await saveChatSheet(chatId, latest.sheetXml)
     if (chatId === activeChatId) {
-      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
+      spindle.sendToFrontend({
+        type: 'SHEET_UPDATED',
+        xml: latest.sheetXml,
+      })
     }
     spindle.toast.success('Rollback: restored previous sheet')
   } else {
@@ -689,7 +775,9 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
   }
 
   await saveChatSnapshots(chatId)
-  spindle.log.info(`Rolled back in chat ${chatId} after deletion of ${messageId}`)
+  spindle.log.info(
+    `Rolled back in chat ${chatId} after deletion of ${messageId}`,
+  )
 }
 
 function buildSheetPrompt(sheetXml: string): string {
@@ -752,8 +840,16 @@ spindle.onFrontendMessage(async (msg: any) => {
       return
     }
     await saveChatSheet(activeChatId, msg.xmlData)
-    await (spindle as any).variables.chat.set(activeChatId, 'manualSyncPending', 'true')
-    spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
+    // Set flag so the interceptor doesn't stomp this manual edit
+    // with the stale <sheet_update> from the last assistant message
+    await spindle.variables.chat.set(
+      activeChatId,
+      'manualSyncPending',
+      'true',
+    )
+    spindle.log.info(
+      `Sheet synced from frontend for chat ${activeChatId}`,
+    )
     spindle.toast.success('Character sheet synced!')
   }
 
@@ -762,7 +858,11 @@ spindle.onFrontendMessage(async (msg: any) => {
       spindle.toast.warning('Open a chat first.')
       return
     }
-    await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
+    // Clear the flag — re-enables normal interceptor behavior
+    await spindle.variables.chat.delete(
+      activeChatId,
+      'manualSyncPending',
+    )
     const sheet = sheets.get(activeChatId) || ''
     spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
@@ -799,11 +899,12 @@ Rules:
 </sheet_update>`
 
     try {
-      const result = await (spindle as any).generate.quiet({
+      const result = await spindle.generate.quiet({
         messages: [
           {
             role: 'system',
-            content: 'You are a character sheet auto-population assistant. You fill in blank fields with sensible defaults and output the complete sheet.',
+            content:
+              'You are a character sheet auto-population assistant. You fill in blank fields with sensible defaults and output the complete sheet.',
           },
           { role: 'user', content: prompt },
         ],
@@ -812,15 +913,31 @@ Rules:
       const update = extractSheetUpdate(result.content)
       if (update) {
         await saveChatSheet(activeChatId, update)
-        spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: update })
-        spindle.sendToFrontend({ type: 'POPULATE_DONE', success: true })
-        spindle.toast.success(`Populated ${fields.length} fields`)
+        spindle.sendToFrontend({
+          type: 'SHEET_UPDATED',
+          xml: update,
+        })
+        spindle.sendToFrontend({
+          type: 'POPULATE_DONE',
+          success: true,
+        })
+        spindle.toast.success(
+          `Populated ${fields.length} fields`,
+        )
       } else {
-        spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
-        spindle.toast.error('Populate failed: no sheet_update in response')
+        spindle.sendToFrontend({
+          type: 'POPULATE_DONE',
+          success: false,
+        })
+        spindle.toast.error(
+          'Populate failed: no sheet_update in response',
+        )
       }
     } catch (e) {
-      spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
+      spindle.sendToFrontend({
+        type: 'POPULATE_DONE',
+        success: false,
+      })
       spindle.toast.error('Populate failed: ' + e)
     }
   }
@@ -840,10 +957,15 @@ spindle.registerInterceptor(async (messages, context) => {
 
   if (!sheet) return messages
 
-  const manualSyncPending = await (spindle as any).variables.chat.get(chatId, 'manualSyncPending')
+  const manualSyncPending = await spindle.variables.chat.get(
+    chatId,
+    'manualSyncPending',
+  )
   if (manualSyncPending === 'true') {
-    await (spindle as any).variables.chat.delete(chatId, 'manualSyncPending')
-    spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
+    await spindle.variables.chat.delete(chatId, 'manualSyncPending')
+    spindle.log.info(
+      `Manual sync pending — skipping stale parse for chat ${chatId}`,
+    )
   } else if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
     if (
@@ -855,7 +977,12 @@ spindle.registerInterceptor(async (messages, context) => {
       const update = extractSheetUpdate(content)
       if (update) {
         const chatIndex = lastAssistant.sourceIndexInChat ?? 0
-        await commitUpdate(chatId, lastAssistant.sourceMessageId, update, chatIndex)
+        await commitUpdate(
+          chatId,
+          lastAssistant.sourceMessageId,
+          update,
+          chatIndex,
+        )
         committedMessageIds.add(lastAssistant.sourceMessageId)
         sheet = sheets.get(chatId) || sheet
       }
@@ -879,7 +1006,10 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   const { chatId, messageId, content } = payload
   if (!chatId || !messageId || !content) return
   if (chatId !== activeChatId) return
-  if (pendingGenerationType === 'swipe' || pendingGenerationType === 'regenerate') {
+  if (
+    pendingGenerationType === 'swipe' ||
+    pendingGenerationType === 'regenerate'
+  ) {
     return
   }
   if (committedMessageIds.has(messageId)) return
@@ -904,4 +1034,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v10)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v9)')
