@@ -752,7 +752,7 @@ spindle.onFrontendMessage(async (msg: any) => {
       return
     }
     await saveChatSheet(activeChatId, msg.xmlData)
-    await spindle.variables.chat.set(activeChatId, 'manualSyncPending', 'true')
+    await (spindle as any).variables.chat.set(activeChatId, 'manualSyncPending', 'true')
     spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
     spindle.toast.success('Character sheet synced!')
   }
@@ -762,7 +762,7 @@ spindle.onFrontendMessage(async (msg: any) => {
       spindle.toast.warning('Open a chat first.')
       return
     }
-    await spindle.variables.chat.delete(activeChatId, 'manualSyncPending')
+    await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
     const sheet = sheets.get(activeChatId) || ''
     spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
@@ -799,7 +799,7 @@ Rules:
 </sheet_update>`
 
     try {
-      const result = await spindle.generate.quiet({
+      const result = await (spindle as any).generate.quiet({
         messages: [
           {
             role: 'system',
@@ -840,9 +840,9 @@ spindle.registerInterceptor(async (messages, context) => {
 
   if (!sheet) return messages
 
-  const manualSyncPending = await spindle.variables.chat.get(chatId, 'manualSyncPending')
+  const manualSyncPending = await (spindle as any).variables.chat.get(chatId, 'manualSyncPending')
   if (manualSyncPending === 'true') {
-    await spindle.variables.chat.delete(chatId, 'manualSyncPending')
+    await (spindle as any).variables.chat.delete(chatId, 'manualSyncPending')
     spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
   } else if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
@@ -904,4 +904,4 @@ spindle.on('MESSAGE_DELETED', async (payload: any) => {
   if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
-spindle.log.info('Bio Tracker backend loaded (Digestion Engine v9)')
+spindle.log.info('Bio Tracker backend loaded (Digestion Engine v10)')
