@@ -126,6 +126,7 @@ export function setup(ctx: SpindleFrontendContext) {
             </div>
           </div>
           <input type="text" class="bt-input full bt-scrape" data-id="PenisShape" placeholder="Penis descriptor (e.g., uncut, veiny)" id="bt-penis-desc">
+          <div class="bt-row"><span>Current Size (L/G cm):</span> <span class="bt-value" id="bt-penis-current" style="color:#aaa;">0.0 x 0.0</span></div>
           <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Vagina" placeholder="Descriptor..." id="bt-vagina"></div>
           <div style="font-size: 13px; margin-top: 15px; margin-bottom: 5px; color: #888;">Markings & Scars:</div>
           <textarea class="bt-textarea bt-scrape" data-id="ScarsMarkings" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
@@ -202,6 +203,9 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-section-title" style="margin-top:0;">CORE STATS</div>
         <div class="bt-row"><span>Health:</span> <input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100"></div>
         <div class="bt-row"><span>Energy:</span> <input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100"></div>
+        <div class="bt-section-title">VITALS</div>
+        <div id="bt-arousal-slot" style="margin-bottom: 15px;"></div>
+        <div id="bt-climax-slot" style="margin-bottom: 15px;"></div>
         <div class="bt-section-title">WORLD STATE</div>
         <div class="bt-row"><span>Time:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Time" id="bt-time" placeholder="14:30"></div>
         <div class="bt-row"><span>Weather:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Weather" id="bt-weather" placeholder="Rainy"></div>
@@ -519,6 +523,53 @@ export function setup(ctx: SpindleFrontendContext) {
     .getElementById('bt-cap-mult')
     ?.addEventListener('input', updateCapacities)
 
+    // ─── Arousal & Climax Sliders ─────────────────────────────
+  const arousalSlot = document.getElementById('bt-arousal-slot')
+  const climaxSlot = document.getElementById('bt-climax-slot')
+
+  const arousalSlider = ctx.components.mountRangeSlider(arousalSlot!, {
+    label: 'Arousal',
+    min: 0,
+    max: 100,
+    step: 1,
+    integer: true,
+    value: 0,
+    onCommit: (v: number) => updateCurrentPenisSize(v),
+  })
+
+  const climaxSlider = ctx.components.mountRangeSlider(climaxSlot!, {
+    label: 'Climax',
+    min: 0,
+    max: 100,
+    step: 1,
+    integer: true,
+    value: 0,
+    disabled: true,
+  })
+
+  function updateCurrentPenisSize(arousalVal: number) {
+    const maxL = parseFloat(
+      (document.getElementById('bt-penis-len') as HTMLInputElement)?.value,
+    ) || 0
+    const maxG = parseFloat(
+      (document.getElementById('bt-penis-girth') as HTMLInputElement)?.value,
+    ) || 0
+    const curL = maxL * (0.3 + 0.7 * (arousalVal / 100))
+    const curG = maxG * (0.3 + 0.7 * (arousalVal / 100))
+    const display = document.getElementById('bt-penis-current')
+    if (display) {
+      display.textContent = `${curL.toFixed(1)} x ${curG.toFixed(1)}`
+    }
+  }
+
+  // Update current penis size when max L/G changes
+  document.getElementById('bt-penis-len')?.addEventListener('input', () => {
+    updateCurrentPenisSize(arousalSlider.getValue())
+  })
+  document.getElementById('bt-penis-girth')?.addEventListener('input', () => {
+    updateCurrentPenisSize(arousalSlider.getValue())
+  })
+
   // ─── Input delegation for dynamic items ────────────────────
   panel.addEventListener('input', (e) => {
     const target = e.target as HTMLElement
@@ -803,6 +854,8 @@ export function setup(ctx: SpindleFrontendContext) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
+    const arousalVal = arousalSlider.getValue()
+    xml += `    <Arousal>${arousalVal}</Arousal>\n`
     xml += `  </State>\n\n  <BaseStats>\n`
     document.querySelectorAll('.bt-scrape').forEach((el) => {
       const input = el as HTMLInputElement
@@ -1369,6 +1422,15 @@ export function setup(ctx: SpindleFrontendContext) {
     document
       .getElementById('bt-skin')
       ?.dispatchEvent(new Event('input'))
+
+    // Update Arousal & Climax sliders
+    const arousalVal = parseFloat(getText('Arousal')) || 0
+    const climaxVal = parseFloat(getText('Climax')) || 0
+    if (arousalSlider) arousalSlider.update({ value: arousalVal })
+    if (climaxSlider) climaxSlider.update({ value: climaxVal })
+    updateCurrentPenisSize(arousalVal)
+
+    // Currency toggle
 
     // Currency toggle
     const currencySystem = getText('CurrencySystem')
