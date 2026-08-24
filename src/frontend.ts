@@ -41,9 +41,6 @@ export function setup(ctx: SpindleFrontendContext) {
     #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
     #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
     .cloth-badge { margin-left: 6px; font-size: 11px; font-weight: bold; text-transform: none; }
-    .bt-flag-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; font-size: 11px; opacity: 0.25; padding: 2px 4px; z-index: 10; touch-action: manipulation; pointer-events: auto; }
-    .bt-flag-btn[data-flagged="true"] { opacity: 1; }
-    .bt-flag-wrap { position: relative; width: 100%; }
   `)
 
   // ─── Preview Modal ─────────────────────────────────────────
@@ -239,7 +236,6 @@ export function setup(ctx: SpindleFrontendContext) {
         <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
         <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
-        <button class="bt-action-btn" id="bt-populate-btn" style="background: #2a2a2a; border-color: #555;">✨ Populate Flagged Fields</button>
       </div>
     </div>
   `
@@ -596,15 +592,11 @@ export function setup(ctx: SpindleFrontendContext) {
         <span>Vol (L): <input type="number" class="bt-input stomach-vol v-vol" style="width: 50px;" value="0"></span>
         <span>Dig %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
       </div>
-      <textarea class="bt-textarea v-appearance" rows="2" style="margin-bottom: 5px; display: none;" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
-      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Current action/state (e.g. thrashing, dissolving)..."></textarea>
+      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Description / Action (e.g. thrashing, sloshing)..."></textarea>
       <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0; display: none;" placeholder="Bound Gear / Items..."></textarea>
     `
     const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
     const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
-    const appearanceArea = div.querySelector(
-      '.v-appearance',
-    ) as HTMLTextAreaElement
     const statusSpan = div.querySelector(
       '.item-status',
     ) as HTMLElement
@@ -612,19 +604,16 @@ export function setup(ctx: SpindleFrontendContext) {
     typeSelect.addEventListener('change', () => {
       if (typeSelect.value === 'Prey') {
         gearArea.style.display = 'block'
-        appearanceArea.style.display = 'block'
         div.classList.remove('is-food', 'is-liquid')
         div.classList.add('is-prey')
         statusSpan.style.display = 'inline'
       } else if (typeSelect.value === 'Liquid') {
         gearArea.style.display = 'none'
-        appearanceArea.style.display = 'none'
         div.classList.remove('is-prey', 'is-food')
         div.classList.add('is-liquid')
         statusSpan.style.display = 'none'
       } else {
         gearArea.style.display = 'none'
-        appearanceArea.style.display = 'none'
         div.classList.remove('is-prey', 'is-liquid')
         div.classList.add('is-food')
         statusSpan.style.display = 'none'
@@ -719,228 +708,168 @@ export function setup(ctx: SpindleFrontendContext) {
         ?.appendChild(div)
     })
 
-  // ─── Flag buttons on fields ────────────────────────────────
-  function addFlagButtons() {
-    const fields = panel.querySelectorAll('.bt-scrape, .bt-cloth-slot')
-    fields.forEach((field) => {
-      const input = field as HTMLElement
-      const fieldId =
-        input.getAttribute('data-id') ||
-        input.getAttribute('data-slot') ||
-        ''
-      if (!fieldId) return
-
-      const row = input.closest('.bt-row')
-      let container: HTMLElement
-
-      if (row) {
-        container = row as HTMLElement
-      } else {
-        const parent = input.parentElement
-        if (!parent) return
-        const wrapper = document.createElement('div')
-        wrapper.className = 'bt-flag-wrap'
-        parent.insertBefore(wrapper, input)
-        wrapper.appendChild(input)
-        container = wrapper
-      }
-
-      if (container.querySelector('.bt-flag-btn')) return
-
-      container.style.position = 'relative'
-
-      const btn = document.createElement('button')
-      btn.className = 'bt-flag-btn'
-      btn.textContent = '📌'
-      btn.dataset.flagged = 'false'
-      btn.dataset.fieldId = fieldId
-
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation()
-        e.preventDefault()
-        const flagged = btn.dataset.flagged === 'true'
-        btn.dataset.flagged = (!flagged).toString()
-        const inp = input as HTMLInputElement
-        if (!flagged) {
-          inp.style.borderLeft = '3px solid #ffd700'
-          inp.style.paddingLeft = '8px'
-        } else {
-          inp.style.borderLeft = ''
-          inp.style.paddingLeft = ''
-        }
-      })
-
-      container.appendChild(btn)
-    })
-  }
-
-  addFlagButtons()
-
-  // ─── Build current XML from form ───────────────────────────
-  function buildCurrentXml(): string {
-    const stateTags = [
-      'Health',
-      'Energy',
-      'Time',
-      'Weather',
-      'Temperature',
-      'Area',
-      'Building',
-      'Room',
-    ]
-
-    let xml = `<CharacterSheet>\n  <State>\n`
-    document.querySelectorAll('.bt-scrape').forEach((el) => {
-      const input = el as HTMLInputElement
-      const val = input.value.trim()
-      const id = input.getAttribute('data-id')
-      if (
-        val !== '' &&
-        val !== '0' &&
-        id &&
-        stateTags.includes(id)
-      ) {
-        xml += `    <${id}>${val}</${id}>\n`
-      }
-    })
-    xml += `  </State>\n\n  <BaseStats>\n`
-    document.querySelectorAll('.bt-scrape').forEach((el) => {
-      const input = el as HTMLInputElement
-      const val = input.value.trim()
-      const id = input.getAttribute('data-id')
-      if (
-        val !== '' &&
-        val !== '0' &&
-        id &&
-        !stateTags.includes(id)
-      ) {
-        xml += `    <${id}>${val}</${id}>\n`
-      }
-    })
-    xml += `  </BaseStats>\n\n  <Clothing>\n`
-    document.querySelectorAll('.bt-cloth-slot').forEach((el) => {
-      const input = el as HTMLInputElement
-      const val = input.value.trim()
-      const slot = input.getAttribute('data-slot')
-      if (val !== '') {
-        const flexEl = input.previousElementSibling?.querySelector(
-          '.bt-cloth-flex',
-        ) as HTMLSelectElement
-        const flexStr = flexEl
-          ? ` elasticity="${flexEl.value}"`
-          : ''
-        xml += `    <Equip slot="${slot}"${flexStr}>${val}</Equip>\n`
-      }
-    })
-    xml += `  </Clothing>\n\n  <Backpack>\n`
-    document.querySelectorAll('.dyn-inv').forEach((el) => {
-      const qty =
-        (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() ||
-        '1'
-      const name = (
-        el.querySelector('.d-name') as HTMLInputElement
-      )?.value.trim()
-      if (name) xml += `    <Item qty="${qty}">${name}</Item>\n`
-    })
-    xml += `  </Backpack>\n\n  <SkillsAndTraits>\n`
-    document.querySelectorAll('.dyn-skill').forEach((el) => {
-      const name = (
-        el.querySelector('.d-name') as HTMLInputElement
-      )?.value.trim()
-      const lvl =
-        (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() ||
-        '1'
-      const desc = (
-        el.querySelector('.d-desc') as HTMLTextAreaElement
-      )?.value.trim()
-      if (name)
-        xml += `    <Skill name="${name}" level="${lvl}">${desc}</Skill>\n`
-    })
-    document.querySelectorAll('.dyn-trait').forEach((el) => {
-      const name = (
-        el.querySelector('.d-name') as HTMLInputElement
-      )?.value.trim()
-      const desc = (
-        el.querySelector('.d-desc') as HTMLTextAreaElement
-      )?.value.trim()
-      if (name) xml += `    <Trait name="${name}">${desc}</Trait>\n`
-    })
-    xml += `  </SkillsAndTraits>\n\n  <DigestiveTract>\n`
-
-    const bellyStatus =
-      document.getElementById('bt-belly-status')?.innerText ||
-      'Flat'
-    const mobility =
-      document.getElementById('bt-mobility')?.innerText ||
-      'Agile'
-    const stomFill =
-      document.getElementById('bt-stom-fill')?.innerText || '0 L'
-    const stomMax =
-      document.getElementById('bt-stom-max-disp')?.innerText ||
-      '0 L'
-    const bowFill =
-      document.getElementById('bt-bowel-fill')?.innerText || '0 L'
-
-    xml += `    <Status belly="${bellyStatus}" mobility="${mobility}" />\n`
-    xml += `    <Stomach current="${stomFill}" max="${stomMax}">\n`
-
-    document
-      .querySelectorAll('#stomach-container .vital-slot')
-      .forEach((el) => {
-        const name =
-          (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() ||
-          'Unknown'
-        const vol =
-          (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() ||
-          '0'
-        const dig =
-          (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() ||
-          '0'
-        const type =
-          (el.querySelector('.v-type') as HTMLSelectElement)?.value ||
-          'Food'
-        const flavor = (
-          el.querySelector('.v-flavor') as HTMLTextAreaElement
-        )?.value.trim()
-        const gear = (
-          el.querySelector('.v-gear') as HTMLTextAreaElement
-        )?.value.trim()
-        const appearance = (
-          el.querySelector('.v-appearance') as HTMLTextAreaElement
-        )?.value.trim()
-
-        xml += `      <Item type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%">\n`
-        if (appearance)
-          xml += `        <Appearance>${appearance}</Appearance>\n`
-        if (flavor)
-          xml += `        <Description>${flavor}</Description>\n`
-        if (type === 'Prey' && gear)
-          xml += `        <BoundGear>${gear}</BoundGear>\n`
-        xml += `      </Item>\n`
-      })
-
-    xml += `    </Stomach>\n    <Bowels current="${bowFill}">\n`
-    document
-      .querySelectorAll('#bowel-container .vital-slot')
-      .forEach((el) => {
-        const name =
-          (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() ||
-          'Waste'
-        const vol =
-          (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() ||
-          '0'
-        xml += `      <Remains volume_L="${vol}">${name}</Remains>\n`
-      })
-
-    xml += `    </Bowels>\n  </DigestiveTract>\n</CharacterSheet>`
-    return xml
-  }
-
   // ─── Sync to AI button ─────────────────────────────────────
   document
     .getElementById('bt-sync-btn')
     ?.addEventListener('click', () => {
-      const xml = buildCurrentXml()
+      let xml = `<CharacterSheet>\n  <State>\n`
+      document.querySelectorAll('.bt-scrape').forEach((el) => {
+        const input = el as HTMLInputElement
+        const val = input.value.trim()
+        const id = input.getAttribute('data-id')
+        if (
+          val !== '' &&
+          val !== '0' &&
+          id &&
+          [
+            'Health',
+            'Energy',
+            'Time',
+            'Weather',
+            'Temperature',
+            'Area',
+            'Building',
+            'Room',
+          ].includes(id)
+        ) {
+          xml += `    <${id}>${val}</${id}>\n`
+        }
+      })
+      xml += `  </State>\n\n  <BaseStats>\n`
+      document.querySelectorAll('.bt-scrape').forEach((el) => {
+        const input = el as HTMLInputElement
+        const val = input.value.trim()
+        const id = input.getAttribute('data-id')
+        if (
+          val !== '' &&
+          val !== '0' &&
+          id &&
+          ![
+            'Health',
+            'Energy',
+            'Time',
+            'Weather',
+            'Temperature',
+            'Area',
+            'Building',
+            'Room',
+          ].includes(id)
+        ) {
+          xml += `    <${id}>${val}</${id}>\n`
+        }
+      })
+      xml += `  </BaseStats>\n\n  <Clothing>\n`
+      document.querySelectorAll('.bt-cloth-slot').forEach((el) => {
+        const input = el as HTMLInputElement
+        const val = input.value.trim()
+        const slot = input.getAttribute('data-slot')
+        if (val !== '') {
+          const flexEl = input.previousElementSibling?.querySelector(
+            '.bt-cloth-flex',
+          ) as HTMLSelectElement
+          const flexStr = flexEl
+            ? ` elasticity="${flexEl.value}"`
+            : ''
+          xml += `    <Equip slot="${slot}"${flexStr}>${val}</Equip>\n`
+        }
+      })
+      xml += `  </Clothing>\n\n  <Backpack>\n`
+      document.querySelectorAll('.dyn-inv').forEach((el) => {
+        const qty =
+          (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() ||
+          '1'
+        const name = (
+          el.querySelector('.d-name') as HTMLInputElement
+        )?.value.trim()
+        if (name) xml += `    <Item qty="${qty}">${name}</Item>\n`
+      })
+      xml += `  </Backpack>\n\n  <SkillsAndTraits>\n`
+      document.querySelectorAll('.dyn-skill').forEach((el) => {
+        const name = (
+          el.querySelector('.d-name') as HTMLInputElement
+        )?.value.trim()
+        const lvl =
+          (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() ||
+          '1'
+        const desc = (
+          el.querySelector('.d-desc') as HTMLTextAreaElement
+        )?.value.trim()
+        if (name)
+          xml += `    <Skill name="${name}" level="${lvl}">${desc}</Skill>\n`
+      })
+      document.querySelectorAll('.dyn-trait').forEach((el) => {
+        const name = (
+          el.querySelector('.d-name') as HTMLInputElement
+        )?.value.trim()
+        const desc = (
+          el.querySelector('.d-desc') as HTMLTextAreaElement
+        )?.value.trim()
+        if (name)
+          xml += `    <Trait name="${name}">${desc}</Trait>\n`
+      })
+      xml += `  </SkillsAndTraits>\n\n  <DigestiveTract>\n`
+
+      const bellyStatus =
+        document.getElementById('bt-belly-status')?.innerText ||
+        'Flat'
+      const mobility =
+        document.getElementById('bt-mobility')?.innerText ||
+        'Agile'
+      const stomFill =
+        document.getElementById('bt-stom-fill')?.innerText || '0 L'
+      const stomMax =
+        document.getElementById('bt-stom-max-disp')?.innerText ||
+        '0 L'
+      const bowFill =
+        document.getElementById('bt-bowel-fill')?.innerText || '0 L'
+
+      xml += `    <Status belly="${bellyStatus}" mobility="${mobility}" />\n`
+      xml += `    <Stomach current="${stomFill}" max="${stomMax}">\n`
+
+      document
+        .querySelectorAll('#stomach-container .vital-slot')
+        .forEach((el) => {
+          const name =
+            (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() ||
+            'Unknown'
+          const vol =
+            (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() ||
+            '0'
+          const dig =
+            (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() ||
+            '0'
+          const type =
+            (el.querySelector('.v-type') as HTMLSelectElement)?.value ||
+            'Food'
+          const flavor = (
+            el.querySelector('.v-flavor') as HTMLTextAreaElement
+          )?.value.trim()
+          const gear = (
+            el.querySelector('.v-gear') as HTMLTextAreaElement
+          )?.value.trim()
+
+          xml += `      <Item type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%">\n`
+          if (flavor)
+            xml += `        <Description>${flavor}</Description>\n`
+          if (type === 'Prey' && gear)
+            xml += `        <BoundGear>${gear}</BoundGear>\n`
+          xml += `      </Item>\n`
+        })
+
+      xml += `    </Stomach>\n    <Bowels current="${bowFill}">\n`
+      document
+        .querySelectorAll('#bowel-container .vital-slot')
+        .forEach((el) => {
+          const name =
+            (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() ||
+            'Waste'
+          const vol =
+            (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() ||
+            '0'
+          xml += `      <Remains volume_L="${vol}">${name}</Remains>\n`
+        })
+
+      xml += `    </Bowels>\n  </DigestiveTract>\n</CharacterSheet>`
 
       const btn = document.getElementById('bt-sync-btn')
       if (btn) {
@@ -975,46 +904,6 @@ export function setup(ctx: SpindleFrontendContext) {
         btn.style.background = '#555'
       }
       ctx.sendToBackend({ type: 'GET_LATEST_SHEET' })
-    })
-
-  // ─── Populate Flagged Fields button ────────────────────────
-  document
-    .getElementById('bt-populate-btn')
-    ?.addEventListener('click', () => {
-      const flagged: string[] = []
-      panel
-        .querySelectorAll('.bt-flag-btn[data-flagged="true"]')
-        .forEach((b) => {
-          const id = (b as HTMLElement).dataset.fieldId
-          if (id) flagged.push(id)
-        })
-
-      const btn = document.getElementById(
-        'bt-populate-btn',
-      ) as HTMLButtonElement
-
-      if (flagged.length === 0) {
-        if (btn) {
-          btn.innerText = '⚠️ No fields flagged'
-          btn.style.background = '#ff4444'
-          setTimeout(() => {
-            btn.innerText = '✨ Populate Flagged Fields'
-            btn.style.background = '#2a2a2a'
-          }, 2000)
-        }
-        return
-      }
-
-      if (btn) {
-        btn.innerText = '⏳ Populating...'
-        btn.style.background = '#555'
-      }
-      const xml = buildCurrentXml()
-      ctx.sendToBackend({
-        type: 'POPULATE_FIELDS',
-        fields: flagged,
-        xml,
-      })
     })
 
   // ─── Breast cup calculator ─────────────────────────────────
@@ -1135,7 +1024,7 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── Tag interceptor: hide sheet_update from chat ──────────
   const unsubTag = ctx.messages.registerTagInterceptor(
     { tagName: 'sheet_update', removeFromMessage: true },
-    () => {},
+    () => {}
   )
 
   // ─── Backend message handler ───────────────────────────────
@@ -1176,45 +1065,6 @@ export function setup(ctx: SpindleFrontendContext) {
           btn.style.background = '#ff4444'
           setTimeout(() => {
             btn.innerText = '🔄 Sync from Latest Message'
-            btn.style.background = '#2a2a2a'
-          }, 2000)
-        }
-      }
-    }
-    if (msg.type === 'POPULATE_DONE') {
-      const btn = document.getElementById(
-        'bt-populate-btn',
-      ) as HTMLButtonElement
-      if (msg.success) {
-        // Clear all flags
-        panel
-          .querySelectorAll('.bt-flag-btn[data-flagged="true"]')
-          .forEach((b) => {
-            const flagBtn = b as HTMLElement
-            flagBtn.dataset.flagged = 'false'
-            const fieldId = flagBtn.dataset.fieldId
-            const input = panel.querySelector(
-              `[data-id="${fieldId}"], [data-slot="${fieldId}"]`,
-            ) as HTMLElement
-            if (input) {
-              input.style.borderLeft = ''
-              input.style.paddingLeft = ''
-            }
-          })
-        if (btn) {
-          btn.innerText = '✅ Populated!'
-          btn.style.background = '#4CAF50'
-          setTimeout(() => {
-            btn.innerText = '✨ Populate Flagged Fields'
-            btn.style.background = '#2a2a2a'
-          }, 2000)
-        }
-      } else {
-        if (btn) {
-          btn.innerText = '⚠️ Populate Failed'
-          btn.style.background = '#ff4444'
-          setTimeout(() => {
-            btn.innerText = '✨ Populate Flagged Fields'
             btn.style.background = '#2a2a2a'
           }, 2000)
         }
@@ -1475,10 +1325,6 @@ export function setup(ctx: SpindleFrontendContext) {
       ) as HTMLSelectElement
       typeSelect.value = type
       typeSelect.dispatchEvent(new Event('change'))
-
-      const appearanceNode = itemNode.querySelector('Appearance')
-      ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value =
-        appearanceNode?.textContent || ''
 
       const descNode = itemNode.querySelector('Description')
       ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value =
