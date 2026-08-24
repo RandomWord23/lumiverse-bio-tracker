@@ -530,28 +530,31 @@ export function setup(ctx: SpindleFrontendContext) {
   let arousalSlider: any = null
   let climaxSlider: any = null
 
-  if (arousalSlot) {
-    arousalSlider = ctx.components.mountRangeSlider(arousalSlot, {
-      label: 'Arousal',
-      min: 0,
-      max: 100,
-      step: 1,
-      integer: true,
-      value: 0,
-      onCommit: (v: number) => updateCurrentPenisSize(v),
-    })
-  }
-
-  if (climaxSlot) {
-    climaxSlider = ctx.components.mountRangeSlider(climaxSlot, {
-      label: 'Climax',
-      min: 0,
-      max: 100,
-      step: 1,
-      integer: true,
-      value: 0,
-      disabled: true,
-    })
+  try {
+    if (arousalSlot && ctx.components?.mountRangeSlider) {
+      arousalSlider = ctx.components.mountRangeSlider(arousalSlot, {
+        label: 'Arousal',
+        min: 0,
+        max: 100,
+        step: 1,
+        integer: true,
+        value: 0,
+        onCommit: (v: number) => updateCurrentPenisSize(v),
+      })
+    }
+    if (climaxSlot && ctx.components?.mountRangeSlider) {
+      climaxSlider = ctx.components.mountRangeSlider(climaxSlot, {
+        label: 'Climax',
+        min: 0,
+        max: 100,
+        step: 1,
+        integer: true,
+        value: 0,
+        disabled: true,
+      })
+    }
+  } catch (e) {
+    // Silently fail if sliders can't mount
   }
 
   function updateCurrentPenisSize(arousalVal: number) {
@@ -861,7 +864,7 @@ export function setup(ctx: SpindleFrontendContext) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
-    const arousalVal = arousalSlider.getValue()
+    const arousalVal = arousalSlider ? arousalSlider.getValue() : 0
     xml += `    <Arousal>${arousalVal}</Arousal>\n`
     xml += `  </State>\n\n  <BaseStats>\n`
     document.querySelectorAll('.bt-scrape').forEach((el) => {
@@ -1069,11 +1072,9 @@ export function setup(ctx: SpindleFrontendContext) {
         btn.innerText = '⏳ Populating...'
         btn.style.background = '#555'
       }
-      const xml = buildCurrentXml()
       ctx.sendToBackend({
         type: 'POPULATE_FIELDS',
         fields: flagged,
-        xml,
       })
     })
 
@@ -1436,8 +1437,6 @@ export function setup(ctx: SpindleFrontendContext) {
     if (arousalSlider) arousalSlider.update({ value: arousalVal })
     if (climaxSlider) climaxSlider.update({ value: climaxVal })
     updateCurrentPenisSize(arousalVal)
-
-    // Currency toggle
 
     // Currency toggle
     const currencySystem = getText('CurrencySystem')
