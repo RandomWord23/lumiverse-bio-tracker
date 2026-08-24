@@ -574,6 +574,59 @@ function runDigestionTick(
       },
     )
 
+        // ─── Vitals: Arousal, Climax, & Penis Scaling ────────────
+    const oldArousal = getStat(oldXml, 'Arousal') || 0
+    let newArousal = getStat(updatedXml, 'Arousal') || 0
+
+    // Apply 50% hourly decay to the old value
+    const decayedArousal = Math.max(0, oldArousal - 50 * elapsed)
+    
+    // If the LLM didn't add enough points to overcome the decay, it drops.
+    // If the LLM added more points than the decay, it rises.
+    let finalArousal = Math.max(newArousal, decayedArousal)
+    finalArousal = Math.min(100, finalArousal)
+
+    let finalClimax = getStat(oldXml, 'Climax') || 0
+    
+    // Check if this is the turn AFTER an orgasm (needs reset)
+    const pendingOrgasmReset = await (spindle as any).variables.chat.get(chatId, 'pendingOrgasmReset')
+    if (pendingOrgasmReset === 'true') {
+      finalArousal = 0
+      finalClimax = 0
+      await (spindle as any).variables.chat.delete(chatId, 'pendingOrgasmReset')
+      spindle.log.info('Post-orgasm reset applied.')
+    } else {
+      // Turn-based climax meter
+      if (finalArousal >= 95) {
+        finalClimax = Math.min(100, finalClimax + 25)
+      } else {
+        finalClimax = Math.max(0, finalClimax - 25)
+      }
+
+      // Trigger orgasm!
+      if (finalClimax >= 100) {
+        finalClimax = 100
+        await (spindle as any).variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
+        spindle.toast.success('🔥 Climax reached! Resetting next turn.')
+        spindle.log.info('Climax event triggered.')
+      }
+    }
+
+    updatedXml = setStat(updatedXml, 'Arousal', finalArousal)
+    updatedXml = setStat(updatedXml, 'Climax', finalClimax)
+
+    // Calculate current penis size based on arousal (30% to 100% scaling)
+    const maxPenisL = getStat(updatedXml, 'PenisLength_cm') || 0
+    const maxPenisG = getStat(updatedXml, 'PenisGirth_cm') || 0
+    if (maxPenisL > 0) {
+      const curL = maxPenisL * (0.3 + 0.7 * (finalArousal / 100))
+      updatedXml = setStat(updatedXml, 'CurrentPenisLength_cm', curL)
+    }
+    if (maxPenisG > 0) {
+      const curG = maxPenisG * (0.3 + 0.7 * (finalArousal / 100))
+      updatedXml = setStat(updatedXml, 'CurrentPenisGirth_cm', curG)
+    }
+    
     if (totalDigestedVol > 0) {
       const heightGrowth = totalDigestedVol * 0.035
       const weightGrowth = totalDigestedVol * 0.035
@@ -737,6 +790,9 @@ CRITICAL XML RULES:
 13. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
 14. If any State or World field (Time, Weather, Temperature, Area, Building, Room, Health, Energy) is blank or "0" in the <CurrentCharacterSheet>, you MUST invent a sensible default consistent with the current scene. For example, if Weather is blank, set it based on the season or what's happening in the story. If Health or Energy is blank, default to 100. Never leave these fields empty in your <sheet_update>.
 15. Prey <Description> MUST reflect the prey's current action/state and update EVERY turn. <Appearance> stays the same unless the prey transforms. Use <Description> for what's happening now (squirming, dissolving, going limp) and <Appearance> for what they look like (age, species, build, hair, eyes).
+16. <Arousal> is a 0-100 meter. The extension AUTOMATICALLY decays it by 50% per hour. You MUST actively add points to it to keep it up during intimate scenes (e.g., add +30 if stimulated, +50 if highly stimulated). If no intimacy occurs, it will naturally drop.
+17. <Climax> is a 0-100 meter managed ENTIRELY by the extension. NEVER change its value yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
+18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension automatically calculates and updates <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> based on Arousal (0% arousal = 30% size, 100% arousal = 100% size). Do NOT output or modify the Current tags yourself.
 
 <sheet_update>
 <CharacterSheet>
