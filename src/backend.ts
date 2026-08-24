@@ -530,7 +530,7 @@ function runDigestionTick(
     bowContent = bowResult.content
 
     const totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
-    const wasteCount = stomResult.wasteCount + bowResult.wasteCount
+    let wasteCount = stomResult.wasteCount + bowResult.wasteCount
     const accumulatedWasteVol = stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
     const totalItemCount = stomResult.itemCount + bowResult.itemCount
 
