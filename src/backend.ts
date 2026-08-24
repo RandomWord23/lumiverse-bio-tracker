@@ -529,10 +529,10 @@ function runDigestionTick(
     })
     bowContent = bowResult.content
 
-    let totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
+    const totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
     let wasteCount = stomResult.wasteCount + bowResult.wasteCount
-    let accumulatedWasteVol = stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
-    let totalItemCount = stomResult.itemCount + bowResult.itemCount
+    const accumulatedWasteVol = stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
+    const totalItemCount = stomResult.itemCount + bowResult.itemCount
 
     if (stomResult.newRemains.length > 0) {
       bowContent += '\n' + stomResult.newRemains.join('\n')
@@ -745,14 +745,14 @@ CRITICAL XML RULES:
 </sheet_update>]`
 }
 
-spindle.onFrontendMessage(async (msg: any, userId: string) => {
+spindle.onFrontendMessage(async (msg: any) => {
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
     if (!activeChatId) {
       spindle.toast.warning('Open a chat first before syncing the sheet.')
       return
     }
     await saveChatSheet(activeChatId, msg.xmlData)
-    await spindle.variables.chat.set(activeChatId, 'manualSyncPending', 'true')
+    await (spindle as any).variables.chat.set(activeChatId, 'manualSyncPending', 'true')
     spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
     spindle.toast.success('Character sheet synced!')
   }
@@ -762,7 +762,7 @@ spindle.onFrontendMessage(async (msg: any, userId: string) => {
       spindle.toast.warning('Open a chat first.')
       return
     }
-    await spindle.variables.chat.delete(activeChatId, 'manualSyncPending')
+    await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
     const sheet = sheets.get(activeChatId) || ''
     spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
@@ -781,7 +781,6 @@ spindle.onFrontendMessage(async (msg: any, userId: string) => {
     )
 
     try {
-      // Insert a hidden user message and trigger a normal generation
       const result = await spindle.chat.appendMessage(
         activeChatId,
         {
@@ -790,8 +789,6 @@ spindle.onFrontendMessage(async (msg: any, userId: string) => {
         },
         { triggerGeneration: true },
       )
-      
-      // Hide the message so the user doesn't see it in the chat UI
       await spindle.chat.setMessageHidden(activeChatId, result.id, true)
     } catch (e) {
       spindle.toast.error('Populate failed: ' + e)
@@ -801,6 +798,7 @@ spindle.onFrontendMessage(async (msg: any, userId: string) => {
       )
     }
   }
+})
 
 spindle.registerInterceptor(async (messages, context) => {
   const ctx = context as any
@@ -816,9 +814,9 @@ spindle.registerInterceptor(async (messages, context) => {
 
   if (!sheet) return messages
 
-  const manualSyncPending = await spindle.variables.chat.get(chatId, 'manualSyncPending')
+  const manualSyncPending = await (spindle as any).variables.chat.get(chatId, 'manualSyncPending')
   if (manualSyncPending === 'true') {
-    await spindle.variables.chat.delete(chatId, 'manualSyncPending')
+    await (spindle as any).variables.chat.delete(chatId, 'manualSyncPending')
     spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
   } else if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
@@ -844,7 +842,6 @@ spindle.registerInterceptor(async (messages, context) => {
     'populateFields',
   )
   if (populateFields) {
-    // Clear it immediately so it only applies to this one generation
     await (spindle as any).variables.chat.delete(chatId, 'populateFields')
     populateInstructions = `\n\n─── AUTO-POPULATE REQUEST ───\nThe user has requested that you populate ONLY the following blank fields with sensible, scene-appropriate defaults: ${populateFields}\nLeave ALL other fields exactly as they are.\nDo not advance the story or add new narrative events. Simply output the complete updated sheet in the <sheet_update> block as usual.`
   }
@@ -858,6 +855,7 @@ spindle.registerInterceptor(async (messages, context) => {
     messages: [injection, ...messages],
     breakdown: [{ messageIndex: 0, name: 'Character Sheet' }],
   }
+}, 50)
 
 spindle.on('GENERATION_ENDED', async (payload: any) => {
   if (payload.error) return
