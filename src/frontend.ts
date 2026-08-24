@@ -41,11 +41,6 @@ export function setup(ctx: SpindleFrontendContext) {
     #bt-preview-content { flex: 1; overflow-y: auto; padding: 15px; color: #a5d6a7; font-family: monospace; font-size: 12px; white-space: pre-wrap; }
     #bt-preview-close { background: #ff4444; color: white; border: none; padding: 12px; font-weight: bold; cursor: pointer; border-radius: 0 0 6px 6px; }
     .cloth-badge { margin-left: 6px; font-size: 11px; font-weight: bold; text-transform: none; }
-    /* ─── Visual Belly SVG ─── */
-    #bt-belly-visual { width: 100%; height: 180px; background: #111; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; display: flex; justify-content: center; align-items: center; position: relative; }
-    #bt-belly-svg { height: 100%; width: auto; transition: transform 0.3s ease; }
-    .bt-torso { stroke: #555; stroke-width: 1.5; transition: d 0.3s ease, fill 0.3s ease; }
-    #bt-mirror-btn { position: absolute; top: 5px; right: 5px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer; padding: 4px 8px; font-size: 14px; z-index: 1; }
   `)
 
   // ─── Preview Modal ─────────────────────────────────────────
@@ -214,17 +209,6 @@ export function setup(ctx: SpindleFrontendContext) {
         <input type="text" class="bt-input full bt-scrape" data-id="Room" placeholder="Room (e.g. Back Alley)" id="bt-room">
       </div>
       <div id="tab-vitals" class="bt-tab-content">
-        <div id="bt-belly-visual">
-          <button id="bt-mirror-btn">⟺</button>
-          <svg id="bt-belly-svg" viewBox="0 0 120 200" preserveAspectRatio="xMidYMid meet">
-            <!-- Static Torso (Back/Hips/Neck) -->
-            <path id="bt-torso-path" d="M 30 15 L 32 170 C 32 190 55 190 58 170 L 58 65 Q 58 30 48 15 Z" class="bt-torso" fill="#2a2a2a" />
-            <!-- Dynamic Breasts (Upper Front) -->
-            <path id="bt-breast-path" d="M 48 15 C 50 35 55 60 58 65 Q 53 35 48 15 Z" class="bt-torso" fill="#2a2a2a" />
-            <!-- Dynamic Belly (Lower Front) -->
-            <path id="bt-belly-shape" d="M 58 65 C 55 100 55 140 58 170 C 58 190 32 190 32 170 L 32 65 Q 45 65 58 65 Z" class="bt-torso" fill="#2a2a2a" />
-          </svg>
-        </div>
         <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
         <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input bt-scrape" data-id="CurrentAcidPct" id="bt-acid-level" value="0"></div>
         <div class="bt-row"><span>Base Digestion (%/h):</span> <input type="number" class="bt-input bt-scrape" data-id="BaseDigestionRate" id="bt-dig-base" value="25"></div>
@@ -519,102 +503,6 @@ export function setup(ctx: SpindleFrontendContext) {
         mobEl.style.color = '#ff4444'
       }
     }
-
-    const breastInput = document.getElementById(
-      'bt-breast-ml',
-    ) as HTMLInputElement
-    const breastVol = breastInput ? parseFloat(breastInput.value) || 0 : 0
-
-    const skinInput = document.getElementById(
-      'bt-skin',
-    ) as HTMLInputElement
-    const skinVal = skinInput ? skinInput.value.toLowerCase() : ''
-
-    updateBodyVisual(stomTotal, baseStomMax, bowelTotal, baseBowelMax, breastVol, skinVal)
-  }
-
-  // ─── Visual Body Updater ───────────────────────────────────
-  function updateBodyVisual(
-    stomVol: number,
-    stomMax: number,
-    bowelVol: number,
-    bowelMax: number,
-    breastVol: number,
-    skinVal: string,
-  ) {
-    const torsoPath = document.getElementById('bt-torso-path')
-    const breastPath = document.getElementById('bt-breast-path')
-    const bellyShape = document.getElementById('bt-belly-shape')
-    if (!torsoPath || !breastPath || !bellyShape) return
-
-    // 1. Skin Color
-    const colorMap: Record<string, string> = {
-      caucasian: '#f5d5b8',
-      light: '#ffe4e1',
-      white: '#ffe4e1',
-      pale: '#ffe4e1',
-      tan: '#d2b48c',
-      olive: '#c19a6b',
-      brown: '#8d5524',
-      dark: '#8d5524',
-      ebony: '#614b3a',
-      black: '#5c4033',
-      blue: '#3366cc',
-      purple: '#800080',
-      red: '#cc3333',
-      green: '#339966',
-    }
-    let skinColor = '#2a2a2a'
-    for (const key in colorMap) {
-      if (skinVal.includes(key)) {
-        skinColor = colorMap[key]
-        break
-      }
-    }
-    torsoPath.setAttribute('fill', skinColor)
-    breastPath.setAttribute('fill', skinColor)
-    bellyShape.setAttribute('fill', skinColor)
-
-    // 2. Belly Bulge (Lower Front, starts at Y=65)
-    const stomPct = Math.min(1.5, stomVol / stomMax)
-    const bowelPct = Math.min(1.5, bowelVol / bowelMax)
-    
-    // Increased bulge amounts for visibility
-    const stomachBulge = stomPct * 60
-    const bowelBulge = bowelPct * 50
-
-    // Path starts at chest (58, 65), curves down to hips (58, 170)
-    const bellyPath = `M 58 65 C ${58 + stomachBulge} 100 ${58 + bowelBulge} 140 58 170 C 58 190 32 190 32 170 L 32 65 Q 45 65 58 65 Z`
-    bellyShape.setAttribute('d', bellyPath)
-
-    // 3. Breast Bulge & Sag (Upper Front, starts at Neck 48,15, ends at Chest 58,65)
-    // Increased bulge limit to 40 for larger sizes
-    const breastBulge = Math.min(40, breastVol / 25) 
-    // Increased sag limit to 20
-    const breastSag = Math.min(20, Math.sqrt(breastVol) / 1.5) 
-
-    // Path starts at neck (48,15), curves outward to chest (58,65)
-    const bPath = `M 48 15 C ${50 + breastBulge} ${35 + breastSag} ${58 + breastBulge} ${60 + breastSag} 58 65 Q ${53 + breastBulge / 2} ${35 + breastSag} 48 15 Z`
-    breastPath.setAttribute('d', bPath)
-  }
-
-  // ─── Mirror Toggle ─────────────────────────────────────────
-  const mirrorBtn = document.getElementById('bt-mirror-btn')
-  const bellySvg = document.getElementById('bt-belly-svg')
-  if (mirrorBtn && bellySvg) {
-    if (localStorage.getItem('bio-tracker-belly-mirror') === 'true') {
-      bellySvg.style.transform = 'scaleX(-1)'
-    }
-    mirrorBtn.addEventListener('click', () => {
-      const isMirrored = bellySvg.style.transform === 'scaleX(-1)'
-      if (isMirrored) {
-        bellySvg.style.transform = 'scaleX(1)'
-        localStorage.setItem('bio-tracker-belly-mirror', 'false')
-      } else {
-        bellySvg.style.transform = 'scaleX(-1)'
-        localStorage.setItem('bio-tracker-belly-mirror', 'true')
-      }
-    })
   }
 
   document
@@ -625,12 +513,6 @@ export function setup(ctx: SpindleFrontendContext) {
     ?.addEventListener('input', updateCapacities)
   document
     .getElementById('bt-cap-mult')
-    ?.addEventListener('input', updateCapacities)
-  document
-    .getElementById('bt-breast-ml')
-    ?.addEventListener('input', updateCapacities)
-  document
-    .getElementById('bt-skin')
     ?.addEventListener('input', updateCapacities)
 
   // ─── Input delegation for dynamic items ────────────────────
