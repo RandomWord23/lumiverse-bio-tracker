@@ -215,7 +215,6 @@ function processClothingStress(
   const oldMode = getMode(oldXml)
   const newMode = getMode(xml)
 
-  // If mode changed, wipe all clothing stress/condition
   if (oldMode !== newMode) {
     spindle.log.info(
       `Clothing mode changed: ${oldMode} → ${newMode}, wiping stress/condition`,
@@ -229,10 +228,8 @@ function processClothingStress(
     if (newMode !== 'hardcore') return { xml, damageEvents }
   }
 
-  // If not hardcore mode, don't process
   if (newMode !== 'hardcore') return { xml, damageEvents }
 
-  // Calculate body stat deltas
   const oldHeight = getStat(oldXml, 'Height_cm') || 160
   const newHeight = getStat(xml, 'Height_cm') || 160
   const oldWeight = getStat(oldXml, 'Weight_kg') || 60
@@ -252,7 +249,6 @@ function processClothingStress(
     penis: newPenisL > 0 ? newPenisL - oldPenisL : 0,
   }
 
-  // Process each <Equip> tag (non-self-closing)
   xml = xml.replace(
     /<Equip\s+([^>]*?)>([\s\S]*?)<\/Equip>/gi,
     (match, attrs, inner) => {
@@ -320,7 +316,6 @@ function processClothingStress(
     },
   )
 
-  // Process self-closing <Equip ... /> tags
   xml = xml.replace(
     /<Equip\s+([^>]+?)\s*\/>/gi,
     (match, attrs) => {
@@ -463,14 +458,11 @@ function digestItemsInContent(
     return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
   }
 
-  // Pass 1: Normal tags <Item ...>...</Item>
-  // [^>]*[^>\/] ensures we don't accidentally match self-closing tags
   content = content.replace(
     /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi,
     (match, attrs, inner) => digestItem(attrs, inner, false),
   )
 
-  // Pass 2: Self-closing tags <Item ... />
   content = content.replace(
     /<Item\s+([^>]+?)\s*\/>/gi,
     (match, attrs) => digestItem(attrs, null, true),
@@ -587,7 +579,6 @@ function runDigestionTick(
       }
     }
 
-    // ─── Extract Stomach and Bowels ──────────────────────────
     const stomMatch = updatedXml.match(
       /<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i,
     )
@@ -598,7 +589,6 @@ function runDigestionTick(
     let stomContent = stomMatch ? stomMatch[2].trim() : ''
     let bowContent = bowMatch ? bowMatch[2].trim() : ''
 
-    // ─── Digest Stomach Items ────────────────────────────────
     const stomResult = digestItemsInContent(stomContent, {
       baseDigRate,
       acidMultiplier,
@@ -606,7 +596,6 @@ function runDigestionTick(
     })
     stomContent = stomResult.content
 
-    // ─── Digest Bowel Items (full-tour / AV) ────────────────
     const bowResult = digestItemsInContent(bowContent, {
       baseDigRate,
       acidMultiplier,
@@ -614,7 +603,6 @@ function runDigestionTick(
     })
     bowContent = bowResult.content
 
-    // ─── Combine waste stats ─────────────────────────────────
     const totalDigestedVol =
       stomResult.totalDigestedVol + bowResult.totalDigestedVol
     const wasteCount = stomResult.wasteCount + bowResult.wasteCount
@@ -622,7 +610,6 @@ function runDigestionTick(
       stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
     const totalItemCount = stomResult.itemCount + bowResult.itemCount
 
-    // ─── Append remains from both stomach and bowels ──────────
     if (stomResult.newRemains.length > 0) {
       bowContent += '\n' + stomResult.newRemains.join('\n')
     }
@@ -630,7 +617,6 @@ function runDigestionTick(
       bowContent += '\n' + bowResult.newRemains.join('\n')
     }
 
-    // ─── Process accumulated waste ───────────────────────────
     if (accumulatedWasteVol > 0) {
       wasteCount++
       const wasteRegex =
@@ -648,11 +634,9 @@ function runDigestionTick(
       }
     }
 
-    // Clean up empty lines
     stomContent = stomContent.replace(/^\s*\n/gm, '').trim()
     bowContent = bowContent.replace(/^\s*\n/gm, '').trim()
 
-    // Rebuild Stomach and Bowels
     updatedXml = updatedXml.replace(
       /<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i,
       (match, attrs) => {
@@ -667,7 +651,6 @@ function runDigestionTick(
       },
     )
 
-    // ─── Nutrient Absorption (Growth) ────────────────────────
     if (totalDigestedVol > 0) {
       const heightGrowth = totalDigestedVol * 0.035
       const weightGrowth = totalDigestedVol * 0.035
@@ -707,7 +690,6 @@ function runDigestionTick(
       )
     }
 
-    // ─── Clothing Stress Processing ──────────────────────────
     const clothingResult = processClothingStress(updatedXml, oldXml)
     updatedXml = clothingResult.xml
 
@@ -871,13 +853,18 @@ spindle.onFrontendMessage(async (msg: any) => {
     spindle.toast.success('Character sheet synced!')
   }
 
-spindle.onFrontendMessage(async (msg: any) => {
-  if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
-    // ... existing sync code ...
-  }
-
   if (msg.type === 'GET_LATEST_SHEET') {
-    // ... existing get latest code ...
+    if (!activeChatId) {
+      spindle.toast.warning('Open a chat first.')
+      return
+    }
+    // Clear the flag — re-enables normal interceptor behavior
+    await spindle.variables.chat.delete(
+      activeChatId,
+      'manualSyncPending',
+    )
+    const sheet = sheets.get(activeChatId) || ''
+    spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
 
   if (msg.type === 'POPULATE_FIELDS' && msg.fields && msg.xml) {
@@ -892,7 +879,67 @@ spindle.onFrontendMessage(async (msg: any) => {
     await saveChatSheet(activeChatId, msg.xml)
 
     const prompt = `You are a character sheet auto-population assistant. Fill in ONLY the specified blank fields with sensible defaults.
-// ... rest of the populate snippet ...
+
+Current sheet:
+${msg.xml}
+
+Fields to fill: ${fieldsList}
+
+Rules:
+- Fill in ONLY the listed fields with sensible, scene-appropriate defaults
+- Leave ALL other fields exactly as they are
+- Output the COMPLETE updated sheet inside a <sheet_update> block
+- Do not advance the story or add new events
+- For State fields (Weather, Temperature, etc.), use values that make sense for the scene
+- For Health/Energy, default to 100 if blank
+- For clothing slots, describe appropriate clothing for the character and setting
+
+<sheet_update>
+...the complete updated sheet...
+</sheet_update>`
+
+    try {
+      const result = await spindle.generate.quiet({
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a character sheet auto-population assistant. You fill in blank fields with sensible defaults and output the complete sheet.',
+          },
+          { role: 'user', content: prompt },
+        ],
+      })
+
+      const update = extractSheetUpdate(result.content)
+      if (update) {
+        await saveChatSheet(activeChatId, update)
+        spindle.sendToFrontend({
+          type: 'SHEET_UPDATED',
+          xml: update,
+        })
+        spindle.sendToFrontend({
+          type: 'POPULATE_DONE',
+          success: true,
+        })
+        spindle.toast.success(
+          `Populated ${fields.length} fields`,
+        )
+      } else {
+        spindle.sendToFrontend({
+          type: 'POPULATE_DONE',
+          success: false,
+        })
+        spindle.toast.error(
+          'Populate failed: no sheet_update in response',
+        )
+      }
+    } catch (e) {
+      spindle.sendToFrontend({
+        type: 'POPULATE_DONE',
+        success: false,
+      })
+      spindle.toast.error('Populate failed: ' + e)
+    }
   }
 })
 
@@ -910,9 +957,6 @@ spindle.registerInterceptor(async (messages, context) => {
 
   if (!sheet) return messages
 
-  // Check manual sync flag — if set, skip parsing the stale
-  // <sheet_update> from the last assistant message so the
-  // manually-edited sheet isn't overwritten. Clear after.
   const manualSyncPending = await spindle.variables.chat.get(
     chatId,
     'manualSyncPending',
