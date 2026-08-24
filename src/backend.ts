@@ -767,64 +767,40 @@ spindle.onFrontendMessage(async (msg: any, userId: string) => {
     spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
 
-  if (msg.type === 'POPULATE_FIELDS' && msg.fields && msg.xml) {
+  if (msg.type === 'POPULATE_FIELDS' && msg.fields) {
     if (!activeChatId) {
       spindle.toast.warning('Open a chat first.')
       return
     }
 
     const fields = msg.fields as string[]
-    const fieldsList = fields.join(', ')
-
-    await saveChatSheet(activeChatId, msg.xml)
-
-    const prompt = `You are a character sheet auto-population assistant. Fill in ONLY the specified blank fields with sensible defaults.
-
-Current sheet:
-${msg.xml}
-
-Fields to fill: ${fieldsList}
-
-Rules:
-- Fill in ONLY the listed fields with sensible, scene-appropriate defaults
-- Leave ALL other fields exactly as they are
-- Output the COMPLETE updated sheet inside a <sheet_update> block
-- Do not advance the story or add new events
-- For State fields (Weather, Temperature, etc.), use values that make sense for the scene
-- For Health/Energy, default to 100 if blank
-- For clothing slots, describe appropriate clothing for the character and setting
-
-<sheet_update>
-...the complete updated sheet...
-</sheet_update>`
+    await (spindle as any).variables.chat.set(
+      activeChatId,
+      'populateFields',
+      fields.join(', '),
+    )
 
     try {
-      const result = await spindle.generate.quiet({
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a character sheet auto-population assistant. You fill in blank fields with sensible defaults and output the complete sheet.',
-          },
-          { role: 'user', content: prompt },
-        ],
-      }, userId)
-
-      const update = extractSheetUpdate(result.content)
-      if (update) {
-        await saveChatSheet(activeChatId, update)
-        spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: update })
-        spindle.sendToFrontend({ type: 'POPULATE_DONE', success: true })
-        spindle.toast.success(`Populated ${fields.length} fields`)
-      } else {
-        spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
-        spindle.toast.error('Populate failed: no sheet_update in response')
-      }
+      // Insert a hidden user message and trigger a normal generation
+      const result = await spindle.chat.appendMessage(
+        activeChatId,
+        {
+          role: 'user',
+          content: '[System: Auto-populating flagged sheet fields. Do not advance the story.]',
+        },
+        { triggerGeneration: true },
+      )
+      
+      // Hide the message so the user doesn't see it in the chat UI
+      await spindle.chat.setMessageHidden(activeChatId, result.id, true)
     } catch (e) {
-      spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
       spindle.toast.error('Populate failed: ' + e)
+      await (spindle as any).variables.chat.delete(
+        activeChatId,
+        'populateFields',
+      )
     }
   }
-})
 
 spindle.registerInterceptor(async (messages, context) => {
   const ctx = context as any
@@ -862,16 +838,26 @@ spindle.registerInterceptor(async (messages, context) => {
     }
   }
 
+  let populateInstructions = ''
+  const populateFields = await (spindle as any).variables.chat.get(
+    chatId,
+    'populateFields',
+  )
+  if (populateFields) {
+    // Clear it immediately so it only applies to this one generation
+    await (spindle as any).variables.chat.delete(chatId, 'populateFields')
+    populateInstructions = `\n\n─── AUTO-POPULATE REQUEST ───\nThe user has requested that you populate ONLY the following blank fields with sensible, scene-appropriate defaults: ${populateFields}\nLeave ALL other fields exactly as they are.\nDo not advance the story or add new narrative events. Simply output the complete updated sheet in the <sheet_update> block as usual.`
+  }
+
   const injection = {
     role: 'system' as const,
-    content: buildSheetPrompt(sheet),
+    content: buildSheetPrompt(sheet) + populateInstructions,
   }
 
   return {
     messages: [injection, ...messages],
     breakdown: [{ messageIndex: 0, name: 'Character Sheet' }],
   }
-}, 50)
 
 spindle.on('GENERATION_ENDED', async (payload: any) => {
   if (payload.error) return
