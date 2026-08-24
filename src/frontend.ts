@@ -55,11 +55,9 @@ export function setup(ctx: SpindleFrontendContext) {
     <button id="bt-preview-close">✖ Close Preview</button>
   `
   document.body.appendChild(previewModal)
-  document
-    .getElementById('bt-preview-close')
-    ?.addEventListener('click', () => {
-      previewModal.style.display = 'none'
-    })
+  document.getElementById('bt-preview-close')?.addEventListener('click', () => {
+    previewModal.style.display = 'none'
+  })
 
   // ─── Panel ─────────────────────────────────────────────────
   const panel = document.createElement('div')
@@ -253,25 +251,10 @@ export function setup(ctx: SpindleFrontendContext) {
   const floatingBtn = document.createElement('div')
   floatingBtn.innerText = '📋'
   Object.assign(floatingBtn.style, {
-    position: 'fixed',
-    bottom: '80px',
-    right: '20px',
-    backgroundColor: '#333',
-    color: '#fff',
-    width: '45px',
-    height: '45px',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: '10px',
-    fontSize: '22px',
-    cursor: 'pointer',
-    zIndex: '9999',
-    userSelect: 'none',
-    transition: 'opacity 0.3s ease',
-    opacity: '0.4',
-    border: '2px solid #555',
-    boxSizing: 'border-box',
+    position: 'fixed', bottom: '80px', right: '20px', backgroundColor: '#333', color: '#fff',
+    width: '45px', height: '45px', display: 'flex', justifyContent: 'center', alignItems: 'center',
+    borderRadius: '10px', fontSize: '22px', cursor: 'pointer', zIndex: '9999', userSelect: 'none',
+    transition: 'opacity 0.3s ease', opacity: '0.4', border: '2px solid #555', boxSizing: 'border-box',
   })
 
   const savedPos = localStorage.getItem('bio-tracker-btn-pos')
@@ -290,9 +273,7 @@ export function setup(ctx: SpindleFrontendContext) {
   const resetFade = () => {
     floatingBtn.style.opacity = '1'
     clearTimeout(fadeTimeout)
-    fadeTimeout = setTimeout(() => {
-      floatingBtn.style.opacity = '0.4'
-    }, 3000)
+    fadeTimeout = setTimeout(() => { floatingBtn.style.opacity = '0.4' }, 3000)
   }
   resetFade()
 
@@ -303,56 +284,31 @@ export function setup(ctx: SpindleFrontendContext) {
   let initialLeft = 0
   let initialTop = 0
 
-  floatingBtn.addEventListener(
-    'touchstart',
-    (e) => {
-      isDragging = true
-      hasMoved = false
-      resetFade()
-      const touch = e.touches[0]
-      const rect = floatingBtn.getBoundingClientRect()
-      startX = touch.clientX
-      startY = touch.clientY
-      initialLeft = rect.left
-      initialTop = rect.top
-      floatingBtn.style.bottom = 'auto'
-      floatingBtn.style.right = 'auto'
-      floatingBtn.style.left = initialLeft + 'px'
-      floatingBtn.style.top = initialTop + 'px'
-    },
-    { passive: true },
-  )
+  floatingBtn.addEventListener('touchstart', (e) => {
+    isDragging = true; hasMoved = false; resetFade()
+    const touch = e.touches[0]
+    const rect = floatingBtn.getBoundingClientRect()
+    startX = touch.clientX; startY = touch.clientY
+    initialLeft = rect.left; initialTop = rect.top
+    floatingBtn.style.bottom = 'auto'; floatingBtn.style.right = 'auto'
+    floatingBtn.style.left = initialLeft + 'px'; floatingBtn.style.top = initialTop + 'px'
+  }, { passive: true })
 
-  document.addEventListener(
-    'touchmove',
-    (e) => {
-      if (!isDragging) return
-      const touch = e.touches[0]
-      if (
-        Math.abs(touch.clientX - startX) > 5 ||
-        Math.abs(touch.clientY - startY) > 5
-      )
-        hasMoved = true
-      floatingBtn.style.left =
-        initialLeft + (touch.clientX - startX) + 'px'
-      floatingBtn.style.top =
-        initialTop + (touch.clientY - startY) + 'px'
-    },
-    { passive: true },
-  )
+  document.addEventListener('touchmove', (e) => {
+    if (!isDragging) return
+    const touch = e.touches[0]
+    if (Math.abs(touch.clientX - startX) > 5 || Math.abs(touch.clientY - startY) > 5) hasMoved = true
+    floatingBtn.style.left = initialLeft + (touch.clientX - startX) + 'px'
+    floatingBtn.style.top = initialTop + (touch.clientY - startY) + 'px'
+  }, { passive: true })
 
   document.addEventListener('touchend', () => {
     if (isDragging) {
-      localStorage.setItem(
-        'bio-tracker-btn-pos',
-        JSON.stringify({
-          x: parseFloat(floatingBtn.style.left),
-          y: parseFloat(floatingBtn.style.top),
-        }),
-      )
+      localStorage.setItem('bio-tracker-btn-pos', JSON.stringify({
+        x: parseFloat(floatingBtn.style.left), y: parseFloat(floatingBtn.style.top)
+      }))
     }
-    isDragging = false
-    resetFade()
+    isDragging = false; resetFade()
   })
 
   floatingBtn.addEventListener('click', () => {
@@ -362,66 +318,43 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   })
 
-  // ─── Panel close ───────────────────────────────────────────
-  document
-    .getElementById('bt-close-btn')
-    ?.addEventListener('click', () => {
-      panel.classList.remove('open')
-      floatingBtn.style.display = 'flex'
-      resetFade()
-    })
+  document.getElementById('bt-close-btn')?.addEventListener('click', () => {
+    panel.classList.remove('open')
+    floatingBtn.style.display = 'flex'
+    resetFade()
+  })
 
   // ─── Tab switching ─────────────────────────────────────────
   panel.querySelectorAll('.bt-tab-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
-      panel
-        .querySelectorAll('.bt-tab-btn, .bt-tab-content')
-        .forEach((el) => el.classList.remove('active'))
+      panel.querySelectorAll('.bt-tab-btn, .bt-tab-content').forEach((el) => el.classList.remove('active'))
       ;(e.target as HTMLElement).classList.add('active')
-      document
-        .getElementById((e.target as HTMLElement).dataset.tab!)
-        ?.classList.add('active')
+      document.getElementById((e.target as HTMLElement).dataset.tab!)?.classList.add('active')
     })
   })
 
   panel.querySelectorAll('.bt-sub-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
-      panel
-        .querySelectorAll('.bt-sub-btn, .bt-sub-content')
-        .forEach((el) => el.classList.remove('active'))
+      panel.querySelectorAll('.bt-sub-btn, .bt-sub-content').forEach((el) => el.classList.remove('active'))
       ;(e.target as HTMLElement).classList.add('active')
-      document
-        .getElementById((e.target as HTMLElement).dataset.sub!)
-        ?.classList.add('active')
+      document.getElementById((e.target as HTMLElement).dataset.sub!)?.classList.add('active')
     })
   })
 
   // ─── Currency toggle ───────────────────────────────────────
-  const currencyType = document.getElementById(
-    'bt-currency-type',
-  ) as HTMLSelectElement
+  const currencyType = document.getElementById('bt-currency-type') as HTMLSelectElement
   currencyType?.addEventListener('change', () => {
     const modern = document.getElementById('currency-modern')
     const fantasy = document.getElementById('currency-fantasy')
-    if (modern)
-      modern.style.display =
-        currencyType.value === 'modern' ? 'block' : 'none'
-    if (fantasy)
-      fantasy.style.display =
-        currencyType.value === 'fantasy' ? 'flex' : 'none'
+    if (modern) modern.style.display = currencyType.value === 'modern' ? 'block' : 'none'
+    if (fantasy) fantasy.style.display = currencyType.value === 'fantasy' ? 'flex' : 'none'
   })
 
   // ─── Capacity calculator ───────────────────────────────────
   function updateCapacities() {
-    const heightEl = document.getElementById(
-      'bt-height',
-    ) as HTMLInputElement
-    const weightEl = document.getElementById(
-      'bt-weight',
-    ) as HTMLInputElement
-    const multEl = document.getElementById(
-      'bt-cap-mult',
-    ) as HTMLInputElement
+    const heightEl = document.getElementById('bt-height') as HTMLInputElement
+    const weightEl = document.getElementById('bt-weight') as HTMLInputElement
+    const multEl = document.getElementById('bt-cap-mult') as HTMLInputElement
     if (!heightEl || !weightEl || !multEl) return
 
     const height = parseFloat(heightEl.value) || 160
@@ -432,129 +365,101 @@ export function setup(ctx: SpindleFrontendContext) {
     const baseBowelMax = baseStomMax * 0.35
 
     const stomMaxDisp = document.getElementById('bt-stom-max-disp')
-    if (stomMaxDisp)
-      stomMaxDisp.innerText = baseStomMax.toFixed(2) + ' L'
+    if (stomMaxDisp) stomMaxDisp.innerText = baseStomMax.toFixed(2) + ' L'
     const bowelMaxDisp = document.getElementById('bt-bowel-max-disp')
-    if (bowelMaxDisp)
-      bowelMaxDisp.innerText = baseBowelMax.toFixed(2) + ' L'
+    if (bowelMaxDisp) bowelMaxDisp.innerText = baseBowelMax.toFixed(2) + ' L'
 
     let stomTotal = 0
     document.querySelectorAll('.stomach-vol').forEach((el) => {
       stomTotal += parseFloat((el as HTMLInputElement).value) || 0
     })
     const stomFillEl = document.getElementById('bt-stom-fill')
-    if (stomFillEl)
-      stomFillEl.innerText = stomTotal.toFixed(2) + ' L'
+    if (stomFillEl) stomFillEl.innerText = stomTotal.toFixed(2) + ' L'
 
     let bowelTotal = 0
     document.querySelectorAll('.bowel-vol').forEach((el) => {
       bowelTotal += parseFloat((el as HTMLInputElement).value) || 0
     })
     const bowelFillEl = document.getElementById('bt-bowel-fill')
-    if (bowelFillEl)
-      bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L'
+    if (bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L'
 
     const stomPct = (stomTotal / baseStomMax) * 100
     const bellyEl = document.getElementById('bt-belly-status')
     if (bellyEl) {
-      if (stomPct <= 5) {
-        bellyEl.innerText = 'Flat'
-        bellyEl.style.color = '#aaa'
-      } else if (stomPct <= 12) {
-        bellyEl.innerText = 'Potbelly'
-        bellyEl.style.color = '#fff'
-      } else if (stomPct <= 20) {
-        bellyEl.innerText = 'Bloated'
-        bellyEl.style.color = '#ffeb3b'
-      } else if (stomPct <= 35) {
-        bellyEl.innerText = 'Full-Term'
-        bellyEl.style.color = '#ff9800'
-      } else if (stomPct <= 48) {
-        bellyEl.innerText = 'Twins'
-        bellyEl.style.color = '#ff9800'
-      } else if (stomPct <= 60) {
-        bellyEl.innerText = 'Triplets'
-        bellyEl.style.color = '#ff5722'
-      } else if (stomPct <= 95) {
-        bellyEl.innerText = 'Same-Size'
-        bellyEl.style.color = '#ff5722'
-      } else if (stomPct <= 125) {
-        bellyEl.innerText = 'Double-Size'
-        bellyEl.style.color = '#ff4444'
-      } else if (stomPct <= 160) {
-        bellyEl.innerText = 'Room-Filling'
-        bellyEl.style.color = '#ff4444'
-      } else {
-        bellyEl.innerText = 'Critical / Bursting'
-        bellyEl.style.color = '#ff0000'
-      }
+      if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.style.color = '#aaa' }
+      else if (stomPct <= 12) { bellyEl.innerText = 'Potbelly'; bellyEl.style.color = '#fff' }
+      else if (stomPct <= 20) { bellyEl.innerText = 'Bloated'; bellyEl.style.color = '#ffeb3b' }
+      else if (stomPct <= 35) { bellyEl.innerText = 'Full-Term'; bellyEl.style.color = '#ff9800' }
+      else if (stomPct <= 48) { bellyEl.innerText = 'Twins'; bellyEl.style.color = '#ff9800' }
+      else if (stomPct <= 60) { bellyEl.innerText = 'Triplets'; bellyEl.style.color = '#ff5722' }
+      else if (stomPct <= 95) { bellyEl.innerText = 'Same-Size'; bellyEl.style.color = '#ff5722' }
+      else if (stomPct <= 125) { bellyEl.innerText = 'Double-Size'; bellyEl.style.color = '#ff4444' }
+      else if (stomPct <= 160) { bellyEl.innerText = 'Room-Filling'; bellyEl.style.color = '#ff4444' }
+      else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000' }
     }
 
-    const overCapPct =
-      ((stomTotal + bowelTotal) / baseStomMax) * 100
+    const overCapPct = ((stomTotal + bowelTotal) / baseStomMax) * 100
     const mobEl = document.getElementById('bt-mobility')
     if (mobEl) {
-      if (overCapPct <= 100) {
-        mobEl.innerText = 'Agile / Normal'
-        mobEl.style.color = '#4CAF50'
-      } else if (overCapPct <= 110) {
-        mobEl.innerText = 'Slowed, clumsy'
-        mobEl.style.color = '#ffeb3b'
-      } else if (overCapPct <= 125) {
-        mobEl.innerText = 'Half speed, stumbles'
-        mobEl.style.color = '#ff9800'
-      } else if (overCapPct <= 150) {
-        mobEl.innerText = 'Slow waddle only'
-        mobEl.style.color = '#ff5722'
-      } else {
-        mobEl.innerText = 'Immobile'
-        mobEl.style.color = '#ff4444'
-      }
+      if (overCapPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50' }
+      else if (overCapPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b' }
+      else if (overCapPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800' }
+      else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722' }
+      else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444' }
     }
   }
 
-  document
-    .getElementById('bt-height')
-    ?.addEventListener('input', updateCapacities)
-  document
-    .getElementById('bt-weight')
-    ?.addEventListener('input', updateCapacities)
-  document
-    .getElementById('bt-cap-mult')
-    ?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-height')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-weight')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-cap-mult')?.addEventListener('input', updateCapacities)
 
-  // ─── Arousal & Climax Sliders ─────────────────────────────
+  // ─── Arousal & Climax Sliders (Native HTML) ────────────────
   const arousalSlot = document.getElementById('bt-arousal-slot')
   const climaxSlot = document.getElementById('bt-climax-slot')
 
-  let arousalSlider: any = null
-  let climaxSlider: any = null
+  if (arousalSlot) {
+    arousalSlot.innerHTML = `
+      <div class="bt-row" style="margin-bottom: 5px;">
+        <span style="font-weight: bold; color: #ff4466;">Arousal:</span>
+        <span class="bt-value" id="bt-arousal-val" style="color: #ff4466;">0%</span>
+      </div>
+      <input type="range" id="bt-arousal-slider" min="0" max="100" step="1" value="0" 
+        style="width: 100%; accent-color: #ff4466; margin-bottom: 10px; touch-action: manipulation;">
+    `
+    const arousalInput = document.getElementById('bt-arousal-slider') as HTMLInputElement
+    const arousalVal = document.getElementById('bt-arousal-val')
+    
+    arousalInput?.addEventListener('input', () => {
+      const v = parseInt(arousalInput.value) || 0
+      if (arousalVal) arousalVal.textContent = v + '%'
+      updateCurrentPenisSize(v)
+    })
+  }
 
-  try {
-    if (arousalSlot && ctx.components?.mountRangeSlider) {
-      arousalSlider = ctx.components.mountRangeSlider(arousalSlot, {
-        label: 'Arousal',
-        min: 0,
-        max: 100,
-        step: 1,
-        integer: true,
-        value: 0,
-        onCommit: (v: number) => updateCurrentPenisSize(v),
-      })
-    }
-    if (climaxSlot && ctx.components?.mountRangeSlider) {
-      climaxSlider = ctx.components.mountRangeSlider(climaxSlot, {
-        label: 'Climax',
-        min: 0,
-        max: 100,
-        step: 1,
-        integer: true,
-        value: 0,
-        disabled: true,
-      })
-    }
-  } catch (e) {
-    // Silently fail if sliders can't mount
+  if (climaxSlot) {
+    climaxSlot.innerHTML = `
+      <div class="bt-row" style="margin-bottom: 5px;">
+        <span style="font-weight: bold; color: #ffaa00;">Climax:</span>
+        <span class="bt-value" id="bt-climax-val" style="color: #ffaa00;">0%</span>
+      </div>
+      <input type="range" id="bt-climax-slider" min="0" max="100" step="1" value="0" disabled
+        style="width: 100%; accent-color: #ffaa00; opacity: 0.7; touch-action: manipulation;">
+    `
+  }
+
+  function setArousalSlider(v: number) {
+    const input = document.getElementById('bt-arousal-slider') as HTMLInputElement
+    const val = document.getElementById('bt-arousal-val')
+    if (input) input.value = String(v)
+    if (val) val.textContent = v + '%'
+    updateCurrentPenisSize(v)
+  }
+
+  function setClimaxSlider(v: number) {
+    const input = document.getElementById('bt-climax-slider') as HTMLInputElement
+    const val = document.getElementById('bt-climax-val')
+    if (input) input.value = String(v)
+    if (val) val.textContent = v + '%'
   }
 
   function updateCurrentPenisSize(arousalVal: number) {
@@ -572,52 +477,38 @@ export function setup(ctx: SpindleFrontendContext) {
     }
   }
 
-  // Update current penis size when max L/G changes
   document.getElementById('bt-penis-len')?.addEventListener('input', () => {
-    if (arousalSlider) updateCurrentPenisSize(arousalSlider.getValue())
+    const input = document.getElementById('bt-arousal-slider') as HTMLInputElement
+    updateCurrentPenisSize(parseInt(input?.value || '0'))
   })
   document.getElementById('bt-penis-girth')?.addEventListener('input', () => {
-    if (arousalSlider) updateCurrentPenisSize(arousalSlider.getValue())
+    const input = document.getElementById('bt-arousal-slider') as HTMLInputElement
+    updateCurrentPenisSize(parseInt(input?.value || '0'))
   })
 
   // ─── Input delegation for dynamic items ────────────────────
   panel.addEventListener('input', (e) => {
     const target = e.target as HTMLElement
-    if (
-      target.classList.contains('stomach-vol') ||
-      target.classList.contains('bowel-vol')
-    ) {
+    if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
       updateCapacities()
     }
     if (target.classList.contains('item-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0
       const slot = target.closest('.vital-slot')
-      const statusSpan = slot?.querySelector(
-        '.item-status',
-      ) as HTMLElement
+      const statusSpan = slot?.querySelector('.item-status') as HTMLElement
       if (statusSpan && slot && !slot.classList.contains('is-liquid')) {
         let text = 'Fully Conscious'
         let color = '#4CAF50'
-        if (val >= 90) {
-          text = 'Dead'
-          color = '#ff4444'
-        } else if (val >= 80) {
-          text = 'Unconscious'
-          color = '#999'
-        } else if (val >= 70) {
-          text = 'Drowsy'
-          color = '#ffeb3b'
-        } else if (val >= 50) {
-          text = 'Conscious'
-          color = '#ff9800'
-        }
+        if (val >= 90) { text = 'Dead'; color = '#ff4444' }
+        else if (val >= 80) { text = 'Unconscious'; color = '#999' }
+        else if (val >= 70) { text = 'Drowsy'; color = '#ffeb3b' }
+        else if (val >= 50) { text = 'Conscious'; color = '#ff9800' }
         statusSpan.innerText = text
         statusSpan.style.color = color
       }
     }
   })
 
-  // ─── Click delegation for remove buttons ───────────────────
   panel.addEventListener('click', (e) => {
     const target = e.target as HTMLElement
     const action = target.getAttribute('data-action')
@@ -626,10 +517,7 @@ export function setup(ctx: SpindleFrontendContext) {
     if (action === 'remove-stomach' || action === 'remove-remains') {
       target.closest('.vital-slot')?.remove()
       updateCapacities()
-    } else if (
-      action === 'remove-skill' ||
-      action === 'remove-trait'
-    ) {
+    } else if (action === 'remove-skill' || action === 'remove-trait') {
       target.closest('.bt-dynamic-item')?.remove()
     } else if (action === 'remove-inv') {
       target.closest('.dyn-inv')?.remove()
@@ -663,12 +551,8 @@ export function setup(ctx: SpindleFrontendContext) {
     `
     const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
     const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
-    const appearanceArea = div.querySelector(
-      '.v-appearance',
-    ) as HTMLTextAreaElement
-    const statusSpan = div.querySelector(
-      '.item-status',
-    ) as HTMLElement
+    const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
+    const statusSpan = div.querySelector('.item-status') as HTMLElement
 
     typeSelect.addEventListener('change', () => {
       if (typeSelect.value === 'Prey') {
@@ -728,67 +612,33 @@ export function setup(ctx: SpindleFrontendContext) {
   function createInvItem(): HTMLElement {
     const div = document.createElement('div')
     div.className = 'bt-row dyn-inv'
-    div.style.cssText =
-      'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;'
+    div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;'
     div.innerHTML = `<input type="number" class="bt-input d-qty" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1"><input type="text" class="bt-input full d-name" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name..."><button data-action="remove-inv" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;">✖</button>`
     return div
   }
 
-  // ─── Add button handlers ───────────────────────────────────
-  document
-    .getElementById('add-stomach-btn')
-    ?.addEventListener('click', () => {
-      const div = createStomachItem()
-      document
-        .getElementById('stomach-container')
-        ?.appendChild(div)
-    })
-
-  document
-    .getElementById('add-remains-btn')
-    ?.addEventListener('click', () => {
-      const div = createRemainsItem()
-      document
-        .getElementById('bowel-container')
-        ?.appendChild(div)
-    })
-
-  document
-    .getElementById('add-skill-btn')
-    ?.addEventListener('click', () => {
-      const div = createSkillItem()
-      document
-        .getElementById('skills-container')
-        ?.appendChild(div)
-    })
-
-  document
-    .getElementById('add-trait-btn')
-    ?.addEventListener('click', () => {
-      const div = createTraitItem()
-      document
-        .getElementById('traits-container')
-        ?.appendChild(div)
-    })
-
-  document
-    .getElementById('add-inv-btn')
-    ?.addEventListener('click', () => {
-      const div = createInvItem()
-      document
-        .getElementById('inv-container')
-        ?.appendChild(div)
-    })
+  document.getElementById('add-stomach-btn')?.addEventListener('click', () => {
+    document.getElementById('stomach-container')?.appendChild(createStomachItem())
+  })
+  document.getElementById('add-remains-btn')?.addEventListener('click', () => {
+    document.getElementById('bowel-container')?.appendChild(createRemainsItem())
+  })
+  document.getElementById('add-skill-btn')?.addEventListener('click', () => {
+    document.getElementById('skills-container')?.appendChild(createSkillItem())
+  })
+  document.getElementById('add-trait-btn')?.addEventListener('click', () => {
+    document.getElementById('traits-container')?.appendChild(createTraitItem())
+  })
+  document.getElementById('add-inv-btn')?.addEventListener('click', () => {
+    document.getElementById('inv-container')?.appendChild(createInvItem())
+  })
 
   // ─── Flag buttons on fields ────────────────────────────────
   function addFlagButtons() {
     const fields = panel.querySelectorAll('.bt-scrape, .bt-cloth-slot')
     fields.forEach((field) => {
       const input = field as HTMLElement
-      const fieldId =
-        input.getAttribute('data-id') ||
-        input.getAttribute('data-slot') ||
-        ''
+      const fieldId = input.getAttribute('data-id') || input.getAttribute('data-slot') || ''
       if (!fieldId) return
 
       const row = input.closest('.bt-row')
@@ -807,7 +657,6 @@ export function setup(ctx: SpindleFrontendContext) {
       }
 
       if (container.querySelector('.bt-flag-btn')) return
-
       container.style.position = 'relative'
 
       const btn = document.createElement('button')
@@ -830,53 +679,34 @@ export function setup(ctx: SpindleFrontendContext) {
           inp.style.paddingLeft = ''
         }
       })
-
       container.appendChild(btn)
     })
   }
-
   addFlagButtons()
 
   // ─── Build current XML from form ───────────────────────────
   function buildCurrentXml(): string {
-    const stateTags = [
-      'Health',
-      'Energy',
-      'Time',
-      'Weather',
-      'Temperature',
-      'Area',
-      'Building',
-      'Room',
-    ]
+    const stateTags = ['Health', 'Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
 
     let xml = `<CharacterSheet>\n  <State>\n`
     document.querySelectorAll('.bt-scrape').forEach((el) => {
       const input = el as HTMLInputElement
       const val = input.value.trim()
       const id = input.getAttribute('data-id')
-      if (
-        val !== '' &&
-        val !== '0' &&
-        id &&
-        stateTags.includes(id)
-      ) {
+      if (val !== '' && val !== '0' && id && stateTags.includes(id)) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
-    const arousalVal = arousalSlider ? arousalSlider.getValue() : 0
+    const arousalInput = document.getElementById('bt-arousal-slider') as HTMLInputElement
+    const arousalVal = parseInt(arousalInput?.value || '0')
     xml += `    <Arousal>${arousalVal}</Arousal>\n`
     xml += `  </State>\n\n  <BaseStats>\n`
+    
     document.querySelectorAll('.bt-scrape').forEach((el) => {
       const input = el as HTMLInputElement
       const val = input.value.trim()
       const id = input.getAttribute('data-id')
-      if (
-        val !== '' &&
-        val !== '0' &&
-        id &&
-        !stateTags.includes(id)
-      ) {
+      if (val !== '' && val !== '0' && id && !stateTags.includes(id)) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
@@ -886,205 +716,122 @@ export function setup(ctx: SpindleFrontendContext) {
       const val = input.value.trim()
       const slot = input.getAttribute('data-slot')
       if (val !== '') {
-        const flexEl = input.previousElementSibling?.querySelector(
-          '.bt-cloth-flex',
-        ) as HTMLSelectElement
-        const flexStr = flexEl
-          ? ` elasticity="${flexEl.value}"`
-          : ''
+        const flexEl = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement
+        const flexStr = flexEl ? ` elasticity="${flexEl.value}"` : ''
         xml += `    <Equip slot="${slot}"${flexStr}>${val}</Equip>\n`
       }
     })
     xml += `  </Clothing>\n\n  <Backpack>\n`
     document.querySelectorAll('.dyn-inv').forEach((el) => {
-      const qty =
-        (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() ||
-        '1'
-      const name = (
-        el.querySelector('.d-name') as HTMLInputElement
-      )?.value.trim()
+      const qty = (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() || '1'
+      const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim()
       if (name) xml += `    <Item qty="${qty}">${name}</Item>\n`
     })
     xml += `  </Backpack>\n\n  <SkillsAndTraits>\n`
     document.querySelectorAll('.dyn-skill').forEach((el) => {
-      const name = (
-        el.querySelector('.d-name') as HTMLInputElement
-      )?.value.trim()
-      const lvl =
-        (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() ||
-        '1'
-      const desc = (
-        el.querySelector('.d-desc') as HTMLTextAreaElement
-      )?.value.trim()
-      if (name)
-        xml += `    <Skill name="${name}" level="${lvl}">${desc}</Skill>\n`
+      const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim()
+      const lvl = (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() || '1'
+      const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim()
+      if (name) xml += `    <Skill name="${name}" level="${lvl}">${desc}</Skill>\n`
     })
     document.querySelectorAll('.dyn-trait').forEach((el) => {
-      const name = (
-        el.querySelector('.d-name') as HTMLInputElement
-      )?.value.trim()
-      const desc = (
-        el.querySelector('.d-desc') as HTMLTextAreaElement
-      )?.value.trim()
+      const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim()
+      const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim()
       if (name) xml += `    <Trait name="${name}">${desc}</Trait>\n`
     })
     xml += `  </SkillsAndTraits>\n\n  <DigestiveTract>\n`
 
-    const bellyStatus =
-      document.getElementById('bt-belly-status')?.innerText ||
-      'Flat'
-    const mobility =
-      document.getElementById('bt-mobility')?.innerText ||
-      'Agile'
-    const stomFill =
-      document.getElementById('bt-stom-fill')?.innerText || '0 L'
-    const stomMax =
-      document.getElementById('bt-stom-max-disp')?.innerText ||
-      '0 L'
-    const bowFill =
-      document.getElementById('bt-bowel-fill')?.innerText || '0 L'
+    const bellyStatus = document.getElementById('bt-belly-status')?.innerText || 'Flat'
+    const mobility = document.getElementById('bt-mobility')?.innerText || 'Agile'
+    const stomFill = document.getElementById('bt-stom-fill')?.innerText || '0 L'
+    const stomMax = document.getElementById('bt-stom-max-disp')?.innerText || '0 L'
+    const bowFill = document.getElementById('bt-bowel-fill')?.innerText || '0 L'
 
     xml += `    <Status belly="${bellyStatus}" mobility="${mobility}" />\n`
     xml += `    <Stomach current="${stomFill}" max="${stomMax}">\n`
 
-    document
-      .querySelectorAll('#stomach-container .vital-slot')
-      .forEach((el) => {
-        const name =
-          (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() ||
-          'Unknown'
-        const vol =
-          (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() ||
-          '0'
-        const dig =
-          (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() ||
-          '0'
-        const type =
-          (el.querySelector('.v-type') as HTMLSelectElement)?.value ||
-          'Food'
-        const flavor = (
-          el.querySelector('.v-flavor') as HTMLTextAreaElement
-        )?.value.trim()
-        const gear = (
-          el.querySelector('.v-gear') as HTMLTextAreaElement
-        )?.value.trim()
-        const appearance = (
-          el.querySelector('.v-appearance') as HTMLTextAreaElement
-        )?.value.trim()
+    document.querySelectorAll('#stomach-container .vital-slot').forEach((el) => {
+      const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown'
+      const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0'
+      const dig = (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() || '0'
+      const type = (el.querySelector('.v-type') as HTMLSelectElement)?.value || 'Food'
+      const flavor = (el.querySelector('.v-flavor') as HTMLTextAreaElement)?.value.trim()
+      const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim()
+      const appearance = (el.querySelector('.v-appearance') as HTMLTextAreaElement)?.value.trim()
 
-        xml += `      <Item type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%">\n`
-        if (appearance)
-          xml += `        <Appearance>${appearance}</Appearance>\n`
-        if (flavor)
-          xml += `        <Description>${flavor}</Description>\n`
-        if (type === 'Prey' && gear)
-          xml += `        <BoundGear>${gear}</BoundGear>\n`
-        xml += `      </Item>\n`
-      })
+      xml += `      <Item type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%">\n`
+      if (appearance) xml += `        <Appearance>${appearance}</Appearance>\n`
+      if (flavor) xml += `        <Description>${flavor}</Description>\n`
+      if (type === 'Prey' && gear) xml += `        <BoundGear>${gear}</BoundGear>\n`
+      xml += `      </Item>\n`
+    })
 
     xml += `    </Stomach>\n    <Bowels current="${bowFill}">\n`
-    document
-      .querySelectorAll('#bowel-container .vital-slot')
-      .forEach((el) => {
-        const name =
-          (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() ||
-          'Waste'
-        const vol =
-          (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() ||
-          '0'
-        xml += `      <Remains volume_L="${vol}">${name}</Remains>\n`
-      })
+    document.querySelectorAll('#bowel-container .vital-slot').forEach((el) => {
+      const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Waste'
+      const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0'
+      xml += `      <Remains volume_L="${vol}">${name}</Remains>\n`
+    })
 
     xml += `    </Bowels>\n  </DigestiveTract>\n</CharacterSheet>`
     return xml
   }
 
   // ─── Sync to AI button ─────────────────────────────────────
-  document
-    .getElementById('bt-sync-btn')
-    ?.addEventListener('click', () => {
-      const xml = buildCurrentXml()
+  document.getElementById('bt-sync-btn')?.addEventListener('click', () => {
+    const xml = buildCurrentXml()
+    const btn = document.getElementById('bt-sync-btn')
+    if (btn) {
+      btn.innerText = '✅ Data Synced to AI!'
+      btn.style.background = '#4CAF50'
+      setTimeout(() => {
+        btn.innerText = '💾 Sync Changes to AI'
+        btn.style.background = '#333'
+      }, 2000)
+    }
+    ctx.sendToBackend({ type: 'SYNC_BIO_DATA', xmlData: xml })
 
-      const btn = document.getElementById('bt-sync-btn')
+    const previewContent = document.getElementById('bt-preview-content')
+    if (previewContent) {
+      previewContent.innerText = xml
+      document.getElementById('bt-preview-modal')!.style.display = 'flex'
+    }
+  })
+
+  document.getElementById('bt-sync-chat-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('bt-sync-chat-btn') as HTMLButtonElement
+    if (btn) { btn.innerText = '⏳ Syncing...'; btn.style.background = '#555' }
+    ctx.sendToBackend({ type: 'GET_LATEST_SHEET' })
+  })
+
+  document.getElementById('bt-populate-btn')?.addEventListener('click', () => {
+    const flagged: string[] = []
+    panel.querySelectorAll('.bt-flag-btn[data-flagged="true"]').forEach((b) => {
+      const id = (b as HTMLElement).dataset.fieldId
+      if (id) flagged.push(id)
+    })
+
+    const btn = document.getElementById('bt-populate-btn') as HTMLButtonElement
+    if (flagged.length === 0) {
       if (btn) {
-        btn.innerText = '✅ Data Synced to AI!'
-        btn.style.background = '#4CAF50'
+        btn.innerText = '⚠️ No fields flagged'
+        btn.style.background = '#ff4444'
         setTimeout(() => {
-          btn.innerText = '💾 Sync Changes to AI'
-          btn.style.background = '#333'
+          btn.innerText = '✨ Populate Flagged Fields'
+          btn.style.background = '#2a2a2a'
         }, 2000)
       }
-      ctx.sendToBackend({ type: 'SYNC_BIO_DATA', xmlData: xml })
+      return
+    }
 
-      const previewContent = document.getElementById(
-        'bt-preview-content',
-      )
-      if (previewContent) {
-        previewContent.innerText = xml
-        document.getElementById('bt-preview-modal')!.style.display =
-          'flex'
-      }
-    })
-
-  // ─── Sync from Latest Message button ───────────────────────
-  document
-    .getElementById('bt-sync-chat-btn')
-    ?.addEventListener('click', () => {
-      const btn = document.getElementById(
-        'bt-sync-chat-btn',
-      ) as HTMLButtonElement
-      if (btn) {
-        btn.innerText = '⏳ Syncing...'
-        btn.style.background = '#555'
-      }
-      ctx.sendToBackend({ type: 'GET_LATEST_SHEET' })
-    })
-
-  // ─── Populate Flagged Fields button ────────────────────────
-  document
-    .getElementById('bt-populate-btn')
-    ?.addEventListener('click', () => {
-      const flagged: string[] = []
-      panel
-        .querySelectorAll('.bt-flag-btn[data-flagged="true"]')
-        .forEach((b) => {
-          const id = (b as HTMLElement).dataset.fieldId
-          if (id) flagged.push(id)
-        })
-
-      const btn = document.getElementById(
-        'bt-populate-btn',
-      ) as HTMLButtonElement
-
-      if (flagged.length === 0) {
-        if (btn) {
-          btn.innerText = '⚠️ No fields flagged'
-          btn.style.background = '#ff4444'
-          setTimeout(() => {
-            btn.innerText = '✨ Populate Flagged Fields'
-            btn.style.background = '#2a2a2a'
-          }, 2000)
-        }
-        return
-      }
-
-      if (btn) {
-        btn.innerText = '⏳ Populating...'
-        btn.style.background = '#555'
-      }
-      ctx.sendToBackend({
-        type: 'POPULATE_FIELDS',
-        fields: flagged,
-      })
-    })
+    if (btn) { btn.innerText = '⏳ Populating...'; btn.style.background = '#555' }
+    const xml = buildCurrentXml()
+    ctx.sendToBackend({ type: 'POPULATE_FIELDS', fields: flagged, xml })
+  })
 
   // ─── Breast cup calculator ─────────────────────────────────
-  const breastInput = document.getElementById(
-    'bt-breast-ml',
-  ) as HTMLInputElement
-  const breastCup = document.getElementById(
-    'bt-breast-cup',
-  ) as HTMLSpanElement
+  const breastInput = document.getElementById('bt-breast-ml') as HTMLInputElement
+  const breastCup = document.getElementById('bt-breast-cup') as HTMLSpanElement
   breastInput?.addEventListener('input', () => {
     const ml = parseInt(breastInput.value) || 0
     let cup = 'AA'
@@ -1101,23 +848,10 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // ─── Color effect for hair/eyes/skin ───────────────────────
   const colorMap: Record<string, string> = {
-    blonde: '#e8c872',
-    blond: '#e8c872',
-    brunette: '#5c4033',
-    brown: '#5c4033',
-    black: '#333333',
-    red: '#cc3333',
-    ginger: '#d95a2b',
-    blue: '#3366cc',
-    green: '#339966',
-    hazel: '#8e7618',
-    purple: '#800080',
-    pink: '#ff99cc',
-    white: '#ffffff',
-    gray: '#808080',
-    grey: '#808080',
-    pale: '#ffe4e1',
-    tan: '#d2b48c',
+    blonde: '#e8c872', blond: '#e8c872', brunette: '#5c4033', brown: '#5c4033',
+    black: '#333333', red: '#cc3333', ginger: '#d95a2b', blue: '#3366cc',
+    green: '#339966', hazel: '#8e7618', purple: '#800080', pink: '#ff99cc',
+    white: '#ffffff', gray: '#808080', grey: '#808080', pale: '#ffe4e1', tan: '#d2b48c',
   }
   function applyColorEffect(inputId: string) {
     const el = document.getElementById(inputId)
@@ -1126,10 +860,7 @@ export function setup(ctx: SpindleFrontendContext) {
       const val = (e.target as HTMLInputElement).value.toLowerCase()
       let foundColor = ''
       for (const key in colorMap) {
-        if (val.includes(key)) {
-          foundColor = colorMap[key]
-          break
-        }
+        if (val.includes(key)) { foundColor = colorMap[key]; break }
       }
       if (foundColor) {
         el.style.borderLeft = '4px solid ' + foundColor
@@ -1145,48 +876,21 @@ export function setup(ctx: SpindleFrontendContext) {
   applyColorEffect('bt-skin')
 
   // ─── Gender icon ───────────────────────────────────────────
-  const genderInput = document.getElementById(
-    'bt-gender',
-  ) as HTMLInputElement
+  const genderInput = document.getElementById('bt-gender') as HTMLInputElement
   const genderIcon = document.getElementById('bt-gender-icon')
   if (genderInput && genderIcon) {
     genderInput.addEventListener('input', () => {
       const val = genderInput.value.toLowerCase().trim()
       let icon = ''
       let color = '#fff'
-      if (
-        val === 'female' ||
-        val === 'woman' ||
-        val === 'girl' ||
-        val === 'f'
-      ) {
-        icon = '♀️'
-        color = '#ff99cc'
-      } else if (
-        val === 'male' ||
-        val === 'man' ||
-        val === 'boy' ||
-        val === 'm'
-      ) {
-        icon = '♂️'
-        color = '#66b2ff'
-      } else if (
-        val.includes('trans') ||
-        val.includes('non-binary') ||
-        val === 'nb' ||
-        val === 't'
-      ) {
-        icon = '⚧️'
-        color = '#e0e0e0'
-      } else if (
-        val.includes('futa') ||
-        val.includes('herm') ||
-        val.includes('intersex') ||
-        val === 'h' ||
-        val === 'i'
-      ) {
-        icon = '⚥'
-        color = '#cc99ff'
+      if (val === 'female' || val === 'woman' || val === 'girl' || val === 'f') {
+        icon = '♀️'; color = '#ff99cc'
+      } else if (val === 'male' || val === 'man' || val === 'boy' || val === 'm') {
+        icon = '♂️'; color = '#66b2ff'
+      } else if (val.includes('trans') || val.includes('non-binary') || val === 'nb' || val === 't') {
+        icon = '⚧️'; color = '#e0e0e0'
+      } else if (val.includes('futa') || val.includes('herm') || val.includes('intersex') || val === 'h' || val === 'i') {
+        icon = '⚥'; color = '#cc99ff'
       }
       genderIcon.innerText = icon
       genderIcon.style.color = color
@@ -1202,11 +906,7 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── Backend message handler ───────────────────────────────
   ctx.onBackendMessage((msg: any) => {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
-      try {
-        populateFormFromXml(msg.xml)
-      } catch (e) {
-        // silent fail
-      }
+      try { populateFormFromXml(msg.xml) } catch (e) {}
     }
     if (msg.type === 'LATEST_SHEET') {
       const btn = document.getElementById('bt-sync-chat-btn')
@@ -1243,25 +943,18 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     }
     if (msg.type === 'POPULATE_DONE') {
-      const btn = document.getElementById(
-        'bt-populate-btn',
-      ) as HTMLButtonElement
+      const btn = document.getElementById('bt-populate-btn') as HTMLButtonElement
       if (msg.success) {
-        // Clear all flags
-        panel
-          .querySelectorAll('.bt-flag-btn[data-flagged="true"]')
-          .forEach((b) => {
-            const flagBtn = b as HTMLElement
-            flagBtn.dataset.flagged = 'false'
-            const fieldId = flagBtn.dataset.fieldId
-            const input = panel.querySelector(
-              `[data-id="${fieldId}"], [data-slot="${fieldId}"]`,
-            ) as HTMLElement
-            if (input) {
-              input.style.borderLeft = ''
-              input.style.paddingLeft = ''
-            }
-          })
+        panel.querySelectorAll('.bt-flag-btn[data-flagged="true"]').forEach((b) => {
+          const flagBtn = b as HTMLElement
+          flagBtn.dataset.flagged = 'false'
+          const fieldId = flagBtn.dataset.fieldId
+          const input = panel.querySelector(`[data-id="${fieldId}"], [data-slot="${fieldId}"]`) as HTMLElement
+          if (input) {
+            input.style.borderLeft = ''
+            input.style.paddingLeft = ''
+          }
+        })
         if (btn) {
           btn.innerText = '✅ Populated!'
           btn.style.background = '#4CAF50'
@@ -1289,10 +982,7 @@ export function setup(ctx: SpindleFrontendContext) {
     if (swipe && typeof swipe === 'object') {
       if (typeof swipe.content === 'string') return swipe.content
       if (Array.isArray(swipe.content)) {
-        return swipe.content
-          .filter((p: any) => p.type === 'text')
-          .map((p: any) => p.text)
-          .join('\n')
+        return swipe.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
       }
       if (typeof swipe.text === 'string') return swipe.text
     }
@@ -1301,34 +991,21 @@ export function setup(ctx: SpindleFrontendContext) {
 
   function extractSheetUpdateFromText(text: string): string | null {
     if (!text) return null
-    let cleanText = text
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&amp;/g, '&')
-    const match = cleanText.match(
-      /<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i,
-    )
+    let cleanText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+    const match = cleanText.match(/<sheet_update>\s*([\s\S]*?)\s*<\/sheet_update>/i)
     return match ? match[1].trim() : null
   }
 
   // ─── Live preview on swipe ─────────────────────────────────
   ctx.events.on('MESSAGE_SWIPED', (payload: any) => {
-    if (
-      payload.action === 'navigated' ||
-      payload.action === 'added' ||
-      payload.action === 'updated'
-    ) {
+    if (payload.action === 'navigated' || payload.action === 'added' || payload.action === 'updated') {
       const msg = payload.message
       const swipeId = payload.swipeId
       if (msg && msg.swipes && msg.swipes[swipeId] !== undefined) {
         const swipeText = getSwipeText(msg.swipes[swipeId])
         const updateXml = extractSheetUpdateFromText(swipeText)
         if (updateXml) {
-          try {
-            populateFormFromXml(updateXml)
-          } catch (e) {
-            // silent fail
-          }
+          try { populateFormFromXml(updateXml) } catch (e) {}
         }
       }
     }
@@ -1336,53 +1013,30 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // ─── Clothing Condition Colors ─────────────────────────────
   const condColors: Record<string, string> = {
-    intact: '#4CAF50',
-    snug: '#ffeb3b',
-    strained: '#ff9800',
-    tight: '#ff5722',
-    damaged: '#ff4444',
-    ruined: '#ff0000',
+    intact: '#4CAF50', snug: '#ffeb3b', strained: '#ff9800',
+    tight: '#ff5722', damaged: '#ff4444', ruined: '#ff0000',
   }
 
   // ─── XML to form parser ────────────────────────────────────
   function populateFormFromXml(xml: string) {
-    // Clear all dynamic items
-    document
-      .querySelectorAll(
-        '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot',
-      )
-      .forEach((el) => el.remove())
+    document.querySelectorAll(
+      '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot'
+    ).forEach((el) => el.remove())
 
-    // Clear clothing condition badges
-    document
-      .querySelectorAll('.cloth-badge')
-      .forEach((el) => el.remove())
+    document.querySelectorAll('.cloth-badge').forEach((el) => el.remove())
 
     if (!xml || xml.trim() === '') return
 
     const parser = new DOMParser()
     const doc = parser.parseFromString(xml, 'application/xml')
-
     const parseError = doc.querySelector('parsererror')
     if (parseError) return
 
-    const getText = (tag: string) =>
-      doc.querySelector(tag)?.textContent || ''
-    const getAttr = (el: Element | null, attr: string) =>
-      el?.getAttribute(attr) || ''
+    const getText = (tag: string) => doc.querySelector(tag)?.textContent || ''
+    const getAttr = (el: Element | null, attr: string) => el?.getAttribute(attr) || ''
 
-    const stateTags = [
-      'Health',
-      'Energy',
-      'Time',
-      'Weather',
-      'Temperature',
-      'Area',
-      'Building',
-      'Room',
-    ]
+    const stateTags = ['Health', 'Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
 
-    // State section
     const state = doc.querySelector('State')
     if (state) {
       document.querySelectorAll('.bt-scrape').forEach((el) => {
@@ -1395,7 +1049,6 @@ export function setup(ctx: SpindleFrontendContext) {
       })
     }
 
-    // BaseStats section
     const baseStats = doc.querySelector('BaseStats')
     if (baseStats) {
       document.querySelectorAll('.bt-scrape').forEach((el) => {
@@ -1409,66 +1062,41 @@ export function setup(ctx: SpindleFrontendContext) {
     }
 
     // Trigger visual updates
-    document
-      .getElementById('bt-height')
-      ?.dispatchEvent(new Event('input'))
-    document
-      .getElementById('bt-weight')
-      ?.dispatchEvent(new Event('input'))
-    document
-      .getElementById('bt-breast-ml')
-      ?.dispatchEvent(new Event('input'))
-    document
-      .getElementById('bt-gender')
-      ?.dispatchEvent(new Event('input'))
-    document
-      .getElementById('bt-hair')
-      ?.dispatchEvent(new Event('input'))
-    document
-      .getElementById('bt-eyes')
-      ?.dispatchEvent(new Event('input'))
-    document
-      .getElementById('bt-skin')
-      ?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-height')?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-weight')?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-breast-ml')?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-gender')?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-hair')?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-eyes')?.dispatchEvent(new Event('input'))
+    document.getElementById('bt-skin')?.dispatchEvent(new Event('input'))
 
     // Update Arousal & Climax sliders
     const arousalVal = parseFloat(getText('Arousal')) || 0
     const climaxVal = parseFloat(getText('Climax')) || 0
-    if (arousalSlider) arousalSlider.update({ value: arousalVal })
-    if (climaxSlider) climaxSlider.update({ value: climaxVal })
-    updateCurrentPenisSize(arousalVal)
+    setArousalSlider(arousalVal)
+    setClimaxSlider(climaxVal)
 
-    // Currency toggle
     const currencySystem = getText('CurrencySystem')
     if (currencySystem) {
-      const currSelect = document.getElementById(
-        'bt-currency-type',
-      ) as HTMLSelectElement
+      const currSelect = document.getElementById('bt-currency-type') as HTMLSelectElement
       if (currSelect) {
         currSelect.value = currencySystem
         currSelect.dispatchEvent(new Event('change'))
       }
     }
 
-    // Clothing
     doc.querySelectorAll('Equip').forEach((equipNode) => {
       const slot = equipNode.getAttribute('slot')
       const elasticity = equipNode.getAttribute('elasticity') || 'standard'
       const value = equipNode.textContent || ''
       const condition = equipNode.getAttribute('condition') || 'intact'
       if (!slot) return
-      const input = document.querySelector(
-        `.bt-cloth-slot[data-slot="${slot}"]`,
-      ) as HTMLInputElement
+      const input = document.querySelector(`.bt-cloth-slot[data-slot="${slot}"]`) as HTMLInputElement
       if (input) {
         input.value = value
-        const flexSelect =
-          input.previousElementSibling?.querySelector(
-            '.bt-cloth-flex',
-          ) as HTMLSelectElement
+        const flexSelect = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement
         if (flexSelect) flexSelect.value = elasticity
 
-        // Inject condition badge
         let labelEl: HTMLElement | null = input.previousElementSibling as HTMLElement
         if (labelEl && labelEl.classList.contains('flex-row')) {
           labelEl = labelEl.querySelector('.slot-label')
@@ -1490,7 +1118,6 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     })
 
-    // Backpack
     doc.querySelectorAll('Backpack > Item').forEach((itemNode) => {
       const qty = itemNode.getAttribute('qty') || '1'
       const name = itemNode.textContent || ''
@@ -1500,84 +1127,56 @@ export function setup(ctx: SpindleFrontendContext) {
       ;(div.querySelector('.d-name') as HTMLInputElement).value = name
     })
 
-    // Skills
     doc.querySelectorAll('Skill').forEach((skillNode) => {
       const div = createSkillItem()
       document.getElementById('skills-container')?.appendChild(div)
-      ;(div.querySelector('.d-name') as HTMLInputElement).value =
-        skillNode.getAttribute('name') || ''
-      ;(div.querySelector('.d-lvl') as HTMLInputElement).value =
-        skillNode.getAttribute('level') || '1'
-      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value =
-        skillNode.textContent || ''
+      ;(div.querySelector('.d-name') as HTMLInputElement).value = skillNode.getAttribute('name') || ''
+      ;(div.querySelector('.d-lvl') as HTMLInputElement).value = skillNode.getAttribute('level') || '1'
+      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = skillNode.textContent || ''
     })
 
-    // Traits
     doc.querySelectorAll('Trait').forEach((traitNode) => {
       const div = createTraitItem()
       document.getElementById('traits-container')?.appendChild(div)
-      ;(div.querySelector('.d-name') as HTMLInputElement).value =
-        traitNode.getAttribute('name') || ''
-      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value =
-        traitNode.textContent || ''
+      ;(div.querySelector('.d-name') as HTMLInputElement).value = traitNode.getAttribute('name') || ''
+      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || ''
     })
 
-    // Stomach items
     doc.querySelectorAll('Stomach > Item').forEach((itemNode) => {
       const div = createStomachItem()
-      document
-        .getElementById('stomach-container')
-        ?.appendChild(div)
+      document.getElementById('stomach-container')?.appendChild(div)
 
-      ;(div.querySelector('.v-name') as HTMLInputElement).value =
-        getAttr(itemNode, 'name')
-      ;(div.querySelector('.v-vol') as HTMLInputElement).value =
-        getAttr(itemNode, 'volume_L')
-      ;(div.querySelector('.v-dig') as HTMLInputElement).value = (
-        getAttr(itemNode, 'digestion') || ''
-      ).replace('%', '')
+      ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name')
+      ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L')
+      ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'digestion') || '').replace('%', '')
 
       const type = getAttr(itemNode, 'type') || 'Food'
-      const typeSelect = div.querySelector(
-        '.v-type',
-      ) as HTMLSelectElement
+      const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
       typeSelect.value = type
       typeSelect.dispatchEvent(new Event('change'))
 
       const appearanceNode = itemNode.querySelector('Appearance')
-      ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value =
-        appearanceNode?.textContent || ''
+      ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
 
       const descNode = itemNode.querySelector('Description')
-      ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value =
-        descNode?.textContent || ''
+      ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
 
       if (type === 'Prey') {
         const gearNode = itemNode.querySelector('BoundGear')
-        ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value =
-          gearNode?.textContent || ''
+        ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
       }
 
-      const digInput = div.querySelector(
-        '.item-dig-input',
-      ) as HTMLInputElement
-      if (digInput)
-        digInput.dispatchEvent(
-          new Event('input', { bubbles: true }),
-        )
+      const digInput = div.querySelector('.item-dig-input') as HTMLInputElement
+      if (digInput) digInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
 
-    // Bowel remains
     doc.querySelectorAll('Remains').forEach((remainsNode) => {
       const div = createRemainsItem()
       document.getElementById('bowel-container')?.appendChild(div)
-      ;(div.querySelector('.v-name') as HTMLInputElement).value =
-        remainsNode.textContent || ''
-      ;(div.querySelector('.v-vol') as HTMLInputElement).value =
-        getAttr(remainsNode, 'volume_L')
+      ;(div.querySelector('.v-name') as HTMLInputElement).value = remainsNode.textContent || ''
+      ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(remainsNode, 'volume_L')
     })
 
-    // Final capacity update
     updateCapacities()
   }
 
