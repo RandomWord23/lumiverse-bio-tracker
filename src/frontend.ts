@@ -438,7 +438,6 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch (e) {}
   }
   document.body.appendChild(floatingBtn)
-  applyUiSettings(currentSettings.ui)
 
   let fadeTimeout: any
   const resetFade = () => {
@@ -447,6 +446,7 @@ export function setup(ctx: SpindleFrontendContext) {
     fadeTimeout = setTimeout(() => { floatingBtn.style.opacity = '0.4' }, 3000)
   }
   resetFade()
+  applyUiSettings(currentSettings.ui)
 
   let isDragging = false
   let hasMoved = false
