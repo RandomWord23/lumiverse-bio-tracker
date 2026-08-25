@@ -4,6 +4,20 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── Styles ────────────────────────────────────────────────
   const removeStyle = ctx.dom.addStyle(`
     #bio-tracker-panel { position: fixed; top: 0; right: -400px; width: 350px; max-width: 100vw; height: 100%; background: #1a1a1a; color: #e0e0e0; z-index: 10000; transition: right 0.3s ease-in-out; box-shadow: -5px 0 20px rgba(0,0,0,0.6); display: flex; flex-direction: column; font-family: system-ui, -apple-system, sans-serif; border-left: 1px solid #333; }
+    .bt-toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #2a2a2a; }
+    .bt-toggle-row:last-child { border-bottom: none; }
+    .bt-toggle-label { font-size: 13px; color: #ccc; flex: 1; }
+    .bt-toggle-desc { font-size: 11px; color: #666; margin-top: 2px; }
+    .bt-switch { position: relative; width: 40px; height: 22px; background: #444; border-radius: 11px; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+    .bt-switch.on { background: #ff4444; }
+    .bt-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: left 0.2s; }
+    .bt-switch.on::after { left: 20px; }
+    .bt-slider-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .bt-slider-row span { font-size: 13px; color: #ccc; min-width: 100px; }
+    .bt-slider-row input[type="range"] { flex: 1; accent-color: #ff4444; }
+    .bt-slider-val { font-size: 12px; color: #ff4444; font-weight: bold; min-width: 40px; text-align: right; }
+    .bt-reset-btn { background: #333; color: #aaa; border: 1px solid #555; padding: 8px; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%; margin-top: 10px; }
+    .bt-reset-btn:active { background: #555; }
     #bio-tracker-panel.open { right: 0; }
     .bt-header { background: #2a2a2a; padding: 15px 20px; font-size: 18px; font-weight: bold; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #ff4444; }
     .bt-close { cursor: pointer; color: #ff4444; font-size: 20px; padding: 5px; }
@@ -72,6 +86,7 @@ export function setup(ctx: SpindleFrontendContext) {
       <button class="bt-tab-btn" data-tab="tab-inv">Inventory</button>
       <button class="bt-tab-btn" data-tab="tab-state">State</button>
       <button class="bt-tab-btn" data-tab="tab-vitals">Metabolism</button>
+      <button class="bt-tab-btn" data-tab="tab-settings">⚙️</button>
     </div>
     <div class="bt-content">
       <div id="tab-char" class="bt-tab-content active">
@@ -243,9 +258,164 @@ export function setup(ctx: SpindleFrontendContext) {
         <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
         <button class="bt-action-btn" id="bt-populate-btn" style="background: #2a2a2a; border-color: #555;">✨ Populate Flagged Fields</button>
       </div>
+      <div id="tab-settings" class="bt-tab-content">
+        <div class="bt-section-title" style="margin-top: 0;">🔔 TOAST ALERTS</div>
+        <div id="bt-toast-settings"></div>
+        <hr style="border-color: #333; margin: 15px 0;">
+        <div class="bt-section-title">⚙️ ENGINE TOGGLES</div>
+        <div id="bt-engine-settings"></div>
+        <hr style="border-color: #333; margin: 15px 0;">
+        <div class="bt-section-title">🎨 UI SETTINGS</div>
+        <div class="bt-slider-row">
+          <span>Btn Opacity:</span>
+          <input type="range" id="bt-set-opacity" min="0.2" max="1" step="0.1" value="0.4">
+          <span class="bt-slider-val" id="bt-set-opacity-val">0.4</span>
+        </div>
+        <div class="bt-slider-row">
+          <span>Panel Width:</span>
+          <input type="range" id="bt-set-width" min="300" max="500" step="10" value="350">
+          <span class="bt-slider-val" id="bt-set-width-val">350px</span>
+        </div>
+        <div class="bt-toggle-row">
+          <div>
+            <div class="bt-toggle-label">Auto-open panel on update</div>
+            <div class="bt-toggle-desc">Open panel when sheet update arrives</div>
+          </div>
+          <div class="bt-switch" id="bt-set-autoopen" data-setting="autoOpen"></div>
+        </div>
+        <button class="bt-reset-btn" id="bt-set-reset-pos">📍 Reset Button Position</button>
+        <hr style="border-color: #333; margin: 15px 0;">
+        <button class="bt-reset-btn" id="bt-set-reset-all" style="color: #ff4444; border-color: #ff4444;">↺ Reset All Settings to Defaults</button>
+      </div>
     </div>
   `
   document.body.appendChild(panel)
+
+  // ─── Settings System ───────────────────────────────────────
+  const defaultToastSettings: Record<string, boolean> = { digestionTicks: true, climaxEvents: true, clothingDamage: true, nutrientAbsorption: false, digestionSkips: false, sheetSync: true, rollbackEvents: true, rollbackWarnings: true, errors: true, chatWarnings: false }
+  const defaultEngineToggles: Record<string, boolean> = { digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true }
+  const defaultUiSettings: Record<string, any> = { btnOpacity: 0.4, panelWidth: 350, autoOpen: false }
+  const toastCategoryDefs = [
+    { key: 'digestionTicks', label: 'Digestion Ticks', desc: 'Sheet updated, digestion tick applied' },
+    { key: 'climaxEvents', label: 'Climax Events', desc: 'Climax reached, resetting next turn' },
+    { key: 'clothingDamage', label: 'Clothing Damage', desc: 'Clothes degraded from body growth' },
+    { key: 'nutrientAbsorption', label: 'Nutrient Absorption', desc: 'Body grew from digestion' },
+    { key: 'digestionSkips', label: 'Digestion Skips', desc: 'Tick skipped (no time, rollback, etc.)' },
+    { key: 'sheetSync', label: 'Sheet Sync', desc: 'Character sheet synced' },
+    { key: 'rollbackEvents', label: 'Rollback Events', desc: 'Sheet restored/cleared on delete' },
+    { key: 'rollbackWarnings', label: 'Rollback Warnings', desc: 'No snapshot found warnings' },
+    { key: 'errors', label: 'Errors', desc: 'Populate failed and other errors' },
+    { key: 'chatWarnings', label: 'Chat Warnings', desc: 'Open a chat first warnings' },
+  ]
+  const engineToggleDefs = [
+    { key: 'digestionEngine', label: 'Digestion Engine', desc: 'Master switch for digestion ticks' },
+    { key: 'clothingStress', label: 'Clothing Stress', desc: 'Clothing degradation in hardcore mode' },
+    { key: 'nutrientAbsorption', label: 'Nutrient Absorption', desc: 'Body growth from digested items' },
+    { key: 'arousalClimax', label: 'Arousal and Climax', desc: 'Arousal decay and climax meter' },
+  ]
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem('bio-tracker-settings')
+      if (raw) {
+        const p = JSON.parse(raw)
+        return { toast: { ...defaultToastSettings, ...(p.toast || {}) }, engine: { ...defaultEngineToggles, ...(p.engine || {}) }, ui: { ...defaultUiSettings, ...(p.ui || {}) } }
+      }
+    } catch (e) {}
+    return { toast: { ...defaultToastSettings }, engine: { ...defaultEngineToggles }, ui: { ...defaultUiSettings } }
+  }
+  function saveSettings(s: any) { localStorage.setItem('bio-tracker-settings', JSON.stringify(s)) }
+  function sendSettingsToBackend(s: any) { ctx.sendToBackend({ type: 'SETTINGS_UPDATED', toastSettings: s.toast, engineToggles: s.engine }) }
+  function applyUiSettings(ui: any) {
+    const pe = document.getElementById('bio-tracker-panel') as HTMLElement
+    if (pe) pe.style.width = ui.panelWidth + 'px'
+    if (floatingBtn) { floatingBtn.style.opacity = String(ui.btnOpacity); clearTimeout(fadeTimeout); fadeTimeout = setTimeout(() => { floatingBtn.style.opacity = String(ui.btnOpacity) }, 3000) }
+  }
+  let currentSettings = loadSettings()
+  function buildToggleRow(def: { key: string; label: string; desc: string }, section: 'toast' | 'engine') {
+    const row = document.createElement('div')
+    row.className = 'bt-toggle-row'
+    const isOn = currentSettings[section][def.key]
+    const labelDiv = document.createElement('div')
+    const labelEl = document.createElement('div')
+    labelEl.className = 'bt-toggle-label'
+    labelEl.textContent = def.label
+    const descEl = document.createElement('div')
+    descEl.className = 'bt-toggle-desc'
+    descEl.textContent = def.desc
+    labelDiv.appendChild(labelEl)
+    labelDiv.appendChild(descEl)
+    const sw = document.createElement('div')
+    sw.className = 'bt-switch' + (isOn ? ' on' : '')
+    sw.dataset.section = section
+    sw.dataset.key = def.key
+    sw.addEventListener('click', () => {
+      const nowOn = !currentSettings[section][def.key]
+      currentSettings[section][def.key] = nowOn
+      sw.classList.toggle('on', nowOn)
+      saveSettings(currentSettings)
+      sendSettingsToBackend(currentSettings)
+    })
+    row.appendChild(labelDiv)
+    row.appendChild(sw)
+    return row
+  }
+  const toastContainer = document.getElementById('bt-toast-settings')
+  if (toastContainer) toastCategoryDefs.forEach((d) => toastContainer.appendChild(buildToggleRow(d, 'toast')))
+  const engineContainer = document.getElementById('bt-engine-settings')
+  if (engineContainer) engineToggleDefs.forEach((d) => engineContainer.appendChild(buildToggleRow(d, 'engine')))
+  const opacitySlider = document.getElementById('bt-set-opacity') as HTMLInputElement
+  const opacityVal = document.getElementById('bt-set-opacity-val')
+  if (opacitySlider) {
+    opacitySlider.value = String(currentSettings.ui.btnOpacity)
+    if (opacityVal) opacityVal.textContent = String(currentSettings.ui.btnOpacity)
+    opacitySlider.addEventListener('input', () => {
+      const v = parseFloat(opacitySlider.value)
+      currentSettings.ui.btnOpacity = v
+      if (opacityVal) opacityVal.textContent = String(v)
+      saveSettings(currentSettings)
+      applyUiSettings(currentSettings.ui)
+    })
+  }
+  const widthSlider = document.getElementById('bt-set-width') as HTMLInputElement
+  const widthVal = document.getElementById('bt-set-width-val')
+  if (widthSlider) {
+    widthSlider.value = String(currentSettings.ui.panelWidth)
+    if (widthVal) widthVal.textContent = currentSettings.ui.panelWidth + 'px'
+    widthSlider.addEventListener('input', () => {
+      const v = parseInt(widthSlider.value)
+      currentSettings.ui.panelWidth = v
+      if (widthVal) widthVal.textContent = v + 'px'
+      saveSettings(currentSettings)
+      applyUiSettings(currentSettings.ui)
+    })
+  }
+  const autoOpenSwitch = document.getElementById('bt-set-autoopen')
+  if (autoOpenSwitch) {
+    autoOpenSwitch.classList.toggle('on', currentSettings.ui.autoOpen)
+    autoOpenSwitch.addEventListener('click', () => {
+      currentSettings.ui.autoOpen = !currentSettings.ui.autoOpen
+      autoOpenSwitch.classList.toggle('on', currentSettings.ui.autoOpen)
+      saveSettings(currentSettings)
+    })
+  }
+  document.getElementById('bt-set-reset-pos')?.addEventListener('click', () => {
+    localStorage.removeItem('bio-tracker-btn-pos')
+    floatingBtn.style.left = ''; floatingBtn.style.top = ''
+    floatingBtn.style.bottom = '80px'; floatingBtn.style.right = '20px'
+    resetFade()
+  })
+  document.getElementById('bt-set-reset-all')?.addEventListener('click', () => {
+    currentSettings = { toast: { ...defaultToastSettings }, engine: { ...defaultEngineToggles }, ui: { ...defaultUiSettings } }
+    saveSettings(currentSettings)
+    sendSettingsToBackend(currentSettings)
+    if (toastContainer) { toastContainer.innerHTML = ''; toastCategoryDefs.forEach((d) => toastContainer.appendChild(buildToggleRow(d, 'toast'))) }
+    if (engineContainer) { engineContainer.innerHTML = ''; engineToggleDefs.forEach((d) => engineContainer.appendChild(buildToggleRow(d, 'engine'))) }
+    if (opacitySlider) { opacitySlider.value = '0.4'; if (opacityVal) opacityVal.textContent = '0.4' }
+    if (widthSlider) { widthSlider.value = '350'; if (widthVal) widthVal.textContent = '350px' }
+    if (autoOpenSwitch) autoOpenSwitch.classList.remove('on')
+    applyUiSettings(currentSettings.ui)
+  })
+  sendSettingsToBackend(currentSettings)
 
   // ─── Floating Button ───────────────────────────────────────
   const floatingBtn = document.createElement('div')
@@ -268,6 +438,7 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch (e) {}
   }
   document.body.appendChild(floatingBtn)
+  applyUiSettings(currentSettings.ui)
 
   let fadeTimeout: any
   const resetFade = () => {
@@ -907,6 +1078,10 @@ export function setup(ctx: SpindleFrontendContext) {
   ctx.onBackendMessage((msg: any) => {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       try { populateFormFromXml(msg.xml) } catch (e) {}
+      if (currentSettings.ui.autoOpen) {
+        panel.classList.add('open')
+        floatingBtn.style.display = 'none'
+      }
     }
     if (msg.type === 'LATEST_SHEET') {
       const btn = document.getElementById('bt-sync-chat-btn')

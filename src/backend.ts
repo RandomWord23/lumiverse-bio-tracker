@@ -12,6 +12,21 @@ const sheets: Map<string, string> = new Map()
 const snapshots: Map<string, Snapshot[]> = new Map()
 const committedMessageIds: Set<string> = new Set()
 
+// ─── Settings (received from frontend) ──────────────────────
+let toastSettings: Record<string, boolean> = {
+  digestionTicks: true, climaxEvents: true, clothingDamage: true,
+  nutrientAbsorption: false, digestionSkips: false, sheetSync: true,
+  rollbackEvents: true, rollbackWarnings: true, errors: true, chatWarnings: false,
+}
+let engineToggles: Record<string, boolean> = {
+  digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
+}
+
+function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
+  if (toastSettings[category] === false) return
+  spindle.toast[type](message)
+}
+
 function sheetPath(chatId: string) {
   return `sheets/${chatId}.xml`
 }
@@ -446,12 +461,16 @@ async function runDigestionTick(
     const newTime = getTimeHours(newXml)
 
     if (oldTime === null || newTime === null) {
+      maybeToast('digestionSkips', 'info', 'Digestion tick skipped: missing time')
       spindle.log.info('Digestion tick skipped: missing time')
-      const clothingResult = processClothingStress(newXml, oldXml)
-      if (clothingResult.damageEvents.length > 0) {
-        spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+      if (engineToggles.clothingStress) {
+        const clothingResult = processClothingStress(newXml, oldXml)
+        if (clothingResult.damageEvents.length > 0) {
+          spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+        }
+        return clothingResult.xml
       }
-      return clothingResult.xml
+      return newXml
     }
 
     let elapsed = newTime - oldTime
@@ -461,21 +480,33 @@ async function runDigestionTick(
         elapsed += 24
         spindle.log.info(`Midnight crossing detected: elapsed adjusted to ${elapsed.toFixed(2)}h`)
       } else {
+        maybeToast('digestionSkips', 'info', 'Digestion tick skipped: time went backwards (rollback)')
         spindle.log.info('Digestion tick skipped: time went backwards (rollback)')
         return newXml
       }
     }
 
     if (elapsed === 0) {
+      maybeToast('digestionSkips', 'info', 'Digestion tick skipped: 0 hours elapsed')
       spindle.log.info('Digestion tick skipped: 0 hours elapsed')
-      const clothingResult = processClothingStress(newXml, oldXml)
-      if (clothingResult.damageEvents.length > 0) {
-        spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+      if (engineToggles.clothingStress) {
+        const clothingResult = processClothingStress(newXml, oldXml)
+        if (clothingResult.damageEvents.length > 0) {
+          spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+        }
+        return clothingResult.xml
       }
-      return clothingResult.xml
+      return newXml
     }
 
-    let acidLevel = getStat(newXml, 'CurrentAcidPct')
+    let updatedXml = newXml
+    let totalDigestedVol = 0
+    let wasteCount = 0
+    let totalItemCount = 0
+    let acidLevel = 0
+
+    if (engineToggles.digestionEngine) {
+      acidLevel = getStat(newXml, 'CurrentAcidPct')
     const baseDigRate = getStat(newXml, 'BaseDigestionRate') || 25
     const acidRiseRate = getStat(newXml, 'AcidRiseRate') || 10
 
@@ -491,7 +522,7 @@ async function runDigestionTick(
 
     const acidMultiplier = 1 + acidLevel / 100
 
-    let updatedXml = newXml.replace(
+    updatedXml = newXml.replace(
       /<CurrentAcidPct>.*?<\/CurrentAcidPct>/i,
       `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`,
     )
@@ -575,60 +606,64 @@ async function runDigestionTick(
       },
     )
 
-        // ─── Vitals: Arousal, Climax, & Penis Scaling ────────────
-    const oldArousal = getStat(oldXml, 'Arousal') || 0
-    let newArousal = getStat(updatedXml, 'Arousal') || 0
+    } // end digestionEngine
 
-    // Apply 50% hourly decay to the old value
-    const decayedArousal = Math.max(0, oldArousal - 50 * elapsed)
-    
-    // If the LLM didn't add enough points to overcome the decay, it drops.
-    // If the LLM added more points than the decay, it rises.
-    let finalArousal = Math.max(newArousal, decayedArousal)
-    finalArousal = Math.min(100, finalArousal)
+    if (engineToggles.arousalClimax) {
+      // Vitals: Arousal, Climax, & Penis Scaling
+      const oldArousal = getStat(oldXml, 'Arousal') || 0
+      let newArousal = getStat(updatedXml, 'Arousal') || 0
 
-    let finalClimax = getStat(oldXml, 'Climax') || 0
-    
-    // Check if this is the turn AFTER an orgasm (needs reset)
-    const pendingOrgasmReset = await (spindle as any).variables.chat.get(chatId, 'pendingOrgasmReset')
-    if (pendingOrgasmReset === 'true') {
-      finalArousal = 0
-      finalClimax = 0
-      await (spindle as any).variables.chat.delete(chatId, 'pendingOrgasmReset')
-      spindle.log.info('Post-orgasm reset applied.')
-    } else {
-      // Turn-based climax meter
-      if (finalArousal >= 95) {
-        finalClimax = Math.min(100, finalClimax + 25)
+      // Apply 50% hourly decay to the old value
+      const decayedArousal = Math.max(0, oldArousal - 50 * elapsed)
+
+      // If the LLM didn't add enough points to overcome the decay, it drops.
+      // If the LLM added more points than the decay, it rises.
+      let finalArousal = Math.max(newArousal, decayedArousal)
+      finalArousal = Math.min(100, finalArousal)
+
+      let finalClimax = getStat(oldXml, 'Climax') || 0
+
+      // Check if this is the turn AFTER an orgasm (needs reset)
+      const pendingOrgasmReset = await (spindle as any).variables.chat.get(chatId, 'pendingOrgasmReset')
+      if (pendingOrgasmReset === 'true') {
+        finalArousal = 0
+        finalClimax = 0
+        await (spindle as any).variables.chat.delete(chatId, 'pendingOrgasmReset')
+        spindle.log.info('Post-orgasm reset applied.')
       } else {
-        finalClimax = Math.max(0, finalClimax - 25)
+        // Turn-based climax meter
+        if (finalArousal >= 95) {
+          finalClimax = Math.min(100, finalClimax + 25)
+        } else {
+          finalClimax = Math.max(0, finalClimax - 25)
+        }
+
+        // Trigger orgasm!
+        if (finalClimax >= 100) {
+          finalClimax = 100
+          await (spindle as any).variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
+          maybeToast('climaxEvents', 'success', '🔥 Climax reached! Resetting next turn.')
+          spindle.log.info('Climax event triggered.')
+        }
       }
 
-      // Trigger orgasm!
-      if (finalClimax >= 100) {
-        finalClimax = 100
-        await (spindle as any).variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
-        spindle.toast.success('🔥 Climax reached! Resetting next turn.')
-        spindle.log.info('Climax event triggered.')
+      updatedXml = setStat(updatedXml, 'Arousal', finalArousal)
+      updatedXml = setStat(updatedXml, 'Climax', finalClimax)
+
+      // Calculate current penis size based on arousal (30% to 100% scaling)
+      const maxPenisL = getStat(updatedXml, 'PenisLength_cm') || 0
+      const maxPenisG = getStat(updatedXml, 'PenisGirth_cm') || 0
+      if (maxPenisL > 0) {
+        const curL = maxPenisL * (0.3 + 0.7 * (finalArousal / 100))
+        updatedXml = setStat(updatedXml, 'CurrentPenisLength_cm', curL)
       }
-    }
+      if (maxPenisG > 0) {
+        const curG = maxPenisG * (0.3 + 0.7 * (finalArousal / 100))
+        updatedXml = setStat(updatedXml, 'CurrentPenisGirth_cm', curG)
+      }
+    } // end arousalClimax
 
-    updatedXml = setStat(updatedXml, 'Arousal', finalArousal)
-    updatedXml = setStat(updatedXml, 'Climax', finalClimax)
-
-    // Calculate current penis size based on arousal (30% to 100% scaling)
-    const maxPenisL = getStat(updatedXml, 'PenisLength_cm') || 0
-    const maxPenisG = getStat(updatedXml, 'PenisGirth_cm') || 0
-    if (maxPenisL > 0) {
-      const curL = maxPenisL * (0.3 + 0.7 * (finalArousal / 100))
-      updatedXml = setStat(updatedXml, 'CurrentPenisLength_cm', curL)
-    }
-    if (maxPenisG > 0) {
-      const curG = maxPenisG * (0.3 + 0.7 * (finalArousal / 100))
-      updatedXml = setStat(updatedXml, 'CurrentPenisGirth_cm', curG)
-    }
-    
-    if (totalDigestedVol > 0) {
+    if (engineToggles.nutrientAbsorption && totalDigestedVol > 0) {
       const heightGrowth = totalDigestedVol * 0.035
       const weightGrowth = totalDigestedVol * 0.035
       const breastGrowth = totalDigestedVol * 1.0
@@ -657,6 +692,11 @@ async function runDigestionTick(
       updatedXml = setStat(updatedXml, 'PenisLength_cm', penisL)
       updatedXml = setStat(updatedXml, 'PenisGirth_cm', penisG)
 
+      maybeToast(
+        'nutrientAbsorption',
+        'info',
+        `Nutrient absorption: +${heightGrowth.toFixed(2)}cm height, +${weightGrowth.toFixed(2)}kg weight, +${breastGrowth.toFixed(2)}ml breasts`,
+      )
       spindle.log.info(
         `Nutrient absorption: +${heightGrowth.toFixed(2)}cm height, ` +
           `+${weightGrowth.toFixed(2)}kg weight, ` +
@@ -665,14 +705,17 @@ async function runDigestionTick(
           `+${penisLGrowth.toFixed(2)}cm penis L, ` +
           `+${penisGGrowth.toFixed(2)}cm penis G`,
       )
-    }
+    } // end nutrientAbsorption
 
-    const clothingResult = processClothingStress(updatedXml, oldXml)
-    updatedXml = clothingResult.xml
+    if (engineToggles.clothingStress) {
+      const clothingResult = processClothingStress(updatedXml, oldXml)
+      updatedXml = clothingResult.xml
 
-    if (clothingResult.damageEvents.length > 0) {
-      spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
-    }
+      if (clothingResult.damageEvents.length > 0) {
+        maybeToast('clothingDamage', 'warning', `Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+        spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
+      }
+    } // end clothingStress
 
     spindle.log.info(
       `Digestion tick: ${elapsed.toFixed(2)}h elapsed, ` +
@@ -711,7 +754,7 @@ async function commitUpdate(
 async function rollbackOnDelete(chatId: string, messageId: string) {
   const list = snapshots.get(chatId)
   if (!list) {
-    spindle.toast.warning('Rollback: no snapshot list found')
+    maybeToast('rollbackWarnings', 'warning', 'Rollback: no snapshot list found')
     return
   }
 
@@ -721,11 +764,11 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
   committedMessageIds.delete(messageId)
 
   if (!hadSnapshot) {
-    spindle.toast.warning('Rollback: deleted message had no snapshot')
+    maybeToast('rollbackWarnings', 'warning', 'Rollback: deleted message had no snapshot')
     return
   }
 
-  spindle.toast.info('Rollback: restoring previous sheet state...')
+  maybeToast('rollbackEvents', 'info', 'Rollback: restoring previous sheet state...')
 
   if (newList.length > 0) {
     const latest = newList.reduce((a, b) => (a.chatIndex > b.chatIndex ? a : b))
@@ -733,13 +776,13 @@ async function rollbackOnDelete(chatId: string, messageId: string) {
     if (chatId === activeChatId) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
     }
-    spindle.toast.success('Rollback: restored previous sheet')
+    maybeToast('rollbackEvents', 'success', 'Rollback: restored previous sheet')
   } else {
     await saveChatSheet(chatId, '')
     if (chatId === activeChatId) {
       spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
     }
-    spindle.toast.success('Rollback: cleared sheet')
+    maybeToast('rollbackEvents', 'success', 'Rollback: cleared sheet')
   }
 
   await saveChatSnapshots(chatId)
@@ -803,20 +846,27 @@ CRITICAL XML RULES:
 }
 
 spindle.onFrontendMessage(async (msg: any) => {
+  if (msg.type === 'SETTINGS_UPDATED') {
+    if (msg.toastSettings) toastSettings = { ...toastSettings, ...msg.toastSettings }
+    if (msg.engineToggles) engineToggles = { ...engineToggles, ...msg.engineToggles }
+    spindle.log.info('Settings updated from frontend')
+    return
+  }
+
   if (msg.type === 'SYNC_BIO_DATA' && msg.xmlData) {
     if (!activeChatId) {
-      spindle.toast.warning('Open a chat first before syncing the sheet.')
+      maybeToast('chatWarnings', 'warning', 'Open a chat first before syncing the sheet.')
       return
     }
     await saveChatSheet(activeChatId, msg.xmlData)
     await (spindle as any).variables.chat.set(activeChatId, 'manualSyncPending', 'true')
     spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
-    spindle.toast.success('Character sheet synced!')
+    maybeToast('sheetSync', 'success', 'Character sheet synced!')
   }
 
   if (msg.type === 'GET_LATEST_SHEET') {
     if (!activeChatId) {
-      spindle.toast.warning('Open a chat first.')
+      maybeToast('chatWarnings', 'warning', 'Open a chat first.')
       return
     }
     await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
@@ -855,7 +905,7 @@ spindle.onFrontendMessage(async (msg: any) => {
 
   if (msg.type === 'POPULATE_FIELDS' && msg.fields) {
     if (!activeChatId) {
-      spindle.toast.warning('Open a chat first.')
+      maybeToast('chatWarnings', 'warning', 'Open a chat first.')
       return
     }
 
@@ -877,7 +927,7 @@ spindle.onFrontendMessage(async (msg: any) => {
       )
       await spindle.chat.setMessageHidden(activeChatId, result.id, true)
     } catch (e) {
-      spindle.toast.error('Populate failed: ' + e)
+      maybeToast('errors', 'error', 'Populate failed: ' + e)
       await (spindle as any).variables.chat.delete(
         activeChatId,
         'populateFields',
@@ -996,7 +1046,7 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   await commitUpdate(chatId, messageId, update, chatIndex)
   committedMessageIds.add(messageId)
 
-  spindle.toast.success('Sheet updated — digestion tick applied')
+  maybeToast('digestionTicks', 'success', 'Sheet updated - digestion tick applied')
 })
 
 spindle.on('CHAT_SWITCHED', async (payload: any) => {
