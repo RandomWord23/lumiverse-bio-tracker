@@ -424,10 +424,11 @@ function digestItemsInContent(
   }
 }
 
-function runDigestionTick(
+async function runDigestionTick(
   newXml: string,
   oldXml: string,
-): string {
+  chatId: string,
+): Promise<string> {
   try {
     const getTimeHours = (xml: string) => {
       const match = xml.match(/<Time>(.*?)<\/Time>/i)
@@ -693,7 +694,7 @@ async function commitUpdate(
   chatIndex: number,
 ) {
   const oldSheet = sheets.get(chatId) || ''
-  const finalXml = runDigestionTick(sheetXml, oldSheet)
+  const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
 
   await saveChatSheet(chatId, finalXml)
   const list = snapshots.get(chatId) || []
@@ -819,7 +820,31 @@ spindle.onFrontendMessage(async (msg: any) => {
       return
     }
     await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
-    const sheet = sheets.get(activeChatId) || ''
+
+    // Try in-memory/storage first
+    let sheet = sheets.get(activeChatId) || ''
+
+    // If empty, scan chat history for the last <sheet_update> block
+    if (!sheet) {
+      try {
+        const messages = await spindle.chat.getMessages(activeChatId)
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msgItem = messages[i]
+          if (msgItem.role !== 'assistant') continue
+          const content = extractTextContent(msgItem.content)
+          const update = extractSheetUpdate(content)
+          if (update) {
+            sheet = update
+            await saveChatSheet(activeChatId, sheet)
+            spindle.log.info(`GET_LATEST_SHEET: recovered sheet from message ${msgItem.id || i}`)
+            break
+          }
+        }
+      } catch (e) {
+        spindle.log.error(`GET_LATEST_SHEET: failed to scan messages: ${e}`)
+      }
+    }
+
     spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
 
@@ -907,8 +932,42 @@ spindle.registerInterceptor(async (messages, context) => {
     content: buildSheetPrompt(sheet) + populateInstructions,
   }
 
+  // ─── Strip <sheet_update> blocks from chat history ──────────
+  // The LLM must rely ONLY on the injected <CurrentCharacterSheet>.
+  // Old <sheet_update> blocks in history cause it to copy stale values.
+  // This modifies the in-memory copy only — database messages are preserved.
+  const cleanedMessages = messages.map((msg: any) => {
+    if (typeof msg.content === 'string') {
+      return {
+        ...msg,
+        content: msg.content.replace(
+          /<sheet_update>[\s\S]*?<\/sheet_update>/gi,
+          '[Sheet update hidden to save context]',
+        ),
+      }
+    }
+    if (Array.isArray(msg.content)) {
+      return {
+        ...msg,
+        content: msg.content.map((part: any) => {
+          if (part.type === 'text' && typeof part.text === 'string') {
+            return {
+              ...part,
+              text: part.text.replace(
+                /<sheet_update>[\s\S]*?<\/sheet_update>/gi,
+                '[Sheet update hidden to save context]',
+              ),
+            }
+          }
+          return part
+        }),
+      }
+    }
+    return msg
+  })
+
   return {
-    messages: [injection, ...messages],
+    messages: [injection, ...cleanedMessages],
     breakdown: [{ messageIndex: 0, name: 'Character Sheet' }],
   }
 }, 50)
