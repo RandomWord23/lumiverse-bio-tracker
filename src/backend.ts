@@ -821,27 +821,32 @@ spindle.onFrontendMessage(async (msg: any) => {
     }
     await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
 
-    // Try in-memory/storage first
-    let sheet = sheets.get(activeChatId) || ''
+    // Always scan chat history first — the button is "Sync from Latest Message"
+    let sheet = ''
 
-    // If empty, scan chat history for the last <sheet_update> block
-    if (!sheet) {
-      try {
-        const messages = await spindle.chat.getMessages(activeChatId)
-        for (let i = messages.length - 1; i >= 0; i--) {
-          const msgItem = messages[i]
-          if (msgItem.role !== 'assistant') continue
-          const content = extractTextContent(msgItem.content)
-          const update = extractSheetUpdate(content)
-          if (update) {
-            sheet = update
-            await saveChatSheet(activeChatId, sheet)
-            spindle.log.info(`GET_LATEST_SHEET: recovered sheet from message ${msgItem.id || i}`)
-            break
-          }
+    try {
+      const messages = await spindle.chat.getMessages(activeChatId)
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const msgItem = messages[i]
+        if (msgItem.role !== 'assistant') continue
+        const content = extractTextContent(msgItem.content)
+        const update = extractSheetUpdate(content)
+        if (update) {
+          sheet = update
+          await saveChatSheet(activeChatId, sheet)
+          spindle.log.info(`GET_LATEST_SHEET: found sheet in message ${msgItem.id || i}`)
+          break
         }
-      } catch (e) {
-        spindle.log.error(`GET_LATEST_SHEET: failed to scan messages: ${e}`)
+      }
+    } catch (e) {
+      spindle.log.error(`GET_LATEST_SHEET: failed to scan messages: ${e}`)
+    }
+
+    // Fall back to stored sheet if no <sheet_update> found in messages
+    if (!sheet) {
+      sheet = sheets.get(activeChatId) || ''
+      if (sheet) {
+        spindle.log.info('GET_LATEST_SHEET: no sheet_update in messages, using stored sheet')
       }
     }
 
