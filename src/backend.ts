@@ -798,9 +798,25 @@ You are operating with a persistent character sheet tracker. Below is the curren
 ${sheetXml}
 </CurrentCharacterSheet>
 
+─── YOUR RESPONSIBILITIES (what YOU must do) ───
+1. ADVANCE <Time> FORWARD every turn. If the scene progresses, increase the <Time> value. The extension uses the time delta to calculate digestion, arousal decay, and body growth. If you do not advance time, the simulation stalls.
+2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
+3. Add <Item> entries to <Stomach> or <Bowels> when the character eats or is eaten. Remove them only if the item was regurgitated or otherwise exits the body.
+4. Update <Arousal> based on what happens in the scene (intimacy raises it, time passes lowers it — the extension halves it each hour).
+5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
+6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
+
+─── WHAT THE EXTENSION HANDLES AUTOMATICALLY (do NOT do these yourself) ───
+- Digestion percentages: calculated from <Time> delta automatically.
+- Nutrient absorption and body growth (Height, Weight, Breast, Hips, Penis): applied automatically when items digest.
+- Clothing stress and condition: degraded automatically as the body grows.
+- <Climax> meter: managed entirely by the extension based on <Arousal>.
+- <CurrentPenisLength_cm> and <CurrentPenisGirth_cm>: calculated from <Arousal> automatically.
+- Moving fully-digested prey remains to <Bowels>.
+
 ─── UPDATE INSTRUCTIONS ───
 
-When the character sheet changes during the scene, you MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of your response.
+You MUST include an updated copy of the FULL sheet inside a <sheet_update> block at the very END of EVERY response — even if nothing changed. Always advance <Time> forward as the scene progresses.
 
 CRITICAL XML RULES:
 1. You MUST copy the EXACT XML structure provided in <CurrentCharacterSheet>. Do NOT invent new tags, do NOT change tag names, do NOT change attributes.
@@ -997,7 +1013,7 @@ spindle.registerInterceptor(async (messages, context) => {
         ...msg,
         content: msg.content.replace(
           /<sheet_update>[\s\S]*?<\/sheet_update>/gi,
-          '[Sheet update hidden to save context]',
+          '',
         ),
       }
     }
@@ -1010,7 +1026,7 @@ spindle.registerInterceptor(async (messages, context) => {
               ...part,
               text: part.text.replace(
                 /<sheet_update>[\s\S]*?<\/sheet_update>/gi,
-                '[Sheet update hidden to save context]',
+                '',
               ),
             }
           }
