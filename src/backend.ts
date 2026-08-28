@@ -233,6 +233,23 @@ function processClothingStress(
 
   if (newMode !== 'hardcore') return { xml, damageEvents }
 
+  // Build a map of slot -> { stress, condition } from the stored sheet so
+  // the LLM cannot "repair" clothing by outputting lower stress or better
+  // condition values than what was previously stored.
+  const oldEquipMap = new Map<string, { stress: number; condition: string }>()
+  const oldEquipRegex = /<Equip\s+([^>]+?)[\s/]*>/gi
+  let oldEquipMatch: RegExpExecArray | null
+  while ((oldEquipMatch = oldEquipRegex.exec(oldXml)) !== null) {
+    const eqAttrs = oldEquipMatch[1]
+    const eqSlot = getAttrFromString(eqAttrs, 'slot')
+    if (eqSlot) {
+      oldEquipMap.set(eqSlot, {
+        stress: parseFloat(getAttrFromString(eqAttrs, 'stress')) || 0,
+        condition: getAttrFromString(eqAttrs, 'condition') || 'intact',
+      })
+    }
+  }
+
   const oldHeight = getStat(oldXml, 'Height_cm') || 160
   const newHeight = getStat(xml, 'Height_cm') || 160
   const oldWeight = getStat(oldXml, 'Weight_kg') || 60
@@ -265,8 +282,12 @@ function processClothingStress(
         return `<Equip ${cleanAttrs.trim()}>${inner}</Equip>`
       }
 
-      let stress = parseFloat(getAttrFromString(attrs, 'stress')) || 0
-      const oldCondition = getAttrFromString(attrs, 'condition') || 'intact'
+      const oldEq = oldEquipMap.get(slot)
+      let stress = Math.max(
+        parseFloat(getAttrFromString(attrs, 'stress')) || 0,
+        oldEq?.stress || 0,
+      )
+      const oldCondition = oldEq?.condition || getAttrFromString(attrs, 'condition') || 'intact'
 
       const affectedParts = slotBodyMap[slot] || ['weight']
 
@@ -316,8 +337,12 @@ function processClothingStress(
         return `<Equip ${cleanAttrs.trim()} />`
       }
 
-      let stress = parseFloat(getAttrFromString(attrs, 'stress')) || 0
-      const oldCondition = getAttrFromString(attrs, 'condition') || 'intact'
+      const oldEq = oldEquipMap.get(slot)
+      let stress = Math.max(
+        parseFloat(getAttrFromString(attrs, 'stress')) || 0,
+        oldEq?.stress || 0,
+      )
+      const oldCondition = oldEq?.condition || getAttrFromString(attrs, 'condition') || 'intact'
 
       const affectedParts = slotBodyMap[slot] || ['weight']
 
@@ -362,6 +387,7 @@ function digestItemsInContent(
     baseDigRate: number
     acidMultiplier: number
     elapsed: number
+    oldDigestionMap: Map<string, number>
   },
 ): {
   content: string
@@ -397,6 +423,9 @@ function digestItemsInContent(
     }
 
     let digNum = parseFloat(getAttrFromString(attrs, 'digestion').replace('%', '')) || 0
+    // Prevent rollback: never let digestion drop below the previously stored value
+    const oldDigNum = ctx.oldDigestionMap.get(name) ?? 0
+    digNum = Math.max(digNum, oldDigNum)
     const digIncrease = ctx.baseDigRate * speedMult * ctx.acidMultiplier * ctx.elapsed
     digNum = Math.min(100, digNum + digIncrease)
 
@@ -454,6 +483,7 @@ function digestItemsInContent(
 
 function processStruggle(
   xml: string,
+  oldXml: string,
   elapsed: number,
 ): { xml: string; struggleEvents: string[] } {
   const struggleEvents: string[] = []
@@ -465,22 +495,58 @@ function processStruggle(
   const stomAttrs = stomMatch[1]
   const stomContent = stomMatch[2]
 
-  // --- Read configuration stats ---
-  const height = getStat(xml, 'Height_cm') || 160
-  const weight = getStat(xml, 'Weight_kg') || 60
-  const capacityMult = getStat(xml, 'CapacityMultiplier') || 1.0
+  // --- Read OLD stomach tag for clamping struggle state ---
+  const oldStomMatch = oldXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+  const oldStomAttrs = oldStomMatch ? oldStomMatch[1] : ''
+  const oldStomContent = oldStomMatch ? oldStomMatch[2] : ''
+
+  // --- Build a map of prey name -> stamina from the OLD (stored) sheet so
+  // the LLM cannot artificially restore a prey's stamina to let them fight
+  // longer than the engine allows. ---
+  const oldPreyStaminaMap = new Map<string, number>()
+  const oldItemRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+  let oldItemMatch: RegExpExecArray | null
+  while ((oldItemMatch = oldItemRegex.exec(oldStomContent)) !== null) {
+    const itemAttrs = oldItemMatch[1]
+    if ((getAttrFromString(itemAttrs, 'type') || 'Food') !== 'Prey') continue
+    const preyName = getAttrFromString(itemAttrs, 'name')
+    if (preyName) {
+      oldPreyStaminaMap.set(preyName, parseFloat(getAttrFromString(itemAttrs, 'stamina')) || 100)
+    }
+  }
+
+  // --- Read configuration stats from the OLD (stored) sheet so the LLM
+  // cannot artificially inflate resistance/decay rates or lower capacity. ---
+  const height = getStat(oldXml, 'Height_cm') || 160
+  const weight = getStat(oldXml, 'Weight_kg') || 60
+  const capacityMult = getStat(oldXml, 'CapacityMultiplier') || 1.0
   const stomachMaxCapacity = height * weight * 0.012 * capacityMult
 
-  const stomachResistance = Math.max(0.1, getStat(xml, 'StomachResistance') || 1.0)
-  const baseIndigestionRate = getStat(xml, 'BaseIndigestionRate') || 30
-  const indigestionDecayRate = getStat(xml, 'IndigestionDecayRate') || 20
+  const stomachResistance = Math.max(0.1, getStat(oldXml, 'StomachResistance') || 1.0)
+  const baseIndigestionRate = getStat(oldXml, 'BaseIndigestionRate') || 30
+  const indigestionDecayRate = getStat(oldXml, 'IndigestionDecayRate') || 20
   const stomachResistanceFactor = 1.0 / stomachResistance
 
-  // --- Read struggle state ---
-  let energy = getStat(xml, 'Energy') || 100
-  let indigestion = parseFloat(getAttrFromString(stomAttrs, 'indigestion')) || 0
+  // --- Read struggle state, clamped against the OLD sheet so the LLM
+  // cannot "reset" energy, indigestion, or stomach fatigue to lower values. ---
+  const oldEnergy = getStat(oldXml, 'Energy') || 100
+  let energy = Math.max(getStat(xml, 'Energy') || oldEnergy, oldEnergy)
+
+  const oldIndigestion = parseFloat(getAttrFromString(oldStomAttrs, 'indigestion')) || 0
+  let indigestion = Math.max(
+    parseFloat(getAttrFromString(stomAttrs, 'indigestion')) || oldIndigestion,
+    oldIndigestion,
+  )
+
   const suppressing = getAttrFromString(stomAttrs, 'suppressing') === 'true'
-  let stomachFatigue = parseFloat(getAttrFromString(stomAttrs, 'stomachFatigue')) || 0
+
+  const oldStomachFatigue =
+    parseFloat(getAttrFromString(oldStomAttrs, 'stomachFatigue')) || 0
+  let stomachFatigue = Math.max(
+    parseFloat(getAttrFromString(stomAttrs, 'stomachFatigue')) || oldStomachFatigue,
+    oldStomachFatigue,
+  )
+
   let triggeredStr = getAttrFromString(stomAttrs, 'indigestionEvents') || ''
   const triggeredSet = new Set(triggeredStr.split(',').filter(Boolean))
 
@@ -526,7 +592,13 @@ function processStruggle(
     const vol = parseFloat(getAttrFromString(attrs, 'volume_L')) || 0
     const digPct = parseFloat((getAttrFromString(attrs, 'digestion') || '0').replace('%', '')) || 0
     let willingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
-    let stamina = parseFloat(getAttrFromString(attrs, 'stamina')) || 100
+    // Clamp stamina against the OLD sheet so the LLM cannot restore a prey's
+    // stamina to let them fight longer than the engine allows.
+    const oldStamina = oldPreyStaminaMap.get(name) ?? 100
+    let stamina = Math.max(
+      parseFloat(getAttrFromString(attrs, 'stamina')) || oldStamina,
+      oldStamina,
+    )
 
     // Consciousness factor from digestion %
     let consciousnessFactor: number
@@ -854,9 +926,11 @@ async function runDigestionTick(
     let acidLevel = 0
 
     if (engineToggles.digestionEngine) {
-      acidLevel = getStat(newXml, 'CurrentAcidPct')
-    const baseDigRate = getStat(newXml, 'BaseDigestionRate') || 25
-    const acidRiseRate = getStat(newXml, 'AcidRiseRate') || 10
+      // Read acid level and config stats from the OLD (stored) sheet so the
+      // LLM cannot artificially lower acid or inflate digestion rates.
+      acidLevel = getStat(oldXml, 'CurrentAcidPct')
+    const baseDigRate = getStat(oldXml, 'BaseDigestionRate') || 25
+    const acidRiseRate = getStat(oldXml, 'AcidRiseRate') || 10
 
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
@@ -889,6 +963,20 @@ async function runDigestionTick(
       }
     }
 
+    // Build a map of item name -> digestion % from the old (stored) sheet
+    // so we can prevent the LLM from accidentally rolling back digestion values.
+    const oldDigestionMap = new Map<string, number>()
+    const oldItemRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+    let oldItemMatch: RegExpExecArray | null
+    while ((oldItemMatch = oldItemRegex.exec(oldXml)) !== null) {
+      const oldAttrs = oldItemMatch[1]
+      const oldName = getAttrFromString(oldAttrs, 'name')
+      if (oldName) {
+        const oldDig = parseFloat(getAttrFromString(oldAttrs, 'digestion').replace('%', '')) || 0
+        oldDigestionMap.set(oldName, oldDig)
+      }
+    }
+
     const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
     const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
 
@@ -899,6 +987,7 @@ async function runDigestionTick(
       baseDigRate,
       acidMultiplier,
       elapsed,
+      oldDigestionMap,
     })
     stomContent = stomResult.content
 
@@ -906,6 +995,7 @@ async function runDigestionTick(
       baseDigRate,
       acidMultiplier,
       elapsed,
+      oldDigestionMap,
     })
     bowContent = bowResult.content
 
@@ -957,7 +1047,7 @@ async function runDigestionTick(
     } // end digestionEngine
 
     if (engineToggles.struggleEngine) {
-      const struggleResult = processStruggle(updatedXml, elapsed)
+      const struggleResult = processStruggle(updatedXml, oldXml, elapsed)
       updatedXml = struggleResult.xml
       if (struggleResult.struggleEvents.length > 0) {
         await (spindle as any).variables.chat.set(
@@ -1034,12 +1124,21 @@ async function runDigestionTick(
       const penisLGrowth = totalDigestedVol * 0.014
       const penisGGrowth = totalDigestedVol * 0.004
 
-      let height = getStat(updatedXml, 'Height_cm') || 160
-      let weight = getStat(updatedXml, 'Weight_kg') || 60
-      let breastVol = getStat(updatedXml, 'BreastVolume_ml') || 0
-      let hips = getStat(updatedXml, 'Hips_cm') || 90
-      let penisL = getStat(updatedXml, 'PenisLength_cm') || 0
-      let penisG = getStat(updatedXml, 'PenisGirth_cm') || 0
+      // Read body stats from the OLD (stored) sheet as the authoritative base,
+      // then clamp the LLM's values so it can never shrink the character.
+      const oldHeight = getStat(oldXml, 'Height_cm') || 160
+      const oldWeight = getStat(oldXml, 'Weight_kg') || 60
+      const oldBreastVol = getStat(oldXml, 'BreastVolume_ml') || 0
+      const oldHips = getStat(oldXml, 'Hips_cm') || 90
+      const oldPenisL = getStat(oldXml, 'PenisLength_cm') || 0
+      const oldPenisG = getStat(oldXml, 'PenisGirth_cm') || 0
+
+      let height = Math.max(getStat(updatedXml, 'Height_cm') || oldHeight, oldHeight)
+      let weight = Math.max(getStat(updatedXml, 'Weight_kg') || oldWeight, oldWeight)
+      let breastVol = Math.max(getStat(updatedXml, 'BreastVolume_ml') || oldBreastVol, oldBreastVol)
+      let hips = Math.max(getStat(updatedXml, 'Hips_cm') || oldHips, oldHips)
+      let penisL = Math.max(getStat(updatedXml, 'PenisLength_cm') || oldPenisL, oldPenisL)
+      let penisG = Math.max(getStat(updatedXml, 'PenisGirth_cm') || oldPenisG, oldPenisG)
 
       height += heightGrowth
       weight += weightGrowth
