@@ -937,11 +937,21 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // ─── Flag buttons on fields ────────────────────────────────
   function addFlagButtons() {
+    // Fields that are auto-managed and should never get a pin button.
+    const skipFieldIds = new Set(['Health', 'Energy'])
     const fields = panel.querySelectorAll('.bt-scrape, .bt-cloth-slot')
     fields.forEach((field) => {
       const input = field as HTMLElement
+
+      // Skip <select> elements (toggles like wealth / clothing mode) —
+      // these are not free-text fields the LLM should populate.
+      if (input.tagName === 'SELECT') return
+
       const fieldId = input.getAttribute('data-id') || input.getAttribute('data-slot') || ''
       if (!fieldId) return
+
+      // Skip auto-managed fields (Health, Energy, etc.).
+      if (skipFieldIds.has(fieldId)) return
 
       const row = input.closest('.bt-row')
       let container: HTMLElement
@@ -960,6 +970,15 @@ export function setup(ctx: SpindleFrontendContext) {
 
       if (container.querySelector('.bt-flag-btn')) return
       container.style.position = 'relative'
+
+      // For right-aligned number inputs, reserve space on the right so the
+      // flag button (positioned at right:4px) doesn't cover the value.
+      if (
+        input.tagName === 'INPUT' &&
+        (input as HTMLInputElement).type === 'number'
+      ) {
+        ;(input as HTMLInputElement).style.paddingRight = '22px'
+      }
 
       const btn = document.createElement('button')
       btn.className = 'bt-flag-btn'
