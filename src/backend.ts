@@ -17,9 +17,11 @@ let toastSettings: Record<string, boolean> = {
   digestionTicks: true, climaxEvents: true, clothingDamage: true,
   nutrientAbsorption: false, digestionSkips: false, sheetSync: true,
   rollbackEvents: true, rollbackWarnings: true, errors: true, chatWarnings: false,
+  struggleEvents: true, vomitEvents: true,
 }
 let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
+  struggleEngine: true,
 }
 
 function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
@@ -387,7 +389,12 @@ function digestItemsInContent(
 
     let speedMult = 1
     if (type === 'Liquid') speedMult = 3
-    else if (type === 'Prey') speedMult = 0.5
+    else if (type === 'Prey') {
+      speedMult = 0.5
+      const willingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+      if (willingness === 'willing') speedMult *= 1.25
+      else if (willingness === 'fighting') speedMult *= 0.5
+    }
 
     let digNum = parseFloat(getAttrFromString(attrs, 'digestion').replace('%', '')) || 0
     const digIncrease = ctx.baseDigRate * speedMult * ctx.acidMultiplier * ctx.elapsed
@@ -413,10 +420,16 @@ function digestItemsInContent(
       return ''
     }
 
-    if (isSelfClosing) {
-      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%" />`
+    let preyAttrs = ''
+    if (type === 'Prey') {
+      const willingness = getAttrFromString(attrs, 'willingness') || 'reluctant'
+      const stamina = getAttrFromString(attrs, 'stamina') || '100'
+      preyAttrs = ` willingness="${willingness}" stamina="${stamina}"`
     }
-    return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%">${inner}</Item>`
+    if (isSelfClosing) {
+      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${preyAttrs} />`
+    }
+    return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${preyAttrs}>${inner}</Item>`
   }
 
   content = content.replace(
@@ -437,6 +450,341 @@ function digestItemsInContent(
     newRemains,
     itemCount,
   }
+}
+
+function processStruggle(
+  xml: string,
+  elapsed: number,
+): { xml: string; struggleEvents: string[] } {
+  const struggleEvents: string[] = []
+
+  // --- Read stomach tag ---
+  const stomMatch = xml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+  if (!stomMatch) return { xml, struggleEvents }
+
+  const stomAttrs = stomMatch[1]
+  const stomContent = stomMatch[2]
+
+  // --- Read configuration stats ---
+  const height = getStat(xml, 'Height_cm') || 160
+  const weight = getStat(xml, 'Weight_kg') || 60
+  const capacityMult = getStat(xml, 'CapacityMultiplier') || 1.0
+  const stomachMaxCapacity = height * weight * 0.012 * capacityMult
+
+  const stomachResistance = Math.max(0.1, getStat(xml, 'StomachResistance') || 1.0)
+  const baseIndigestionRate = getStat(xml, 'BaseIndigestionRate') || 30
+  const indigestionDecayRate = getStat(xml, 'IndigestionDecayRate') || 20
+  const stomachResistanceFactor = 1.0 / stomachResistance
+
+  // --- Read struggle state ---
+  let energy = getStat(xml, 'Energy') || 100
+  let indigestion = parseFloat(getAttrFromString(stomAttrs, 'indigestion')) || 0
+  const suppressing = getAttrFromString(stomAttrs, 'suppressing') === 'true'
+  let stomachFatigue = parseFloat(getAttrFromString(stomAttrs, 'stomachFatigue')) || 0
+  let triggeredStr = getAttrFromString(stomAttrs, 'indigestionEvents') || ''
+  const triggeredSet = new Set(triggeredStr.split(',').filter(Boolean))
+
+  // --- Helper: write Stomach tag with updated attrs + content ---
+  const updateStomachTag = (content: string): string => {
+    return xml.replace(
+      /<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i,
+      (_match, attrs) => {
+        let newAttrs = attrs
+          .replace(/\s+indigestion="[^"]*"/gi, '')
+          .replace(/\s+stomachFatigue="[^"]*"/gi, '')
+          .replace(/\s+indigestionEvents="[^"]*"/gi, '')
+          .trim()
+        newAttrs += ` indigestion="${indigestion.toFixed(2)}" stomachFatigue="${stomachFatigue.toFixed(2)}" indigestionEvents="${triggeredStr}"`
+        return `<Stomach${newAttrs}>\n${content}\n    </Stomach>`
+      },
+    )
+  }
+
+  // --- Collect prey data (first pass: scan, no modification) ---
+  interface PreyData {
+    name: string
+    volume: number
+    digestionPct: number
+    willingness: string
+    stamina: number
+    consciousnessFactor: number
+    sizeFactor: number
+    willingnessFactor: number
+    personalStruggle: number
+    escaped: boolean
+    attrs: string
+    inner: string | null
+    isSelfClosing: boolean
+  }
+
+  const preyData: PreyData[] = []
+
+  const collectPrey = (attrs: string, inner: string | null, isSelfClosing: boolean): void => {
+    if ((getAttrFromString(attrs, 'type') || 'Food') !== 'Prey') return
+
+    const name = getAttrFromString(attrs, 'name')
+    const vol = parseFloat(getAttrFromString(attrs, 'volume_L')) || 0
+    const digPct = parseFloat((getAttrFromString(attrs, 'digestion') || '0').replace('%', '')) || 0
+    let willingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+    let stamina = parseFloat(getAttrFromString(attrs, 'stamina')) || 100
+
+    // Consciousness factor from digestion %
+    let consciousnessFactor: number
+    if (digPct < 50) consciousnessFactor = 1.0
+    else if (digPct < 70) consciousnessFactor = 0.5
+    else if (digPct < 85) consciousnessFactor = 0.1
+    else consciousnessFactor = 0.0
+
+    // Size factor
+    const sizeFactor = stomachMaxCapacity > 0 ? Math.min(2.0, vol / stomachMaxCapacity) : 1.0
+
+    // Willingness factor
+    let willingnessFactor: number
+    if (willingness === 'willing') willingnessFactor = 0
+    else if (willingness === 'fighting') willingnessFactor = 1.0
+    else willingnessFactor = 0.25
+
+    // Stamina drain (fighting) or recovery (not fighting)
+    if (willingness === 'fighting') {
+      const staminaLoss = 3 * elapsed * sizeFactor
+      stamina = Math.max(0, stamina - staminaLoss)
+      if (stamina <= 0) {
+        willingness = 'reluctant'
+        willingnessFactor = 0.25
+        struggleEvents.push(
+          `EXHAUSTED: "${name}" has run out of stamina and can no longer fight — they've gone limp.`,
+        )
+      }
+    } else {
+      stamina = Math.min(100, stamina + 5 * elapsed)
+    }
+
+    // Personal struggle contribution (raw, before suppression/resistance)
+    const personalStruggle =
+      baseIndigestionRate * elapsed * consciousnessFactor * sizeFactor * willingnessFactor
+
+    preyData.push({
+      name,
+      volume: vol,
+      digestionPct: digPct,
+      willingness,
+      stamina,
+      consciousnessFactor,
+      sizeFactor,
+      willingnessFactor,
+      personalStruggle,
+      escaped: false,
+      attrs,
+      inner,
+      isSelfClosing,
+    })
+  }
+
+  // Pass 1: non-self-closing Prey items
+  stomContent.replace(
+    /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi,
+    (match, attrs, inner) => {
+      collectPrey(attrs, inner, false)
+      return match
+    },
+  )
+  // Pass 2: self-closing Prey items
+  stomContent.replace(/<Item\s+([^>]+?)\s*\/>/gi, (match, attrs) => {
+    collectPrey(attrs, null, true)
+    return match
+  })
+
+  // --- No prey: decay indigestion + recover energy ---
+  if (preyData.length === 0) {
+    const hasItems = stomContent.includes('<Item')
+    indigestion = Math.max(0, indigestion - indigestionDecayRate * elapsed * 2.0)
+    energy = Math.min(100, energy + (hasItems ? 3 : 5) * elapsed)
+    stomachFatigue = Math.max(0, stomachFatigue - 2 * elapsed)
+
+    xml = updateStomachTag(stomContent.trim())
+    xml = setStat(xml, 'Energy', energy)
+    return { xml, struggleEvents }
+  }
+
+  // --- Compute totals ---
+  let totalIndigestionGain = 0
+  let totalStruggle = 0
+  let numFighting = 0
+
+  for (const prey of preyData) {
+    totalIndigestionGain += prey.personalStruggle * stomachResistanceFactor
+    totalStruggle += prey.personalStruggle
+    if (prey.willingness === 'fighting') numFighting++
+  }
+
+  const anyFighting = numFighting > 0
+
+  // --- Suppression factor ---
+  let suppressionFactor: number
+  if (energy <= 0) {
+    suppressionFactor = 1.0
+  } else if (suppressing) {
+    if (stomachFatigue > 20) suppressionFactor = 0.7
+    else if (stomachFatigue > 10) suppressionFactor = 0.5
+    else suppressionFactor = 0.3
+    if (energy <= 20) suppressionFactor = Math.min(1.0, suppressionFactor + 0.2)
+  } else {
+    suppressionFactor = energy <= 20 ? 0.85 : 0.7
+  }
+
+  totalIndigestionGain *= suppressionFactor
+
+  // --- Update indigestion (accumulate or decay) ---
+  if (anyFighting) {
+    indigestion = Math.min(100, indigestion + totalIndigestionGain)
+  } else {
+    const allWilling = preyData.every((p) => p.willingness === 'willing')
+    const decayMult = allWilling ? 2.0 : 1.0
+    indigestion = Math.max(0, indigestion - indigestionDecayRate * elapsed * decayMult)
+  }
+
+  // --- Energy drain / recovery ---
+  if (anyFighting) {
+    const fightingStruggle =
+      suppressionFactor *
+      preyData
+        .filter((p) => p.willingness === 'fighting')
+        .reduce((sum, p) => sum + p.personalStruggle * stomachResistanceFactor, 0)
+    let energyDrain = fightingStruggle * 0.5
+    if (suppressing && energy > 0) {
+      energyDrain += numFighting * 2 * elapsed
+    }
+    energy = Math.max(0, energy - energyDrain)
+  } else {
+    energy = Math.min(100, energy + 3 * elapsed)
+  }
+
+  // --- Stomach fatigue ---
+  if (suppressing && energy > 0 && anyFighting) {
+    stomachFatigue += numFighting * 1 * elapsed
+  } else if (!suppressing) {
+    stomachFatigue = Math.max(0, stomachFatigue - 2 * elapsed)
+  }
+
+  // --- Threshold events (one-shot) ---
+  const thresholds = [
+    {
+      pct: 25,
+      id: 'discomfort',
+      msg: 'The pred feels mild discomfort in their stomach — slight nausea, prey movements are noticeable.',
+    },
+    {
+      pct: 50,
+      id: 'distress',
+      msg: "The pred's belly is visibly bulging and shifting — onlookers can see something is alive inside. The pred feels significant nausea.",
+    },
+    {
+      pct: 75,
+      id: 'gag',
+      msg: 'The pred feels a strong urge to retch — involuntary gagging, difficulty keeping prey down. Vomit is approaching.',
+    },
+    {
+      pct: 90,
+      id: 'critical',
+      msg: 'The pred is on the verge of vomiting — they can barely hold the prey down. One more struggle could trigger it.',
+    },
+  ]
+
+  for (const t of thresholds) {
+    if (indigestion >= t.pct && !triggeredSet.has(t.id)) {
+      triggeredSet.add(t.id)
+      struggleEvents.push(`THRESHOLD EVENT: Indigestion reached ${t.pct}% — ${t.msg}`)
+      maybeToast('struggleEvents', 'warning', `Indigestion ${t.pct}%: ${t.id}`)
+    }
+  }
+
+  // --- Vomit event (indigestion ≥ 100) ---
+  if (indigestion >= 100) {
+    indigestion = 100
+    const escapedPrey: string[] = []
+    const remainingPrey: string[] = []
+
+    for (const prey of preyData) {
+      const struggleShareFactor =
+        totalStruggle > 0
+          ? 0.5 + 0.5 * (prey.personalStruggle / totalStruggle)
+          : 0.5
+      const escapeChance = 0.9 * prey.consciousnessFactor * struggleShareFactor
+      if (Math.random() < escapeChance) {
+        prey.escaped = true
+        escapedPrey.push(prey.name)
+      } else {
+        remainingPrey.push(prey.name)
+      }
+    }
+
+    let vomitMsg = 'VOMIT: The pred has vomited!'
+    if (escapedPrey.length > 0) {
+      vomitMsg += ` The following prey escaped: ${escapedPrey.map((n) => `"${n}"`).join(', ')}.`
+      vomitMsg +=
+        ' Remove them from the Stomach section in your sheet_update (the extension has already removed them from the stored sheet). Narrate the vomit scene.'
+    } else {
+      vomitMsg += ' No prey managed to escape — they all remain in the stomach. Narrate the vomit scene.'
+    }
+    if (remainingPrey.length > 0) {
+      vomitMsg += ` ${remainingPrey.map((n) => `"${n}"`).join(', ')} did not escape and remain${remainingPrey.length === 1 ? 's' : ''} in the stomach.`
+    }
+    struggleEvents.push(vomitMsg)
+    maybeToast('vomitEvents', 'warning', `🤢 Vomit event! ${escapedPrey.length} prey escaped.`)
+
+    // Post-vomit reset
+    indigestion = 0
+    energy = Math.max(0, energy - 20)
+    stomachFatigue = Math.max(0, stomachFatigue - 5)
+    triggeredSet.clear()
+  }
+
+  triggeredStr = Array.from(triggeredSet).join(',')
+
+  // --- Update XML: remove escaped prey, update willingness/stamina on remaining ---
+  let preyIdx = 0
+  let newStomContent = stomContent.replace(
+    /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi,
+    (match, attrs, inner) => {
+      if ((getAttrFromString(attrs, 'type') || 'Food') !== 'Prey') return match
+      const prey = preyData[preyIdx++]
+      if (prey.escaped) return ''
+      let newAttrs = attrs
+        .replace(/\s+willingness="[^"]*"/gi, '')
+        .replace(/\s+stamina="[^"]*"/gi, '')
+        .trim()
+      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}"`
+      return `<Item ${newAttrs}>${inner}</Item>`
+    },
+  )
+  newStomContent = newStomContent.replace(
+    /<Item\s+([^>]+?)\s*\/>/gi,
+    (match, attrs) => {
+      if ((getAttrFromString(attrs, 'type') || 'Food') !== 'Prey') return match
+      const prey = preyData[preyIdx++]
+      if (prey.escaped) return ''
+      let newAttrs = attrs
+        .replace(/\s+willingness="[^"]*"/gi, '')
+        .replace(/\s+stamina="[^"]*"/gi, '')
+        .trim()
+      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}"`
+      return `<Item ${newAttrs} />`
+    },
+  )
+
+  // Clean up empty lines from removed prey
+  newStomContent = newStomContent.replace(/^\s*\n/gm, '').trim()
+
+  // --- Write back to XML ---
+  xml = updateStomachTag(newStomContent)
+  xml = setStat(xml, 'Energy', energy)
+
+  spindle.log.info(
+    `Struggle tick: indigestion ${indigestion.toFixed(1)}%, energy ${energy.toFixed(1)}, ` +
+      `${numFighting} fighting prey, fatigue ${stomachFatigue.toFixed(1)}`,
+  )
+
+  return { xml, struggleEvents }
 }
 
 async function runDigestionTick(
@@ -607,6 +955,21 @@ async function runDigestionTick(
     )
 
     } // end digestionEngine
+
+    if (engineToggles.struggleEngine) {
+      const struggleResult = processStruggle(updatedXml, elapsed)
+      updatedXml = struggleResult.xml
+      if (struggleResult.struggleEvents.length > 0) {
+        await (spindle as any).variables.chat.set(
+          chatId,
+          'pendingStruggleEvents',
+          JSON.stringify(struggleResult.struggleEvents),
+        )
+        spindle.log.info(
+          `Struggle events: ${struggleResult.struggleEvents.length} events triggered`,
+        )
+      }
+    } // end struggleEngine
 
     if (engineToggles.arousalClimax) {
       // Vitals: Arousal, Climax, & Penis Scaling
@@ -854,6 +1217,66 @@ CRITICAL XML RULES:
 17. <Climax> is a 0-100 meter managed ENTIRELY by the extension. NEVER change its value yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
 18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension automatically calculates and updates <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> based on Arousal (0% arousal = 30% size, 100% arousal = 100% size). Do NOT output or modify the Current tags yourself.
 
+─── STRUGGLE & INDIGESTION SYSTEM ───
+The extension includes a Struggle Engine that simulates prey resistance and stomach indigestion. Here is how it works and what YOU must do:
+
+PREY WILLINGNESS STATES:
+Each prey item in <Stomach> has a willingness attribute: willingness="willing|reluctant|fighting".
+- "willing": The prey is cooperating or enjoying it. Digestion is 25% FASTER. They do NOT contribute to indigestion. Use this for willing prey, consensual scenarios, or prey who have given up.
+- "reluctant": The prey is passively resisting but not actively fighting. Normal digestion speed. They contribute a small amount to indigestion. This is the DEFAULT — use it when unsure.
+- "fighting": The prey is actively struggling, kicking, thrashing. Digestion is 50% SLOWER. They contribute heavily to indigestion. Use this when prey is actively resisting.
+
+YOU must set the willingness attribute based on the scene narrative. If a prey character is fighting back, set willingness="fighting". If they surrender or go limp, change it to "willing" or "reluctant". The extension handles all the math — you only set the state.
+
+PREY STAMINA:
+Each prey has a stamina attribute (0-100). The extension AUTOMATICALLY drains stamina when prey are "fighting" and recovers it when they are not. When stamina reaches 0, the extension forces the prey to "reluctant" (too exhausted to fight). You do NOT need to manage stamina yourself — just copy the value you see in the sheet.
+
+STOMACH INDIGESTION METER:
+The <Stomach> tag has an indigestion attribute (0-100). This is a stomach-level meter that rises when prey fight and falls when they don't. The extension AUTOMATICALLY calculates indigestion based on prey willingness, prey size relative to stomach capacity, prey consciousness (digestion %), and the pred's suppression efforts. You do NOT set indigestion yourself — just copy the value you see.
+
+INDIGESTION THRESHOLD EVENTS:
+When indigestion crosses certain thresholds (25%, 50%, 75%, 90%), the extension generates an event notification. You will see these in a "STRUGGLE EVENTS" section injected into your prompt. When you see them, NARRATE the effects:
+- 25%: Mild discomfort, slight queasiness.
+- 50%: Visible discomfort, stomach gurgling, the pred feels pressure.
+- 75%: Gagging, struggling to keep prey down, visible distension.
+- 90%: Severe retching, the pred is barely holding on.
+
+VOMIT EVENTS:
+When indigestion reaches 100%, a vomit event triggers. The extension rolls escape chances for each prey — those that escape are ALREADY REMOVED from the stored sheet. You will see a "STRUGGLE EVENTS" notification telling you which prey escaped and which remain. You MUST:
+- Narrate the vomit scene dramatically.
+- Remove escaped prey from the <Stomach> section in your <sheet_update> (the extension already removed them from the stored sheet, but your output sheet must match).
+- Keep prey that did not escape in the <Stomach> section.
+- After vomiting, indigestion resets to 0 and the pred loses Energy.
+
+PRED SUPPRESSION:
+The pred can actively suppress struggling prey. This is controlled by the suppressing="true|false" attribute on the <Stomach> tag. When suppressing="true":
+- Indigestion accumulation is greatly reduced (the pred is actively holding prey down).
+- BUT it drains the pred's Energy faster.
+- It also causes stomach fatigue over time, which reduces suppression effectiveness.
+Set suppressing="true" when the pred is actively clenching, holding, or pinning down prey. Set suppressing="false" when the pred is relaxed or distracted. The extension handles all suppression math.
+
+STOMACH RESISTANCE:
+<StomachResistance> in <BaseStats> is a multiplier (default 1.0) that affects how easily the pred's stomach endures struggling. Higher values = more resistant (less indigestion per struggle). Lower values = weaker stomach (more indigestion). This is a character trait — set it once and rarely change it (e.g., a pred with an "iron stomach" might have 2.0, a delicate pred might have 0.5).
+
+ENERGY:
+<Energy> in <State> is drained by fighting prey and active suppression. The extension AUTOMATICALLY manages Energy drain from the struggle system. You may also adjust Energy for other reasons (exertion, rest, etc.). When Energy is low, suppression becomes less effective and the pred may struggle to hold prey.
+
+SUMMARY OF WHAT YOU DO vs WHAT THE EXTENSION DOES:
+YOU do:
+- Set willingness="willing|reluctant|fighting" on prey items based on scene.
+- Set suppressing="true|false" on the <Stomach> tag based on scene.
+- Set <StomachResistance> as a character trait.
+- Narrate indigestion threshold events and vomit events when notified.
+- Remove escaped prey from your <sheet_update> after a vomit event.
+The EXTENSION does (do NOT do these):
+- Calculates indigestion accumulation/decay.
+- Drains/recovers prey stamina.
+- Drains/recovers pred Energy from struggle.
+- Rolls escape chances during vomit.
+- Removes escaped prey from the stored sheet.
+- Tracks stomach fatigue.
+- Generates threshold and vomit event notifications.
+
 <sheet_update>
 <CharacterSheet>
   ...the complete updated sheet with ALL fields, not just changed ones...
@@ -998,9 +1421,29 @@ spindle.registerInterceptor(async (messages, context) => {
     populateInstructions = `\n\n─── AUTO-POPULATE REQUEST ───\nThe user has requested that you populate ONLY the following blank fields with sensible, scene-appropriate defaults: ${populateFields}\nLeave ALL other fields exactly as they are.\nDo not advance the story or add new narrative events. Simply output the complete updated sheet in the <sheet_update> block as usual.`
   }
 
+  let struggleNotification = ''
+  const pendingStruggleEvents = await (spindle as any).variables.chat.get(
+    chatId,
+    'pendingStruggleEvents',
+  )
+  if (pendingStruggleEvents) {
+    await (spindle as any).variables.chat.delete(chatId, 'pendingStruggleEvents')
+    try {
+      const events: string[] = JSON.parse(pendingStruggleEvents)
+      if (events.length > 0) {
+        struggleNotification =
+          '\n\n─── STRUGGLE EVENTS ───\n' +
+          events.join('\n') +
+          '\n\nIMPORTANT: The events above were triggered by the Struggle Engine. You MUST narrate them in your response. If prey escaped during a vomit event, they have ALREADY been removed from the stored sheet — make sure your <sheet_update> does not include them in <Stomach>.'
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
   const injection = {
     role: 'system' as const,
-    content: buildSheetPrompt(sheet) + populateInstructions,
+    content: buildSheetPrompt(sheet) + populateInstructions + struggleNotification,
   }
 
   // ─── Strip <sheet_update> blocks from chat history ──────────

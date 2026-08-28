@@ -130,6 +130,7 @@ export function setup(ctx: SpindleFrontendContext) {
           <input type="text" class="bt-input full bt-scrape" data-id="BreastShape" placeholder="Breast descriptor (e.g., firm, perky)" id="bt-breast-desc">
           <div class="bt-row"><span>Ass (Hips cm):</span> <input type="number" class="bt-input bt-input-wide bt-scrape" data-id="Hips_cm" id="bt-ass-cm" value="90"></div>
           <input type="text" class="bt-input full bt-scrape" data-id="AssShape" placeholder="Ass descriptor (e.g., plump, wide)" id="bt-ass-desc">
+          <div class="bt-row"><span>Stomach Resist:</span> <input type="number" class="bt-input bt-input-wide bt-scrape" data-id="StomachResistance" id="bt-stomach-resist" step="0.1" value="1.0"></div>
           <div class="bt-row">
             <span>Penis (L/G cm):</span>
             <div style="display:flex; justify-content:space-between; width: 65%;">
@@ -215,7 +216,16 @@ export function setup(ctx: SpindleFrontendContext) {
       <div id="tab-state" class="bt-tab-content">
         <div class="bt-section-title" style="margin-top:0;">CORE STATS</div>
         <div class="bt-row"><span>Health:</span> <input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100"></div>
-        <div class="bt-row"><span>Energy:</span> <input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100"></div>
+        <div class="bt-row" style="align-items:center;">
+          <span>Energy:</span>
+          <input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100" style="width:60px;">
+          <div style="flex:1; display:flex; align-items:center; gap:6px; margin-left:8px;">
+            <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden;">
+              <div id="bt-energy-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s, background 0.3s;"></div>
+            </div>
+            <span class="bt-value" id="bt-energy-status" style="min-width:65px; text-align:right; font-size:11px; color:#4CAF50;">Energetic</span>
+          </div>
+        </div>
         <div class="bt-section-title">VITALS</div>
         <div id="bt-arousal-slot" style="margin-bottom: 15px;"></div>
         <div id="bt-climax-slot" style="margin-bottom: 15px;"></div>
@@ -244,6 +254,28 @@ export function setup(ctx: SpindleFrontendContext) {
         </div>
         <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-stom-max-disp">115.20 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-stom-fill">0.00 L</span></div>
+        <div class="bt-row" style="align-items:center;">
+          <span>Indigestion:</span>
+          <div style="flex:1; display:flex; align-items:center; gap:6px; margin-left:8px;">
+            <div style="flex:1; height:14px; background:#1a1a1a; border:1px solid #333; border-radius:7px; overflow:hidden;">
+              <div id="bt-indigestion-bar" style="height:100%; width:0%; background:linear-gradient(90deg, #4CAF50, #FF9800, #f44336); transition:width 0.3s;"></div>
+            </div>
+            <span class="bt-value" id="bt-indigestion-val" style="min-width:35px; text-align:right;">0%</span>
+          </div>
+        </div>
+        <div class="bt-row" style="align-items:center;">
+          <span>Suppressing:</span>
+          <label style="display:flex; align-items:center; gap:5px; margin-left:8px; cursor:pointer; font-size:12px;">
+            <input type="checkbox" id="bt-suppressing-toggle" style="width:auto; cursor:pointer;">
+            <span id="bt-suppressing-label" style="color:#666;">Passive</span>
+          </label>
+          <span style="font-size:11px; color:#555; margin-left:8px;" id="bt-fatigue-info"></span>
+        </div>
+        <div class="bt-row" style="align-items:center;">
+          <span>Struggle Risk:</span>
+          <span class="bt-value" id="bt-struggle-risk" style="margin-left:8px; font-size:12px; font-weight:bold;">None</span>
+          <span style="font-size:11px; color:#555; margin-left:8px;" id="bt-struggle-detail"></span>
+        </div>
         <div id="stomach-container" style="margin-top: 10px;"></div>
         <hr style="border-color: #333; margin: 15px 0;">
         <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
@@ -292,8 +324,8 @@ export function setup(ctx: SpindleFrontendContext) {
   document.body.appendChild(panel)
 
   // ─── Settings System ───────────────────────────────────────
-  const defaultToastSettings: Record<string, boolean> = { digestionTicks: true, climaxEvents: true, clothingDamage: true, nutrientAbsorption: false, digestionSkips: false, sheetSync: true, rollbackEvents: true, rollbackWarnings: true, errors: true, chatWarnings: false }
-  const defaultEngineToggles: Record<string, boolean> = { digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true }
+  const defaultToastSettings: Record<string, boolean> = { digestionTicks: true, climaxEvents: true, clothingDamage: true, nutrientAbsorption: false, digestionSkips: false, sheetSync: true, rollbackEvents: true, rollbackWarnings: true, struggleEvents: true, vomitEvents: true, errors: true, chatWarnings: false }
+  const defaultEngineToggles: Record<string, boolean> = { digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true, struggleEngine: true }
   const defaultUiSettings: Record<string, any> = { btnOpacity: 0.4, panelWidth: 350, autoOpen: false }
   const toastCategoryDefs = [
     { key: 'digestionTicks', label: 'Digestion Ticks', desc: 'Sheet updated, digestion tick applied' },
@@ -304,6 +336,8 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'sheetSync', label: 'Sheet Sync', desc: 'Character sheet synced' },
     { key: 'rollbackEvents', label: 'Rollback Events', desc: 'Sheet restored/cleared on delete' },
     { key: 'rollbackWarnings', label: 'Rollback Warnings', desc: 'No snapshot found warnings' },
+    { key: 'struggleEvents', label: 'Struggle Events', desc: 'Indigestion thresholds and prey struggling' },
+    { key: 'vomitEvents', label: 'Vomit Events', desc: 'Prey escape during vomit events' },
     { key: 'errors', label: 'Errors', desc: 'Populate failed and other errors' },
     { key: 'chatWarnings', label: 'Chat Warnings', desc: 'Open a chat first warnings' },
   ]
@@ -312,6 +346,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'clothingStress', label: 'Clothing Stress', desc: 'Clothing degradation in hardcore mode' },
     { key: 'nutrientAbsorption', label: 'Nutrient Absorption', desc: 'Body growth from digested items' },
     { key: 'arousalClimax', label: 'Arousal and Climax', desc: 'Arousal decay and climax meter' },
+    { key: 'struggleEngine', label: 'Struggle Engine', desc: 'Prey struggling, indigestion, and vomit events' },
   ]
   function loadSettings() {
     try {
@@ -578,6 +613,56 @@ export function setup(ctx: SpindleFrontendContext) {
       else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722' }
       else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444' }
     }
+
+    // ─── Struggle risk assessment ───────────────────────────────
+    let preyCount = 0
+    let fightingCount = 0
+    let reluctantCount = 0
+    let willingCount = 0
+    let totalPreyVolume = 0
+    document.querySelectorAll('#stomach-container .vital-slot').forEach((el) => {
+      const type = (el.querySelector('.v-type') as HTMLSelectElement)?.value
+      if (type !== 'Prey') return
+      preyCount++
+      const vol = parseFloat((el.querySelector('.v-vol') as HTMLInputElement)?.value || '0') || 0
+      totalPreyVolume += vol
+      const will = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'Reluctant'
+      if (will === 'Fighting') fightingCount++
+      else if (will === 'Willing') willingCount++
+      else reluctantCount++
+    })
+
+    const indigestionText = document.getElementById('bt-indigestion-val')?.textContent || '0%'
+    const indigestion = parseFloat(indigestionText.replace('%', '')) || 0
+
+    const riskEl = document.getElementById('bt-struggle-risk')
+    const detailEl = document.getElementById('bt-struggle-detail')
+    if (riskEl && detailEl) {
+      if (preyCount === 0) {
+        riskEl.textContent = 'None'
+        riskEl.style.color = '#666'
+        detailEl.textContent = ''
+      } else {
+        // Risk score: weighted by fighting prey, indigestion level, and fill ratio
+        const fillRatio = baseStomMax > 0 ? totalPreyVolume / baseStomMax : 0
+        const riskScore = (fightingCount * 30) + (reluctantCount * 10) + (indigestion * 0.5) + (fillRatio * 15)
+        let riskLabel: string
+        let riskColor: string
+        if (riskScore >= 80 || indigestion >= 90) { riskLabel = 'CRITICAL — Vomit imminent'; riskColor = '#ff0000' }
+        else if (riskScore >= 50 || indigestion >= 75) { riskLabel = 'High — Vomit likely soon'; riskColor = '#ff4444' }
+        else if (riskScore >= 25 || indigestion >= 50) { riskLabel = 'Moderate — Building pressure'; riskColor = '#ff9800' }
+        else if (riskScore >= 10 || indigestion >= 25) { riskLabel = 'Low — Some unrest'; riskColor = '#ffeb3b' }
+        else { riskLabel = 'Minimal — Calm'; riskColor = '#4CAF50' }
+        riskEl.textContent = riskLabel
+        riskEl.style.color = riskColor
+        const parts: string[] = []
+        if (fightingCount > 0) parts.push(`${fightingCount} fighting`)
+        if (reluctantCount > 0) parts.push(`${reluctantCount} reluctant`)
+        if (willingCount > 0) parts.push(`${willingCount} willing`)
+        parts.push(`${Math.round(indigestion)}% indigestion`)
+        detailEl.textContent = parts.join(' · ')
+      }
+    }
   }
 
   document.getElementById('bt-height')?.addEventListener('input', updateCapacities)
@@ -632,6 +717,35 @@ export function setup(ctx: SpindleFrontendContext) {
     if (input) input.value = String(v)
     if (val) val.textContent = v + '%'
   }
+
+  function updateEnergyDisplay() {
+    const energyInput = document.getElementById('bt-energy') as HTMLInputElement
+    if (!energyInput) return
+    const v = Math.max(0, Math.min(100, parseInt(energyInput.value) || 0))
+    const bar = document.getElementById('bt-energy-bar')
+    const status = document.getElementById('bt-energy-status')
+    if (bar) {
+      bar.style.width = v + '%'
+      if (v >= 75) bar.style.background = '#4CAF50'
+      else if (v >= 50) bar.style.background = '#8BC34A'
+      else if (v >= 25) bar.style.background = '#FF9800'
+      else if (v >= 10) bar.style.background = '#ff5722'
+      else bar.style.background = '#f44336'
+    }
+    if (status) {
+      let label: string
+      let color: string
+      if (v >= 75) { label = 'Energetic'; color = '#4CAF50' }
+      else if (v >= 50) { label = 'Steady'; color = '#8BC34A' }
+      else if (v >= 25) { label = 'Tired'; color = '#FF9800' }
+      else if (v >= 10) { label = 'Exhausted'; color = '#ff5722' }
+      else { label = 'Collapsing'; color = '#f44336' }
+      status.textContent = label
+      status.style.color = color
+    }
+  }
+
+  document.getElementById('bt-energy')?.addEventListener('input', updateEnergyDisplay)
 
   function updateCurrentPenisSize(arousalVal: number) {
     const maxL = parseFloat(
@@ -712,6 +826,19 @@ export function setup(ctx: SpindleFrontendContext) {
       <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
         <span>Status: <strong class="item-status" style="color:#4CAF50;">Fully Conscious</strong></span>
       </div>
+      <div class="flex-row v-prey-willingness" style="margin-bottom: 5px; font-size: 12px; display: none;">
+        <span>Willingness:</span>
+        <select class="bt-select v-willingness" style="width: 90px; margin-left: 5px;">
+          <option value="Willing">Willing</option>
+          <option value="Reluctant" selected>Reluctant</option>
+          <option value="Fighting">Fighting</option>
+        </select>
+        <span style="margin-left: 8px;">Stamina:</span>
+        <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden; margin-left:4px; max-width:80px;">
+          <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
+        </div>
+        <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
+      </div>
       <div class="flex-row" style="margin-bottom: 5px;">
         <span>Vol (L): <input type="number" class="bt-input stomach-vol v-vol" style="width: 50px;" value="0"></span>
         <span>Dig %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
@@ -724,23 +851,27 @@ export function setup(ctx: SpindleFrontendContext) {
     const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
     const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
     const statusSpan = div.querySelector('.item-status') as HTMLElement
+    const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
 
     typeSelect.addEventListener('change', () => {
       if (typeSelect.value === 'Prey') {
         gearArea.style.display = 'block'
         appearanceArea.style.display = 'block'
+        willingnessRow.style.display = 'flex'
         div.classList.remove('is-food', 'is-liquid')
         div.classList.add('is-prey')
         statusSpan.style.display = 'inline'
       } else if (typeSelect.value === 'Liquid') {
         gearArea.style.display = 'none'
         appearanceArea.style.display = 'none'
+        willingnessRow.style.display = 'none'
         div.classList.remove('is-prey', 'is-food')
         div.classList.add('is-liquid')
         statusSpan.style.display = 'none'
       } else {
         gearArea.style.display = 'none'
         appearanceArea.style.display = 'none'
+        willingnessRow.style.display = 'none'
         div.classList.remove('is-prey', 'is-liquid')
         div.classList.add('is-food')
         statusSpan.style.display = 'none'
@@ -919,7 +1050,8 @@ export function setup(ctx: SpindleFrontendContext) {
     const bowFill = document.getElementById('bt-bowel-fill')?.innerText || '0 L'
 
     xml += `    <Status belly="${bellyStatus}" mobility="${mobility}" />\n`
-    xml += `    <Stomach current="${stomFill}" max="${stomMax}">\n`
+    const suppressing = (document.getElementById('bt-suppressing-toggle') as HTMLInputElement)?.checked ? 'true' : 'false'
+    xml += `    <Stomach current="${stomFill}" max="${stomMax}" suppressing="${suppressing}">\n`
 
     document.querySelectorAll('#stomach-container .vital-slot').forEach((el) => {
       const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown'
@@ -930,7 +1062,14 @@ export function setup(ctx: SpindleFrontendContext) {
       const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim()
       const appearance = (el.querySelector('.v-appearance') as HTMLTextAreaElement)?.value.trim()
 
-      xml += `      <Item type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%">\n`
+      let itemAttrs = `type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%"`
+      if (type === 'Prey') {
+        const willingness = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'Reluctant'
+        const staminaText = (el.querySelector('.v-stamina-val') as HTMLElement)?.textContent || '100%'
+        const stamina = parseFloat(staminaText.replace('%', '')) || 100
+        itemAttrs += ` willingness="${willingness}" stamina="${stamina}"`
+      }
+      xml += `      <Item ${itemAttrs}>\n`
       if (appearance) xml += `        <Appearance>${appearance}</Appearance>\n`
       if (flavor) xml += `        <Description>${flavor}</Description>\n`
       if (type === 'Prey' && gear) xml += `        <BoundGear>${gear}</BoundGear>\n`
@@ -1244,6 +1383,7 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('bt-hair')?.dispatchEvent(new Event('input'))
     document.getElementById('bt-eyes')?.dispatchEvent(new Event('input'))
     document.getElementById('bt-skin')?.dispatchEvent(new Event('input'))
+    updateEnergyDisplay()
 
     // Update Arousal & Climax sliders
     const arousalVal = parseFloat(getText('Arousal')) || 0
@@ -1317,6 +1457,31 @@ export function setup(ctx: SpindleFrontendContext) {
       ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || ''
     })
 
+    // Read Stomach-level struggle attributes
+    const stomachNode = doc.querySelector('Stomach')
+    if (stomachNode) {
+      const indigestion = parseFloat(stomachNode.getAttribute('indigestion') || '0') || 0
+      const indBar = document.getElementById('bt-indigestion-bar')
+      const indVal = document.getElementById('bt-indigestion-val')
+      if (indBar) indBar.style.width = `${Math.min(100, Math.max(0, indigestion))}%`
+      if (indVal) indVal.textContent = `${Math.round(indigestion)}%`
+
+      const suppressing = stomachNode.getAttribute('suppressing') === 'true'
+      const suppressToggle = document.getElementById('bt-suppressing-toggle') as HTMLInputElement
+      const suppressLabel = document.getElementById('bt-suppressing-label')
+      if (suppressToggle) suppressToggle.checked = suppressing
+      if (suppressLabel) suppressLabel.textContent = suppressing ? 'Active' : 'Passive'
+
+      const stomachFatigue = parseFloat(stomachNode.getAttribute('stomachFatigue') || '0') || 0
+      const fatigueInfo = document.getElementById('bt-fatigue-info')
+      if (fatigueInfo) {
+        if (stomachFatigue > 20) fatigueInfo.textContent = `Fatigue: High (${Math.round(stomachFatigue)})`
+        else if (stomachFatigue > 10) fatigueInfo.textContent = `Fatigue: Moderate (${Math.round(stomachFatigue)})`
+        else if (stomachFatigue > 0) fatigueInfo.textContent = `Fatigue: Low (${Math.round(stomachFatigue)})`
+        else fatigueInfo.textContent = ''
+      }
+    }
+
     doc.querySelectorAll('Stomach > Item').forEach((itemNode) => {
       const div = createStomachItem()
       document.getElementById('stomach-container')?.appendChild(div)
@@ -1339,6 +1504,19 @@ export function setup(ctx: SpindleFrontendContext) {
       if (type === 'Prey') {
         const gearNode = itemNode.querySelector('BoundGear')
         ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+
+        const willingness = getAttr(itemNode, 'willingness') || 'Reluctant'
+        const willingnessSelect = div.querySelector('.v-willingness') as HTMLSelectElement
+        if (willingnessSelect) willingnessSelect.value = willingness
+
+        const stamina = parseFloat(getAttr(itemNode, 'stamina') || '100') || 100
+        const staminaBar = div.querySelector('.v-stamina-bar') as HTMLElement
+        const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
+        if (staminaBar) {
+          staminaBar.style.width = `${Math.min(100, Math.max(0, stamina))}%`
+          staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+        }
+        if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
       }
 
       const digInput = div.querySelector('.item-dig-input') as HTMLInputElement
