@@ -1630,15 +1630,36 @@ spindle.onFrontendMessage(async (msg: any) => {
       return
     }
 
+    // Guard: reject if a populate is already in progress (prevents spam)
+    const existingPopulate = await (spindle as any).variables.chat.get(
+      activeChatId,
+      'populatePending',
+    )
+    if (existingPopulate) {
+      spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
+      return
+    }
+
     const fields = msg.fields as string[]
     await (spindle as any).variables.chat.set(
       activeChatId,
       'populateFields',
       fields.join(', '),
     )
+    // Track that a populate generation is pending so GENERATION_ENDED
+    // can notify the frontend when it completes.
+    await (spindle as any).variables.chat.set(
+      activeChatId,
+      'populatePending',
+      'true',
+    )
 
     try {
-      const result = await spindle.chat.appendMessage(
+      // NOTE: The message is intentionally NOT hidden. setMessageHidden
+      // removes the message from the LLM's context (soft-delete from
+      // prompt), which would leave the LLM with no user input to
+      // respond to. The LLM must see this request to act on it.
+      await spindle.chat.appendMessage(
         activeChatId,
         {
           role: 'user',
@@ -1646,13 +1667,17 @@ spindle.onFrontendMessage(async (msg: any) => {
         },
         { triggerGeneration: true },
       )
-      await spindle.chat.setMessageHidden(activeChatId, result.id, true)
     } catch (e) {
       maybeToast('errors', 'error', 'Populate failed: ' + e)
       await (spindle as any).variables.chat.delete(
         activeChatId,
         'populateFields',
       )
+      await (spindle as any).variables.chat.delete(
+        activeChatId,
+        'populatePending',
+      )
+      spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
     }
   }
 })
@@ -1780,6 +1805,23 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   if (committedMessageIds.has(messageId)) return
 
   const update = extractSheetUpdate(content)
+
+  // ─── Populate completion notification ──────────────────────
+  // If a populate generation just finished, notify the frontend
+  // so the button can reset (regardless of whether a sheet_update
+  // was produced).
+  const populatePending = await (spindle as any).variables.chat.get(
+    chatId,
+    'populatePending',
+  )
+  if (populatePending) {
+    await (spindle as any).variables.chat.delete(chatId, 'populatePending')
+    spindle.sendToFrontend({
+      type: 'POPULATE_DONE',
+      success: !!update,
+    })
+  }
+
   if (!update) return
 
   const list = snapshots.get(chatId) || []

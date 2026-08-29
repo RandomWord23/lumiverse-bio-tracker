@@ -1249,14 +1249,20 @@ export function setup(ctx: SpindleFrontendContext) {
     ctx.sendToBackend({ type: 'GET_LATEST_SHEET' })
   })
 
+  let populateInProgress = false
+
   document.getElementById('bt-populate-btn')?.addEventListener('click', () => {
+    const btn = document.getElementById('bt-populate-btn') as HTMLButtonElement
+
+    // Guard: prevent spamming while a populate generation is running.
+    if (populateInProgress) return
+
     const flagged: string[] = []
     panel.querySelectorAll('.bt-flag-btn[data-flagged="true"]').forEach((b) => {
       const id = (b as HTMLElement).dataset.fieldId
       if (id) flagged.push(id)
     })
 
-    const btn = document.getElementById('bt-populate-btn') as HTMLButtonElement
     if (flagged.length === 0) {
       if (btn) {
         btn.innerText = '⚠️ No fields flagged'
@@ -1269,6 +1275,7 @@ export function setup(ctx: SpindleFrontendContext) {
       return
     }
 
+    populateInProgress = true
     if (btn) { btn.innerText = '⏳ Populating...'; btn.style.background = '#555' }
     const xml = buildCurrentXml()
     ctx.sendToBackend({ type: 'POPULATE_FIELDS', fields: flagged, xml })
@@ -1392,6 +1399,7 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     }
     if (msg.type === 'POPULATE_DONE') {
+      populateInProgress = false
       const btn = document.getElementById('bt-populate-btn') as HTMLButtonElement
       if (msg.success) {
         panel.querySelectorAll('.bt-flag-btn[data-flagged="true"]').forEach((b) => {
