@@ -347,6 +347,17 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'nutrientAbsorption', label: 'Nutrient Absorption', desc: 'Body growth from digested items' },
     { key: 'arousalClimax', label: 'Arousal and Climax', desc: 'Arousal decay and climax meter' },
     { key: 'struggleEngine', label: 'Struggle Engine', desc: 'Prey struggling, indigestion, and vomit events' },
+    { key: 'buffSystem', label: 'Buff System', desc: 'Apply skill/trait percentage buffs to stats' },
+  ]
+  const buffTargetDefs = [
+    { value: 'BaseDigestionRate', label: 'Digestion Rate' },
+    { value: 'AcidRiseRate', label: 'Acid Rise Rate' },
+    { value: 'StomachResistance', label: 'Stomach Resistance' },
+    { value: 'ArousalDecay', label: 'Arousal Decay' },
+    { value: 'ArousalGain', label: 'Arousal Gain' },
+    { value: 'NutrientAbsorption', label: 'Nutrient Absorption' },
+    { value: 'ClothingStress', label: 'Clothing Stress' },
+    { value: 'EnergyDrain', label: 'Energy Drain' },
   ]
   function loadSettings() {
     try {
@@ -806,6 +817,11 @@ export function setup(ctx: SpindleFrontendContext) {
       target.closest('.bt-dynamic-item')?.remove()
     } else if (action === 'remove-inv') {
       target.closest('.dyn-inv')?.remove()
+    } else if (action === 'add-buff') {
+      const container = target.closest('.bt-buffs-section')?.querySelector('.bt-buffs-container')
+      container?.appendChild(createBuffEntry())
+    } else if (action === 'remove-buff') {
+      target.closest('.bt-buff-entry')?.remove()
     }
   })
 
@@ -897,17 +913,60 @@ export function setup(ctx: SpindleFrontendContext) {
     return div
   }
 
+  function createBuffEntry(): HTMLElement {
+    const div = document.createElement('div')
+    div.className = 'bt-buff-entry'
+    div.style.cssText = 'display: flex; gap: 5px; margin-top: 4px; align-items: center;'
+    const select = document.createElement('select')
+    select.className = 'bt-input bt-buff-stat'
+    select.style.cssText = 'flex: 1; padding: 4px;'
+    buffTargetDefs.forEach(t => {
+      const opt = document.createElement('option')
+      opt.value = t.value
+      opt.textContent = t.label
+      select.appendChild(opt)
+    })
+    const input = document.createElement('input')
+    input.type = 'number'
+    input.className = 'bt-input bt-buff-pct'
+    input.style.cssText = 'width: 70px; padding: 4px; text-align: center;'
+    input.placeholder = '+25'
+    const btn = document.createElement('button')
+    btn.className = 'bt-remove-btn'
+    btn.dataset.action = 'remove-buff'
+    btn.textContent = '✖'
+    btn.style.cssText = 'background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 14px;'
+    div.appendChild(select)
+    div.appendChild(input)
+    div.appendChild(btn)
+    return div
+  }
+
+  function collectBuffsFromItem(el: Element): string {
+    const entries: string[] = []
+    el.querySelectorAll('.bt-buff-entry').forEach((buffEl) => {
+      const stat = (buffEl.querySelector('.bt-buff-stat') as HTMLSelectElement)?.value
+      const pct = (buffEl.querySelector('.bt-buff-pct') as HTMLInputElement)?.value.trim()
+      if (stat && pct) {
+        const pctNum = parseFloat(pct) || 0
+        const sign = pctNum >= 0 ? '+' : ''
+        entries.push(`${stat}:${sign}${pctNum}`)
+      }
+    })
+    return entries.join(';')
+  }
+
   function createSkillItem(): HTMLElement {
     const div = document.createElement('div')
     div.className = 'bt-dynamic-item dyn-skill'
-    div.innerHTML = `<button class="bt-remove-btn" data-action="remove-skill">✖</button><input type="text" class="bt-input full d-name" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input d-lvl" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea>`
+    div.innerHTML = `<button class="bt-remove-btn" data-action="remove-skill">✖</button><input type="text" class="bt-input full d-name" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input d-lvl" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea><div class="bt-buffs-section" style="margin-top: 6px;"><div style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888;"><span>Buffs/Debuffs</span><button class="bt-add-btn bt-add-buff" data-action="add-buff" style="font-size: 11px; padding: 2px 6px;">+ Add</button></div><div class="bt-buffs-container"></div></div>`
     return div
   }
 
   function createTraitItem(): HTMLElement {
     const div = document.createElement('div')
     div.className = 'bt-dynamic-item dyn-trait'
-    div.innerHTML = `<button class="bt-remove-btn" data-action="remove-trait">✖</button><input type="text" class="bt-input full d-name" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea>`
+    div.innerHTML = `<button class="bt-remove-btn" data-action="remove-trait">✖</button><input type="text" class="bt-input full d-name" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea><div class="bt-buffs-section" style="margin-top: 6px;"><div style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888;"><span>Buffs/Debuffs</span><button class="bt-add-btn bt-add-buff" data-action="add-buff" style="font-size: 11px; padding: 2px 6px;">+ Add</button></div><div class="bt-buffs-container"></div></div>`
     return div
   }
 
@@ -1053,12 +1112,18 @@ export function setup(ctx: SpindleFrontendContext) {
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim()
       const lvl = (el.querySelector('.d-lvl') as HTMLInputElement)?.value.trim() || '1'
       const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim()
-      if (name) xml += `    <Skill name="${name}" level="${lvl}">${desc}</Skill>\n`
+      const buffsStr = collectBuffsFromItem(el)
+      let attrs = `name="${name}" level="${lvl}"`
+      if (buffsStr) attrs += ` buffs="${buffsStr}"`
+      if (name) xml += `    <Skill ${attrs}>${desc}</Skill>\n`
     })
     document.querySelectorAll('.dyn-trait').forEach((el) => {
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim()
       const desc = (el.querySelector('.d-desc') as HTMLTextAreaElement)?.value.trim()
-      if (name) xml += `    <Trait name="${name}">${desc}</Trait>\n`
+      const buffsStr = collectBuffsFromItem(el)
+      let attrs = `name="${name}"`
+      if (buffsStr) attrs += ` buffs="${buffsStr}"`
+      if (name) xml += `    <Trait ${attrs}>${desc}</Trait>\n`
     })
     xml += `  </SkillsAndTraits>\n\n  <DigestiveTract>\n`
 
@@ -1467,6 +1532,19 @@ export function setup(ctx: SpindleFrontendContext) {
       ;(div.querySelector('.d-name') as HTMLInputElement).value = skillNode.getAttribute('name') || ''
       ;(div.querySelector('.d-lvl') as HTMLInputElement).value = skillNode.getAttribute('level') || '1'
       ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = skillNode.textContent || ''
+      const buffsAttr = skillNode.getAttribute('buffs')
+      if (buffsAttr) {
+        const container = div.querySelector('.bt-buffs-container')
+        buffsAttr.split(';').forEach(pair => {
+          const [stat, pct] = pair.split(':')
+          if (stat && pct && container) {
+            const entry = createBuffEntry()
+            ;(entry.querySelector('.bt-buff-stat') as HTMLSelectElement).value = stat.trim()
+            ;(entry.querySelector('.bt-buff-pct') as HTMLInputElement).value = pct.trim()
+            container.appendChild(entry)
+          }
+        })
+      }
     })
 
     doc.querySelectorAll('Trait').forEach((traitNode) => {
@@ -1474,6 +1552,19 @@ export function setup(ctx: SpindleFrontendContext) {
       document.getElementById('traits-container')?.appendChild(div)
       ;(div.querySelector('.d-name') as HTMLInputElement).value = traitNode.getAttribute('name') || ''
       ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || ''
+      const buffsAttr = traitNode.getAttribute('buffs')
+      if (buffsAttr) {
+        const container = div.querySelector('.bt-buffs-container')
+        buffsAttr.split(';').forEach(pair => {
+          const [stat, pct] = pair.split(':')
+          if (stat && pct && container) {
+            const entry = createBuffEntry()
+            ;(entry.querySelector('.bt-buff-stat') as HTMLSelectElement).value = stat.trim()
+            ;(entry.querySelector('.bt-buff-pct') as HTMLInputElement).value = pct.trim()
+            container.appendChild(entry)
+          }
+        })
+      }
     })
 
     // Read Stomach-level struggle attributes

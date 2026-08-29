@@ -21,7 +21,7 @@ let toastSettings: Record<string, boolean> = {
 }
 let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
-  struggleEngine: true,
+  struggleEngine: true, buffSystem: true,
 }
 
 function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
@@ -126,6 +126,28 @@ function getAttrFromString(str: string, attr: string): string {
   return match ? match[1] : ''
 }
 
+function collectBuffs(xml: string): Record<string, number> {
+  const buffs: Record<string, number> = {}
+  const parseBuffsAttr = (attrs: string) => {
+    const buffsAttr = getAttrFromString(attrs, 'buffs')
+    if (!buffsAttr) return
+    buffsAttr.split(';').forEach(pair => {
+      const [stat, pct] = pair.split(':')
+      if (stat && pct) {
+        const key = stat.trim()
+        const val = (parseFloat(pct) || 0) / 100
+        buffs[key] = (buffs[key] || 0) + val
+      }
+    })
+  }
+  const skillRegex = /<Skill\s+([^>]*?)>/gi
+  let m: RegExpExecArray | null
+  while ((m = skillRegex.exec(xml)) !== null) parseBuffsAttr(m[1])
+  const traitRegex = /<Trait\s+([^>]*?)>/gi
+  while ((m = traitRegex.exec(xml)) !== null) parseBuffsAttr(m[1])
+  return buffs
+}
+
 function getStat(xml: string, tag: string): number {
   const match = xml.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'))
   return match ? parseFloat(match[1]) || 0 : 0
@@ -211,6 +233,7 @@ function deriveCondition(
 function processClothingStress(
   xml: string,
   oldXml: string,
+  clothingStressMult: number = 0,
 ): { xml: string; damageEvents: string[] } {
   const damageEvents: string[] = []
   const getMode = (x: string) => {
@@ -297,6 +320,7 @@ function processClothingStress(
         const mult = stressMultipliers[part] || 1
         stressChange += delta * mult
       }
+      stressChange *= (1 + clothingStressMult)
 
       stress += stressChange
       stress = Math.max(0, stress)
@@ -352,6 +376,7 @@ function processClothingStress(
         const mult = stressMultipliers[part] || 1
         stressChange += delta * mult
       }
+      stressChange *= (1 + clothingStressMult)
 
       stress += stressChange
       stress = Math.max(0, stress)
@@ -485,6 +510,8 @@ function processStruggle(
   xml: string,
   oldXml: string,
   elapsed: number,
+  stomachResistanceMult: number = 0,
+  energyDrainMult: number = 0,
 ): { xml: string; struggleEvents: string[] } {
   const struggleEvents: string[] = []
 
@@ -522,7 +549,7 @@ function processStruggle(
   const capacityMult = getStat(oldXml, 'CapacityMultiplier') || 1.0
   const stomachMaxCapacity = height * weight * 0.012 * capacityMult
 
-  const stomachResistance = Math.max(0.1, getStat(oldXml, 'StomachResistance') || 1.0)
+  const stomachResistance = Math.max(0.1, (getStat(oldXml, 'StomachResistance') || 1.0) * (1 + stomachResistanceMult))
   const baseIndigestionRate = getStat(oldXml, 'BaseIndigestionRate') || 30
   const indigestionDecayRate = getStat(oldXml, 'IndigestionDecayRate') || 20
   const stomachResistanceFactor = 1.0 / stomachResistance
@@ -722,9 +749,9 @@ function processStruggle(
       preyData
         .filter((p) => p.willingness === 'fighting')
         .reduce((sum, p) => sum + p.personalStruggle * stomachResistanceFactor, 0)
-    let energyDrain = fightingStruggle * 0.5
+    let energyDrain = fightingStruggle * 0.5 * (1 + energyDrainMult)
     if (suppressing && energy > 0) {
-      energyDrain += numFighting * 2 * elapsed
+      energyDrain += numFighting * 2 * elapsed * (1 + energyDrainMult)
     }
     energy = Math.max(0, energy - energyDrain)
   } else {
@@ -920,6 +947,7 @@ async function runDigestionTick(
     }
 
     let updatedXml = newXml
+    const buffs = engineToggles.buffSystem ? collectBuffs(oldXml) : {}
     let totalDigestedVol = 0
     let wasteCount = 0
     let totalItemCount = 0
@@ -929,8 +957,8 @@ async function runDigestionTick(
       // Read acid level and config stats from the OLD (stored) sheet so the
       // LLM cannot artificially lower acid or inflate digestion rates.
       acidLevel = getStat(oldXml, 'CurrentAcidPct')
-    const baseDigRate = getStat(oldXml, 'BaseDigestionRate') || 25
-    const acidRiseRate = getStat(oldXml, 'AcidRiseRate') || 10
+    const baseDigRate = (getStat(oldXml, 'BaseDigestionRate') || 25) * (1 + (buffs.BaseDigestionRate || 0))
+    const acidRiseRate = (getStat(oldXml, 'AcidRiseRate') || 10) * (1 + (buffs.AcidRiseRate || 0))
 
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
@@ -1047,7 +1075,7 @@ async function runDigestionTick(
     } // end digestionEngine
 
     if (engineToggles.struggleEngine) {
-      const struggleResult = processStruggle(updatedXml, oldXml, elapsed)
+      const struggleResult = processStruggle(updatedXml, oldXml, elapsed, buffs.StomachResistance || 0, buffs.EnergyDrain || 0)
       updatedXml = struggleResult.xml
       if (struggleResult.struggleEvents.length > 0) {
         await (spindle as any).variables.chat.set(
@@ -1066,12 +1094,13 @@ async function runDigestionTick(
       const oldArousal = getStat(oldXml, 'Arousal') || 0
       let newArousal = getStat(updatedXml, 'Arousal') || 0
 
-      // Apply 50% hourly decay to the old value
-      const decayedArousal = Math.max(0, oldArousal - 50 * elapsed)
+      // Apply hourly decay to the old value (buffs can modify decay rate)
+      const arousalDecayRate = 50 * (1 + (buffs.ArousalDecay || 0))
+      const decayedArousal = Math.max(0, oldArousal - arousalDecayRate * elapsed)
 
       // If the LLM didn't add enough points to overcome the decay, it drops.
       // If the LLM added more points than the decay, it rises.
-      let finalArousal = Math.max(newArousal, decayedArousal)
+      let finalArousal = Math.max(newArousal * (1 + (buffs.ArousalGain || 0)), decayedArousal)
       finalArousal = Math.min(100, finalArousal)
 
       let finalClimax = getStat(oldXml, 'Climax') || 0
@@ -1117,12 +1146,13 @@ async function runDigestionTick(
     } // end arousalClimax
 
     if (engineToggles.nutrientAbsorption && totalDigestedVol > 0) {
-      const heightGrowth = totalDigestedVol * 0.035
-      const weightGrowth = totalDigestedVol * 0.035
-      const breastGrowth = totalDigestedVol * 1.0
-      const hipsGrowth = totalDigestedVol * 0.035
-      const penisLGrowth = totalDigestedVol * 0.014
-      const penisGGrowth = totalDigestedVol * 0.004
+      const nutrientMult = 1 + (buffs.NutrientAbsorption || 0)
+      const heightGrowth = totalDigestedVol * 0.035 * nutrientMult
+      const weightGrowth = totalDigestedVol * 0.035 * nutrientMult
+      const breastGrowth = totalDigestedVol * 1.0 * nutrientMult
+      const hipsGrowth = totalDigestedVol * 0.035 * nutrientMult
+      const penisLGrowth = totalDigestedVol * 0.014 * nutrientMult
+      const penisGGrowth = totalDigestedVol * 0.004 * nutrientMult
 
       // Read body stats from the OLD (stored) sheet as the authoritative base,
       // then clamp the LLM's values so it can never shrink the character.
@@ -1170,7 +1200,7 @@ async function runDigestionTick(
     } // end nutrientAbsorption
 
     if (engineToggles.clothingStress) {
-      const clothingResult = processClothingStress(updatedXml, oldXml)
+      const clothingResult = processClothingStress(updatedXml, oldXml, buffs.ClothingStress || 0)
       updatedXml = clothingResult.xml
 
       if (clothingResult.damageEvents.length > 0) {
@@ -1375,6 +1405,34 @@ The EXTENSION does (do NOT do these):
 - Removes escaped prey from the stored sheet.
 - Tracks stomach fatigue.
 - Generates threshold and vomit event notifications.
+
+─── BUFF/DEBUFF SYSTEM ───
+Skills and Traits can apply percentage-based buffs or debuffs to character stats. This is done via the optional 'buffs' attribute on <Skill> and <Trait> tags.
+
+FORMAT:
+buffs="StatKey:+Pct;StatKey2:-Pct2"
+
+Example:
+<Skill name="Iron Stomach" level="3" buffs="BaseDigestionRate:+25;StomachResistance:+50">Iron-lined stomach.</Skill>
+<Trait name="Weak Constitution" buffs="StomachResistance:-30">Frail and easily overwhelmed.</Trait>
+
+VALID BUFF TARGETS:
+- BaseDigestionRate: Base digestion speed (+ = faster, - = slower)
+- AcidRiseRate: Acid accumulation speed (+ = faster, - = slower)
+- StomachResistance: Resistance to indigestion from struggling prey (+ = more resistant, - = less resistant)
+- ArousalDecay: Arousal decay rate (+ = decays faster, - = decays slower/stays aroused)
+- ArousalGain: Arousal gain from stimuli (+ = more gain, - = less gain)
+- NutrientAbsorption: Body growth from digestion (+ = more growth, - = less growth)
+- ClothingStress: Clothing stress accumulation (+ = more stress, - = less stress)
+- EnergyDrain: Energy drain from struggle/suppression (+ = more drain, - = less drain)
+
+RULES:
+1. The 'buffs' attribute is OPTIONAL. Omit it if the skill/trait has no buffs.
+2. Percentages can be positive (buff) or negative (debuff).
+3. Multiple buffs are separated by semicolons.
+4. The extension AUTOMATICALLY applies all buffs during the digestion tick. You do NOT need to calculate the modified values yourself — just set the raw base stats as normal and the extension applies the multipliers.
+5. When assigning a new Skill or Trait, consider whether it should have buffs. A "Strong Digestion" skill might have buffs="BaseDigestionRate:+25". A "Frail" trait might have buffs="StomachResistance:-30;BaseDigestionRate:-15".
+6. Copy existing 'buffs' attributes exactly as-is when updating the sheet. Do NOT modify or remove buffs unless the skill/trait itself changes.
 
 <sheet_update>
 <CharacterSheet>
