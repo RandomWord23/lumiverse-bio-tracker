@@ -1659,11 +1659,15 @@ spindle.onFrontendMessage(async (msg: any) => {
       // removes the message from the LLM's context (soft-delete from
       // prompt), which would leave the LLM with no user input to
       // respond to. The LLM must see this request to act on it.
+      //
+      // The flagged field names are included directly in the user
+      // message so the LLM knows exactly which fields to populate.
+      const fieldList = fields.join(', ')
       await spindle.chat.appendMessage(
         activeChatId,
         {
           role: 'user',
-          content: '[System: Auto-populating flagged sheet fields. Do not advance the story.]',
+          content: `[System: Auto-populate request. Please populate ONLY the following blank sheet fields with sensible, scene-appropriate defaults: ${fieldList}. Leave ALL other fields exactly as they are. Do not advance the story or add new narrative events. Output the complete updated sheet in the <sheet_update> block as usual.]`,
         },
         { triggerGeneration: true },
       )
