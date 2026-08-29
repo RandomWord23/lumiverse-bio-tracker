@@ -1667,7 +1667,7 @@ spindle.onFrontendMessage(async (msg: any) => {
         activeChatId,
         {
           role: 'user',
-          content: `[System: Auto-populate request. Please populate ONLY the following blank sheet fields with sensible, scene-appropriate defaults: ${fieldList}. Leave ALL other fields exactly as they are. Do not advance the story or add new narrative events. Output the complete updated sheet in the <sheet_update> block as usual.]`,
+          content: `[System: Auto-populate request. Please populate ONLY the following blank sheet fields with sensible, scene-appropriate defaults: ${fieldList}. Leave ALL other fields exactly as they are. Do not advance the story or add new narrative events.\n\nCRITICAL: You MUST output the updated sheet as FULL NESTED XML inside a <sheet_update> block — exactly the same XML structure shown in <CurrentCharacterSheet>. Do NOT use flat "Key: Value" lines. The output MUST look like:\n<sheet_update>\n<CharacterSheet>\n  <State>\n    <Time>...</Time>\n    ...\n  </State>\n  <BaseStats>\n    <Name>...</Name>\n    ...\n  </BaseStats>\n  ...all other sections...\n</CharacterSheet>\n</sheet_update>\nCopy every tag and attribute from <CurrentCharacterSheet> exactly, filling in only the blank fields listed above. Output the COMPLETE sheet with ALL sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract).]`,
         },
         { triggerGeneration: true },
       )
@@ -1729,7 +1729,7 @@ spindle.registerInterceptor(async (messages, context) => {
   )
   if (populateFields) {
     await (spindle as any).variables.chat.delete(chatId, 'populateFields')
-    populateInstructions = `\n\n─── AUTO-POPULATE REQUEST ───\nThe user has requested that you populate ONLY the following blank fields with sensible, scene-appropriate defaults: ${populateFields}\nLeave ALL other fields exactly as they are.\nDo not advance the story or add new narrative events. Simply output the complete updated sheet in the <sheet_update> block as usual.`
+    populateInstructions = `\n\n─── AUTO-POPULATE REQUEST ───\nThe user has requested that you populate ONLY the following blank fields with sensible, scene-appropriate defaults: ${populateFields}\nLeave ALL other fields exactly as they are.\nDo not advance the story or add new narrative events.\n\nCRITICAL FORMAT REMINDER: Your <sheet_update> block MUST contain FULL NESTED XML matching the structure of <CurrentCharacterSheet> — NOT flat "Key: Value" lines. The output MUST look like:\n<sheet_update>\n<CharacterSheet>\n  <State><Time>...</Time>...</State>\n  <BaseStats><Name>...</Name>...</BaseStats>\n  <Clothing>...</Clothing>\n  <Backpack>...</Backpack>\n  <SkillsAndTraits>...</SkillsAndTraits>\n  <DigestiveTract>...</DigestiveTract>\n</CharacterSheet>\n</sheet_update>\nCopy every tag and attribute from <CurrentCharacterSheet> exactly, filling in only the blank fields listed above. Output the COMPLETE sheet with ALL sections.`
   }
 
   let struggleNotification = ''
