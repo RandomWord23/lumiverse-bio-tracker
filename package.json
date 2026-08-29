@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "devDependencies": {
-    "lumiverse-spindle-types": "latest"
+    "lumiverse-spindle-types": "latest",
+    "typescript": "^7.0.2"
   }
 }

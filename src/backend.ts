@@ -22,6 +22,7 @@ let toastSettings: Record<string, boolean> = {
 let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
   struggleEngine: true, buffSystem: true,
+  attributeSystem: false,
 }
 
 function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
@@ -146,6 +147,100 @@ function collectBuffs(xml: string): Record<string, number> {
   const traitRegex = /<Trait\s+([^>]*?)>/gi
   while ((m = traitRegex.exec(xml)) !== null) parseBuffsAttr(m[1])
   return buffs
+}
+
+// ─── Modifier Pipeline ──────────────────────────────────────
+// All modifier sources (buffs, attributes, health states, energy states,
+// status effects) are summed into one additive pool per stat key, then
+// clamped to [-0.50, +0.50] before being applied as rate × (1 + finalMultiplier).
+
+/** Clamp every value in a modifier map to [-0.50, +0.50]. */
+function applyModifierCap(modifiers: Record<string, number>): Record<string, number> {
+  const capped: Record<string, number> = {}
+  for (const key of Object.keys(modifiers)) {
+    capped[key] = Math.max(-0.50, Math.min(0.50, modifiers[key]))
+  }
+  return capped
+}
+
+/**
+ * Collect ALL modifiers from every source (buffs, attributes, health, energy,
+ * status effects) into a single additive pool per stat key.
+ * Each source is guarded by its engine toggle so that disabling a system
+ * removes its contribution entirely.
+ */
+function collectModifiers(xml: string): Record<string, number> {
+  const modifiers: Record<string, number> = {}
+
+  // 1. Buffs from <Skill buffs="…"> and <Trait buffs="…">
+  if (engineToggles.buffSystem) {
+    const buffs = collectBuffs(xml)
+    for (const [key, val] of Object.entries(buffs)) {
+      modifiers[key] = (modifiers[key] || 0) + val
+    }
+  }
+
+  // 2. Attribute modifiers
+  if (engineToggles.attributeSystem) {
+    const attrMods = processAttributes(xml)
+    for (const [key, val] of Object.entries(attrMods)) {
+      modifiers[key] = (modifiers[key] || 0) + val
+    }
+  }
+
+  // Future sources (health states, energy states, status effects) will be
+  // merged here in later phases, each guarded by its own toggle.
+
+  return applyModifierCap(modifiers)
+}
+
+// ─── Attribute System ──────────────────────────────────────
+// Six attributes (STR, DEX, CON, INT, WIS, CHA), default score 10.
+// Modifier = floor((score - 10) / 2), range -5..+5 at scores 0..20.
+// Each attribute's modifier contributes  modifier × 0.05  to the relevant
+// stat's additive pool (so a +5 modifier = +25% to that stat).
+
+/** Maps each attribute key to the stat keys it influences. */
+const ATTRIBUTE_STAT_MAP: Record<string, string[]> = {
+  STR: ['StomachResistance'],
+  DEX: ['ArousalDecay'],
+  CON: ['AcidRiseRate', 'HealthRegen'],
+  INT: ['NutrientAbsorption'],
+  WIS: ['IndigestionDecayRate', 'EnergyRegen'],
+  CHA: ['Suppression'],
+}
+
+const ATTRIBUTE_KEYS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const
+const ATTRIBUTE_MODIFIER_WEIGHT = 0.05
+
+/** Read a single attribute score from the <Attributes> XML block. */
+function getAttribute(xml: string, key: string): number {
+  const match = xml.match(new RegExp(`<${key}>(.*?)<\\/${key}>`, 'i'))
+  return match ? parseFloat(match[1]) || 10 : 10
+}
+
+/** Compute the D&D-style modifier for a score: floor((score - 10) / 2). */
+function attributeModifier(score: number): number {
+  return Math.floor((score - 10) / 2)
+}
+
+/**
+ * Parse the <Attributes> block and return a modifier map keyed by stat name.
+ * Each attribute's modifier × 0.05 is added to every stat it influences.
+ */
+function processAttributes(xml: string): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const attrKey of ATTRIBUTE_KEYS) {
+    const score = getAttribute(xml, attrKey)
+    const mod = attributeModifier(score)
+    if (mod === 0) continue // score 10 → modifier 0 → no contribution
+    const contribution = mod * ATTRIBUTE_MODIFIER_WEIGHT
+    const stats = ATTRIBUTE_STAT_MAP[attrKey] || []
+    for (const statKey of stats) {
+      out[statKey] = (out[statKey] || 0) + contribution
+    }
+  }
+  return out
 }
 
 function getStat(xml: string, tag: string): number {
@@ -947,7 +1042,9 @@ async function runDigestionTick(
     }
 
     let updatedXml = newXml
-    const buffs = engineToggles.buffSystem ? collectBuffs(oldXml) : {}
+    // Unified modifier pipeline: collects buffs + attributes (+ future sources),
+    // sums them additively per stat key, and clamps to ±50%.
+    const modifiers = collectModifiers(oldXml)
     let totalDigestedVol = 0
     let wasteCount = 0
     let totalItemCount = 0
@@ -957,8 +1054,8 @@ async function runDigestionTick(
       // Read acid level and config stats from the OLD (stored) sheet so the
       // LLM cannot artificially lower acid or inflate digestion rates.
       acidLevel = getStat(oldXml, 'CurrentAcidPct')
-    const baseDigRate = (getStat(oldXml, 'BaseDigestionRate') || 25) * (1 + (buffs.BaseDigestionRate || 0))
-    const acidRiseRate = (getStat(oldXml, 'AcidRiseRate') || 10) * (1 + (buffs.AcidRiseRate || 0))
+    const baseDigRate = (getStat(oldXml, 'BaseDigestionRate') || 25) * (1 + (modifiers.BaseDigestionRate || 0))
+    const acidRiseRate = (getStat(oldXml, 'AcidRiseRate') || 10) * (1 + (modifiers.AcidRiseRate || 0))
 
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
@@ -1075,7 +1172,7 @@ async function runDigestionTick(
     } // end digestionEngine
 
     if (engineToggles.struggleEngine) {
-      const struggleResult = processStruggle(updatedXml, oldXml, elapsed, buffs.StomachResistance || 0, buffs.EnergyDrain || 0)
+      const struggleResult = processStruggle(updatedXml, oldXml, elapsed, modifiers.StomachResistance || 0, modifiers.EnergyDrain || 0)
       updatedXml = struggleResult.xml
       if (struggleResult.struggleEvents.length > 0) {
         await (spindle as any).variables.chat.set(
@@ -1094,13 +1191,13 @@ async function runDigestionTick(
       const oldArousal = getStat(oldXml, 'Arousal') || 0
       let newArousal = getStat(updatedXml, 'Arousal') || 0
 
-      // Apply hourly decay to the old value (buffs can modify decay rate)
-      const arousalDecayRate = 50 * (1 + (buffs.ArousalDecay || 0))
+      // Apply hourly decay to the old value (modifiers can modify decay rate)
+      const arousalDecayRate = 50 * (1 + (modifiers.ArousalDecay || 0))
       const decayedArousal = Math.max(0, oldArousal - arousalDecayRate * elapsed)
 
       // If the LLM didn't add enough points to overcome the decay, it drops.
       // If the LLM added more points than the decay, it rises.
-      let finalArousal = Math.max(newArousal * (1 + (buffs.ArousalGain || 0)), decayedArousal)
+      let finalArousal = Math.max(newArousal * (1 + (modifiers.ArousalGain || 0)), decayedArousal)
       finalArousal = Math.min(100, finalArousal)
 
       let finalClimax = getStat(oldXml, 'Climax') || 0
@@ -1146,7 +1243,7 @@ async function runDigestionTick(
     } // end arousalClimax
 
     if (engineToggles.nutrientAbsorption && totalDigestedVol > 0) {
-      const nutrientMult = 1 + (buffs.NutrientAbsorption || 0)
+      const nutrientMult = 1 + (modifiers.NutrientAbsorption || 0)
       const heightGrowth = totalDigestedVol * 0.035 * nutrientMult
       const weightGrowth = totalDigestedVol * 0.035 * nutrientMult
       const breastGrowth = totalDigestedVol * 1.0 * nutrientMult
@@ -1200,7 +1297,7 @@ async function runDigestionTick(
     } // end nutrientAbsorption
 
     if (engineToggles.clothingStress) {
-      const clothingResult = processClothingStress(updatedXml, oldXml, buffs.ClothingStress || 0)
+      const clothingResult = processClothingStress(updatedXml, oldXml, modifiers.ClothingStress || 0)
       updatedXml = clothingResult.xml
 
       if (clothingResult.damageEvents.length > 0) {
@@ -1405,6 +1502,34 @@ The EXTENSION does (do NOT do these):
 - Removes escaped prey from the stored sheet.
 - Tracks stomach fatigue.
 - Generates threshold and vomit event notifications.
+
+─── ATTRIBUTE SYSTEM ───
+The character has six RPG attributes: STR (Strength), DEX (Dexterity), CON (Constitution), INT (Intelligence), WIS (Wisdom), CHA (Charisma). These are stored in an <Attributes> block inside <BaseStats>:
+
+<Attributes>
+  <STR>10</STR>
+  <DEX>10</DEX>
+  <CON>10</CON>
+  <INT>10</INT>
+  <WIS>10</WIS>
+  <CHA>10</CHA>
+</Attributes>
+
+Each attribute ranges from 1 to 20. A score of 10 is average (no modifier). The extension AUTOMATICALLY computes attribute modifiers and applies them to relevant stats during the digestion tick. You do NOT need to calculate any modifier math — just set the raw attribute scores.
+
+ATTRIBUTE EFFECTS (applied automatically by the extension):
+- STR → StomachResistance (higher STR = more resistant to indigestion from struggling prey)
+- DEX → ArousalDecay (higher DEX = arousal decays faster)
+- CON → AcidRiseRate, HealthRegen (higher CON = faster acid rise, better health regen)
+- INT → NutrientAbsorption (higher INT = more body growth from digestion)
+- WIS → IndigestionDecayRate, EnergyRegen (higher WIS = indigestion falls faster, energy recovers faster)
+- CHA → Suppression (higher CHA = more effective at holding down struggling prey)
+
+YOUR RESPONSIBILITIES FOR ATTRIBUTES:
+1. Set initial attribute scores when creating a character. Default is 10 for all attributes if unspecified. Most characters should have scores between 8 and 15, with exceptional individuals reaching 16-18.
+2. Copy existing attribute scores exactly as-is when updating the sheet. Do NOT change them unless the character has genuinely grown (e.g., through training, transformation, or level-up).
+3. When narrating, consider the character's attributes. A high-STR pred should be better at holding prey; a high-CON pred should digest faster and recover quicker; a high-WIS pred should manage energy and indigestion better.
+4. The extension handles ALL modifier math. You just set the raw scores and the extension applies the effects automatically.
 
 ─── BUFF/DEBUFF SYSTEM ───
 Skills and Traits can apply percentage-based buffs or debuffs to character stats. This is done via the optional 'buffs' attribute on <Skill> and <Trait> tags.

@@ -93,6 +93,7 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-sub-tabs">
           <button class="bt-sub-btn active" data-sub="sub-app">Appearance</button>
           <button class="bt-sub-btn" data-sub="sub-skills">Skills & Traits</button>
+          <button class="bt-sub-btn" data-sub="sub-attr">Attributes</button>
         </div>
         <div id="sub-app" class="bt-sub-content active">
           <div class="bt-section-title" style="margin-top: 0;">IDENTITY & BASE</div>
@@ -153,6 +154,25 @@ export function setup(ctx: SpindleFrontendContext) {
           <div>
             <div class="bt-row"><span style="font-weight:bold;">Traits</span> <button class="bt-add-btn" id="add-trait-btn">+ Add</button></div>
             <div id="traits-container"></div>
+          </div>
+        </div>
+        <div id="sub-attr" class="bt-sub-content">
+          <div class="bt-section-title" style="margin-top: 0;">ATTRIBUTES</div>
+          <div style="font-size: 12px; color: #888; margin-bottom: 12px;">Range 1–20 (default 10). Modifier = ⌊(score−10)/2⌋. The extension applies modifiers automatically.</div>
+          <div class="bt-row"><span>STR (Strength):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="STR" min="1" max="20" value="10" id="bt-attr-str" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-str" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-row"><span>DEX (Dexterity):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="DEX" min="1" max="20" value="10" id="bt-attr-dex" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-dex" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-row"><span>CON (Constitution):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="CON" min="1" max="20" value="10" id="bt-attr-con" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-con" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-row"><span>INT (Intelligence):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="INT" min="1" max="20" value="10" id="bt-attr-int" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-int" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-row"><span>WIS (Wisdom):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="WIS" min="1" max="20" value="10" id="bt-attr-wis" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-wis" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-row"><span>CHA (Charisma):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="CHA" min="1" max="20" value="10" id="bt-attr-cha" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-cha" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-section-title" style="margin-top: 15px;">DERIVED EFFECTS</div>
+          <div style="font-size: 12px; color: #888; line-height: 1.6;">
+            <div>STR → Stomach Resistance</div>
+            <div>DEX → Arousal Decay</div>
+            <div>CON → Acid Rise Rate, Health Regen</div>
+            <div>INT → Nutrient Absorption</div>
+            <div>WIS → Indigestion Decay, Energy Regen</div>
+            <div>CHA → Suppression</div>
           </div>
         </div>
       </div>
@@ -348,6 +368,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'arousalClimax', label: 'Arousal and Climax', desc: 'Arousal decay and climax meter' },
     { key: 'struggleEngine', label: 'Struggle Engine', desc: 'Prey struggling, indigestion, and vomit events' },
     { key: 'buffSystem', label: 'Buff System', desc: 'Apply skill/trait percentage buffs to stats' },
+    { key: 'attributeSystem', label: 'Attribute System', desc: 'Apply STR/DEX/CON/INT/WIS/CHA modifiers to engine stats' },
   ]
   const buffTargetDefs = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -555,6 +576,24 @@ export function setup(ctx: SpindleFrontendContext) {
       panel.querySelectorAll('.bt-sub-btn, .bt-sub-content').forEach((el) => el.classList.remove('active'))
       ;(e.target as HTMLElement).classList.add('active')
       document.getElementById((e.target as HTMLElement).dataset.sub!)?.classList.add('active')
+    })
+  })
+
+  // ─── Attribute modifier display ─────────────────────────────
+  function updateAttrModDisplay(attrKey: string) {
+    const input = document.getElementById('bt-attr-' + attrKey.toLowerCase()) as HTMLInputElement
+    const span = document.getElementById('bt-attr-mod-' + attrKey.toLowerCase())
+    if (!input || !span) return
+    const score = parseInt(input.value) || 10
+    const mod = Math.floor((score - 10) / 2)
+    const sign = mod >= 0 ? '+' : ''
+    span.textContent = sign + mod
+    span.style.color = mod > 0 ? '#44ff44' : mod < 0 ? '#ff4444' : '#aaa'
+  }
+  document.querySelectorAll('.bt-attr').forEach((el) => {
+    el.addEventListener('input', () => {
+      const attrKey = (el as HTMLInputElement).dataset.attr
+      if (attrKey) updateAttrModDisplay(attrKey)
     })
   })
 
@@ -1090,6 +1129,18 @@ export function setup(ctx: SpindleFrontendContext) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
+    // Attributes block inside BaseStats
+    const attrKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+    let attrXml = `    <Attributes>`
+    let hasAttr = false
+    for (const ak of attrKeys) {
+      const attrInput = document.getElementById('bt-attr-' + ak.toLowerCase()) as HTMLInputElement
+      const attrVal = attrInput?.value.trim() || '10'
+      if (attrVal !== '10') hasAttr = true
+      attrXml += `<${ak}>${attrVal}</${ak}>`
+    }
+    attrXml += `</Attributes>\n`
+    if (hasAttr) xml += attrXml
     xml += `  </BaseStats>\n\n  <Clothing>\n`
     document.querySelectorAll('.bt-cloth-slot').forEach((el) => {
       const input = el as HTMLInputElement
@@ -1457,6 +1508,26 @@ export function setup(ctx: SpindleFrontendContext) {
           if (node) input.value = node.textContent || ''
         }
       })
+    }
+
+    // Parse Attributes block
+    const attrBlock = baseStats?.querySelector('Attributes')
+    if (attrBlock) {
+      const attrKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+      for (const ak of attrKeys) {
+        const node = attrBlock.querySelector(ak)
+        const input = document.getElementById('bt-attr-' + ak.toLowerCase()) as HTMLInputElement
+        if (node && input) input.value = node.textContent || '10'
+        if (ak) updateAttrModDisplay(ak)
+      }
+    } else {
+      // Reset to defaults if no Attributes block
+      const attrKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+      for (const ak of attrKeys) {
+        const input = document.getElementById('bt-attr-' + ak.toLowerCase()) as HTMLInputElement
+        if (input) input.value = '10'
+        updateAttrModDisplay(ak)
+      }
     }
 
     // Trigger visual updates
