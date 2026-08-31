@@ -1026,7 +1026,9 @@ export function setup(ctx: SpindleFrontendContext) {
         const willingness = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'reluctant'
         const staminaText = (el.querySelector('.v-stamina-val') as HTMLElement)?.textContent || '100%'
         const stamina = parseFloat(staminaText.replace('%', '')) || 100
-        itemAttrs += ` willingness="${willingness}" stamina="${stamina}"`
+        const struggleText = (el.querySelector('.v-struggle-val') as HTMLElement)?.textContent || '+0.00%'
+        const struggle = parseFloat(struggleText.replace(/[+%]/g, '')) || 0
+        itemAttrs += ` willingness="${willingness}" stamina="${stamina}" struggle="${struggle.toFixed(2)}"`
       }
       xml += `      <Item ${itemAttrs}>\n`
       if (appearance) xml += `        <Appearance>${appearance}</Appearance>\n`
@@ -1057,7 +1059,9 @@ export function setup(ctx: SpindleFrontendContext) {
           const willingness = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'reluctant'
           const staminaText = (el.querySelector('.v-stamina-val') as HTMLElement)?.textContent || '100%'
           const stamina = parseFloat(staminaText.replace('%', '')) || 100
-          itemAttrs += ` willingness="${willingness}" stamina="${stamina}"`
+          const struggleText = (el.querySelector('.v-struggle-val') as HTMLElement)?.textContent || '+0.00%'
+          const struggle = parseFloat(struggleText.replace(/[+%]/g, '')) || 0
+          itemAttrs += ` willingness="${willingness}" stamina="${stamina}" struggle="${struggle.toFixed(2)}"`
         }
         xml += `      <Item ${itemAttrs}>\n`
         if (appearance) xml += `        <Appearance>${appearance}</Appearance>\n`
@@ -1550,6 +1554,10 @@ export function setup(ctx: SpindleFrontendContext) {
           staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
         }
         if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
+
+        const struggle = parseFloat(getAttr(itemNode, 'struggle') || '0') || 0
+        const struggleVal = div.querySelector('.v-struggle-val') as HTMLElement
+        if (struggleVal) struggleVal.textContent = `+${struggle.toFixed(2)}%`
       }
 
       const digInput = div.querySelector('.item-dig-input') as HTMLInputElement
@@ -1601,6 +1609,10 @@ export function setup(ctx: SpindleFrontendContext) {
               staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
             }
             if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
+
+            const struggle = parseFloat(getAttr(child, 'struggle') || '0') || 0
+            const struggleVal = div.querySelector('.v-struggle-val') as HTMLElement
+            if (struggleVal) struggleVal.textContent = `+${struggle.toFixed(2)}%`
           }
 
           const digInput = div.querySelector('.item-dig-input') as HTMLInputElement

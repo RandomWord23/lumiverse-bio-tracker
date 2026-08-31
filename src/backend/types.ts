@@ -82,6 +82,8 @@ export interface PreyData {
   sizeFactor: number
   willingnessFactor: number
   personalStruggle: number
+  /** Effective indigestion contribution after stomach resistance & suppression (set after aggregation). */
+  effectiveStruggle: number
   escaped: boolean
   attrs: string
   inner: string | null

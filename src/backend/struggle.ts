@@ -153,6 +153,7 @@ export function processStruggle(
       sizeFactor,
       willingnessFactor,
       personalStruggle,
+      effectiveStruggle: 0,
       escaped: false,
       attrs,
       inner,
@@ -197,6 +198,8 @@ export function processStruggle(
     if (prey.willingness === 'fighting') numFighting++
   }
 
+  // (effectiveStruggle is filled in after suppressionFactor is known — see below)
+
   const anyFighting = numFighting > 0
 
   // --- Suppression factor ---
@@ -213,6 +216,11 @@ export function processStruggle(
   }
 
   totalIndigestionGain *= suppressionFactor
+
+  // --- Per-prey effective struggle (for UI display) ---
+  for (const prey of preyData) {
+    prey.effectiveStruggle = prey.personalStruggle * stomachResistanceFactor * suppressionFactor
+  }
 
   // --- Update indigestion (accumulate or decay) ---
   if (anyFighting) {
@@ -332,8 +340,9 @@ export function processStruggle(
       let newAttrs = attrs
         .replace(/\s+willingness="[^"]*"/gi, '')
         .replace(/\s+stamina="[^"]*"/gi, '')
+        .replace(/\s+struggle="[^"]*"/gi, '')
         .trim()
-      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}"`
+      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}" struggle="${prey.effectiveStruggle.toFixed(2)}"`
       return `<Item ${newAttrs}>${inner}</Item>`
     },
   )
@@ -346,8 +355,9 @@ export function processStruggle(
       let newAttrs = attrs
         .replace(/\s+willingness="[^"]*"/gi, '')
         .replace(/\s+stamina="[^"]*"/gi, '')
+        .replace(/\s+struggle="[^"]*"/gi, '')
         .trim()
-      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}"`
+      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}" struggle="${prey.effectiveStruggle.toFixed(2)}"`
       return `<Item ${newAttrs} />`
     },
   )

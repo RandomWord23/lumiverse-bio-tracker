@@ -662,6 +662,7 @@ export function processStruggle(
       sizeFactor,
       willingnessFactor,
       personalStruggle,
+      effectiveStruggle: 0,
       escaped: false,
       attrs,
       inner,
@@ -841,8 +842,9 @@ export function processStruggle(
       let newAttrs = attrs
         .replace(/\s+willingness="[^"]*"/gi, '')
         .replace(/\s+stamina="[^"]*"/gi, '')
+        .replace(/\s+struggle="[^"]*"/gi, '')
         .trim()
-      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}"`
+      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}" struggle="${prey.effectiveStruggle.toFixed(2)}"`
       return `<Item ${newAttrs}>${inner}</Item>`
     },
   )
@@ -855,8 +857,9 @@ export function processStruggle(
       let newAttrs = attrs
         .replace(/\s+willingness="[^"]*"/gi, '')
         .replace(/\s+stamina="[^"]*"/gi, '')
+        .replace(/\s+struggle="[^"]*"/gi, '')
         .trim()
-      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}"`
+      newAttrs += ` willingness="${prey.willingness}" stamina="${prey.stamina.toFixed(2)}" struggle="${prey.effectiveStruggle.toFixed(2)}"`
       return `<Item ${newAttrs} />`
     },
   )
@@ -970,6 +973,9 @@ YOU must set the willingness attribute based on the scene narrative. If a prey c
 
 PREY STAMINA:
 Each prey has a stamina attribute (0-100). The extension AUTOMATICALLY drains stamina when prey are "fighting" and recovers it when they are not. When stamina reaches 0, the extension forces the prey to "reluctant" (too exhausted to fight). You do NOT need to manage stamina yourself — just copy the value you see in the sheet.
+
+PREY STRUGGLE:
+Each prey also has a struggle attribute (a decimal, e.g. struggle="12.50"). This is the indigestion % that this prey contributes per time-tick, computed by the extension from willingness, size, consciousness, and suppression. It is EXTENSION-MANAGED — just copy the value you see in the sheet verbatim. Do NOT set or recalculate it yourself.
 
 STOMACH INDIGESTION METER:
 The <Stomach> tag has an indigestion attribute (0-100). This is a stomach-level meter that rises when prey fight and falls when they don't. The extension AUTOMATICALLY calculates indigestion based on prey willingness, prey size relative to stomach capacity, prey consciousness (digestion %), and the pred's suppression efforts. You do NOT set indigestion yourself — just copy the value you see.
