@@ -330,7 +330,7 @@ export async function runDigestionTick(
         `[DigestionTick] After processStruggle: indigestion attr="${postStruggleInd ? postStruggleInd[1] : 'MISSING'}"`,
       )
       if (struggleResult.struggleEvents.length > 0) {
-        await (spindle as any).variables.chat.set(
+        await spindle.variables.chat.set(
           chatId,
           'pendingStruggleEvents',
           JSON.stringify(struggleResult.struggleEvents),
@@ -358,11 +358,11 @@ export async function runDigestionTick(
       let finalClimax = getStat(oldXml, 'Climax') || 0
 
       // Check if this is the turn AFTER an orgasm (needs reset)
-      const pendingOrgasmReset = await (spindle as any).variables.chat.get(chatId, 'pendingOrgasmReset')
+      const pendingOrgasmReset = await spindle.variables.chat.get(chatId, 'pendingOrgasmReset')
       if (pendingOrgasmReset === 'true') {
         finalArousal = 0
         finalClimax = 0
-        await (spindle as any).variables.chat.delete(chatId, 'pendingOrgasmReset')
+        await spindle.variables.chat.delete(chatId, 'pendingOrgasmReset')
         spindle.log.info('Post-orgasm reset applied.')
       } else {
         // Turn-based climax meter
@@ -375,7 +375,7 @@ export async function runDigestionTick(
         // Trigger orgasm!
         if (finalClimax >= 100) {
           finalClimax = 100
-          await (spindle as any).variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
+          await spindle.variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
           maybeToast('climaxEvents', 'success', '🔥 Climax reached! Resetting next turn.')
           spindle.log.info('Climax event triggered.')
         }
@@ -574,9 +574,9 @@ export async function promptInterceptor(messages: any[], context: any) {
 
   if (!sheet) return messages
 
-  const manualSyncPending = await (spindle as any).variables.chat.get(chatId, 'manualSyncPending')
+  const manualSyncPending = await spindle.variables.chat.get(chatId, 'manualSyncPending')
   if (manualSyncPending === 'true') {
-    await (spindle as any).variables.chat.delete(chatId, 'manualSyncPending')
+    await spindle.variables.chat.delete(chatId, 'manualSyncPending')
     spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
   } else if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
@@ -597,22 +597,22 @@ export async function promptInterceptor(messages: any[], context: any) {
   }
 
   let populateInstructions = ''
-  const populateFields = await (spindle as any).variables.chat.get(
+  const populateFields = await spindle.variables.chat.get(
     chatId,
     'populateFields',
   )
   if (populateFields) {
-    await (spindle as any).variables.chat.delete(chatId, 'populateFields')
+    await spindle.variables.chat.delete(chatId, 'populateFields')
     populateInstructions = `\n\n─── AUTO-POPULATE REQUEST ───\nThe user has requested that you populate ONLY the following blank fields with sensible, scene-appropriate defaults: ${populateFields}\nLeave ALL other fields exactly as they are.\nDo not advance the story or add new narrative events.\n\nCRITICAL FORMAT REMINDER: Your <sheet_update> block MUST contain FULL NESTED XML matching the structure of <CurrentCharacterSheet> — NOT flat "Key: Value" lines. The output MUST look like:\n<sheet_update>\n<CharacterSheet>\n  <State><Time>...</Time>...</State>\n  <BaseStats><Name>...</Name>...</BaseStats>\n  <Clothing>...</Clothing>\n  <Backpack>...</Backpack>\n  <SkillsAndTraits>...</SkillsAndTraits>\n  <DigestiveTract>...</DigestiveTract>\n</CharacterSheet>\n</sheet_update>\nCopy every tag and attribute from <CurrentCharacterSheet> exactly, filling in only the blank fields listed above. Output the COMPLETE sheet with ALL sections.`
   }
 
   let struggleNotification = ''
-  const pendingStruggleEvents = await (spindle as any).variables.chat.get(
+  const pendingStruggleEvents = await spindle.variables.chat.get(
     chatId,
     'pendingStruggleEvents',
   )
   if (pendingStruggleEvents) {
-    await (spindle as any).variables.chat.delete(chatId, 'pendingStruggleEvents')
+    await spindle.variables.chat.delete(chatId, 'pendingStruggleEvents')
     try {
       const events: string[] = JSON.parse(pendingStruggleEvents)
       if (events.length > 0) {

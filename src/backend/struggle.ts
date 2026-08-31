@@ -396,6 +396,4 @@ export function processStruggle(
   )
 
   return { xml, struggleEvents }
-
-  return { xml, struggleEvents }
 }

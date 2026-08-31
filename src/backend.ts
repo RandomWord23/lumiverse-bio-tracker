@@ -43,7 +43,7 @@ spindle.onFrontendMessage(async (msg: any) => {
       return
     }
     await saveChatSheet(activeChatId, msg.xmlData)
-    await (spindle as any).variables.chat.set(activeChatId, 'manualSyncPending', 'true')
+    await spindle.variables.chat.set(activeChatId, 'manualSyncPending', 'true')
     spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
     maybeToast('sheetSync', 'success', 'Character sheet synced!')
   }
@@ -53,7 +53,7 @@ spindle.onFrontendMessage(async (msg: any) => {
       maybeToast('chatWarnings', 'warning', 'Open a chat first.')
       return
     }
-    await (spindle as any).variables.chat.delete(activeChatId, 'manualSyncPending')
+    await spindle.variables.chat.delete(activeChatId, 'manualSyncPending')
 
     // Always scan chat history first — the button is "Sync from Latest Message"
     let sheet = ''
@@ -94,7 +94,7 @@ spindle.onFrontendMessage(async (msg: any) => {
     }
 
     // Guard: reject if a populate is already in progress (prevents spam)
-    const existingPopulate = await (spindle as any).variables.chat.get(
+    const existingPopulate = await spindle.variables.chat.get(
       activeChatId,
       'populatePending',
     )
@@ -104,14 +104,14 @@ spindle.onFrontendMessage(async (msg: any) => {
     }
 
     const fields = msg.fields as string[]
-    await (spindle as any).variables.chat.set(
+    await spindle.variables.chat.set(
       activeChatId,
       'populateFields',
       fields.join(', '),
     )
     // Track that a populate generation is pending so GENERATION_ENDED
     // can notify the frontend when it completes.
-    await (spindle as any).variables.chat.set(
+    await spindle.variables.chat.set(
       activeChatId,
       'populatePending',
       'true',
@@ -136,11 +136,11 @@ spindle.onFrontendMessage(async (msg: any) => {
       )
     } catch (e) {
       maybeToast('errors', 'error', 'Populate failed: ' + e)
-      await (spindle as any).variables.chat.delete(
+      await spindle.variables.chat.delete(
         activeChatId,
         'populateFields',
       )
-      await (spindle as any).variables.chat.delete(
+      await spindle.variables.chat.delete(
         activeChatId,
         'populatePending',
       )
@@ -168,12 +168,12 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   // If a populate generation just finished, notify the frontend
   // so the button can reset (regardless of whether a sheet_update
   // was produced).
-  const populatePending = await (spindle as any).variables.chat.get(
+  const populatePending = await spindle.variables.chat.get(
     chatId,
     'populatePending',
   )
   if (populatePending) {
-    await (spindle as any).variables.chat.delete(chatId, 'populatePending')
+    await spindle.variables.chat.delete(chatId, 'populatePending')
     spindle.sendToFrontend({
       type: 'POPULATE_DONE',
       success: !!update,
