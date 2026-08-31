@@ -41,6 +41,12 @@ export async function runDigestionTick(
   oldXml: string,
   chatId: string,
 ): Promise<string> {
+  // Hoist updatedXml outside the try block so the catch can return the
+  // last successfully-processed XML instead of the raw LLM output.
+  // This prevents a late-stage error (e.g. in arousalClimax or
+  // nutrientAbsorption) from discarding indigestion/struggle values
+  // that processStruggle already computed and wrote.
+  let updatedXml: string = newXml
   try {
     const getTimeHours = (xml: string) => {
       const match = xml.match(/<Time>(.*?)<\/Time>/i)
@@ -136,7 +142,7 @@ export async function runDigestionTick(
       return newXml
     }
 
-    let updatedXml = newXml
+    updatedXml = newXml
     // Unified modifier pipeline: collects buffs + attributes (+ future sources),
     // sums them additively per stat key, and clamps to ±50%.
     const modifiers = collectModifiers(oldXml)
@@ -318,6 +324,11 @@ export async function runDigestionTick(
     if (engineToggles.struggleEngine) {
       const struggleResult = processStruggle(updatedXml, oldXml, elapsed, modifiers.StomachResistance || 0, modifiers.EnergyDrain || 0)
       updatedXml = struggleResult.xml
+      // Verify indigestion survived into updatedXml after processStruggle
+      const postStruggleInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+      spindle.log.info(
+        `[DigestionTick] After processStruggle: indigestion attr="${postStruggleInd ? postStruggleInd[1] : 'MISSING'}"`,
+      )
       if (struggleResult.struggleEvents.length > 0) {
         await (spindle as any).variables.chat.set(
           chatId,
@@ -456,10 +467,24 @@ export async function runDigestionTick(
         `${wasteCount} moved to bowels, ${totalDigestedVol.toFixed(2)}L digested`,
     )
 
+    // Final verification: log indigestion in the XML being returned
+    const finalInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+    spindle.log.info(
+      `[DigestionTick] RETURN: indigestion="${finalInd ? finalInd[1] : 'MISSING'}"`,
+    )
     return updatedXml
   } catch (e) {
     spindle.log.error(`Digestion tick failed: ${e}`)
-    return newXml
+    // Return the last successfully-processed XML (which may include
+    // indigestion/struggle values from processStruggle) instead of the
+    // raw LLM output. This prevents a late-stage error from discarding
+    // computed values that the user already saw toasts for.
+    const catchInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+    spindle.log.info(
+      `[DigestionTick] CATCH RETURN: indigestion="${catchInd ? catchInd[1] : 'MISSING'}" ` +
+        `(preserved from last successful step)`,
+    )
+    return updatedXml
   }
 }
 
@@ -471,6 +496,14 @@ export async function commitUpdate(
 ) {
   const oldSheet = sheets.get(chatId) || ''
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
+
+  // Verify indigestion in the final XML before saving
+  const commitInd = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+  spindle.log.info(
+    `[commitUpdate] message ${messageId}: ` +
+      `oldSheet indigestion="${(oldSheet.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i) || [])[1] || 'MISSING'}", ` +
+      `finalXml indigestion="${commitInd ? commitInd[1] : 'MISSING'}"`,
+  )
 
   await saveChatSheet(chatId, finalXml)
   const list = snapshots.get(chatId) || []

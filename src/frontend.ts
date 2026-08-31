@@ -1205,7 +1205,13 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── Backend message handler ───────────────────────────────
   ctx.onBackendMessage((msg: any) => {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
-      try { populateFormFromXml(msg.xml) } catch (e) {}
+      try {
+        const indMatch = msg.xml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+        console.log(`[SHEET_UPDATED] received indigestion="${indMatch ? indMatch[1] : 'MISSING'}"`)
+        populateFormFromXml(msg.xml)
+      } catch (e) {
+        console.error('[SHEET_UPDATED] populateFormFromXml failed:', e)
+      }
       if (currentSettings.ui.autoOpen) {
         panel.classList.add('open')
         floatingBtn.style.display = 'none'

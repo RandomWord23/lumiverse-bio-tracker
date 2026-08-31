@@ -57,9 +57,15 @@ export function processStruggle(
   let energy = Math.max(getStat(xml, 'Energy') || oldEnergy, oldEnergy)
 
   const oldIndigestion = parseFloat(getAttrFromString(oldStomAttrs, 'indigestion')) || 0
+  const llmIndigestion = parseFloat(getAttrFromString(stomAttrs, 'indigestion'))
   let indigestion = Math.max(
-    parseFloat(getAttrFromString(stomAttrs, 'indigestion')) || oldIndigestion,
+    isNaN(llmIndigestion) ? oldIndigestion : (llmIndigestion || oldIndigestion),
     oldIndigestion,
+  )
+  spindle.log.info(
+    `[Struggle] indigestion: old=${oldIndigestion.toFixed(2)}, ` +
+      `llm=${isNaN(llmIndigestion) ? 'omitted' : llmIndigestion}, ` +
+      `clamped=${indigestion.toFixed(2)}`,
   )
 
   const suppressing = getAttrFromString(stomAttrs, 'suppressing') === 'true'
@@ -71,7 +77,13 @@ export function processStruggle(
     oldStomachFatigue,
   )
 
-  let triggeredStr = getAttrFromString(stomAttrs, 'indigestionEvents') || ''
+  // Fall back to the OLD sheet's indigestionEvents if the LLM omitted it.
+  // Without this, thresholds (25%/50%/75%/90%) re-fire on every tick
+  // because the LLM's sheet doesn't carry forward the triggered set.
+  let triggeredStr =
+    getAttrFromString(stomAttrs, 'indigestionEvents') ||
+    getAttrFromString(oldStomAttrs, 'indigestionEvents') ||
+    ''
   const triggeredSet = new Set(triggeredStr.split(',').filter(Boolean))
 
   // --- Helper: write Stomach tag with updated attrs + content ---
@@ -225,10 +237,16 @@ export function processStruggle(
   // --- Update indigestion (accumulate or decay) ---
   if (anyFighting) {
     indigestion = Math.min(100, indigestion + totalIndigestionGain)
+    spindle.log.info(
+      `[Struggle] ACCUMULATE: +${totalIndigestionGain.toFixed(2)} → indigestion=${indigestion.toFixed(2)}`,
+    )
   } else {
     const allWilling = preyData.every((p) => p.willingness === 'willing')
     const decayMult = allWilling ? 2.0 : 1.0
     indigestion = Math.max(0, indigestion - indigestionDecayRate * elapsed * decayMult)
+    spindle.log.info(
+      `[Struggle] DECAY: -${(indigestionDecayRate * elapsed * decayMult).toFixed(2)} → indigestion=${indigestion.toFixed(2)}`,
+    )
   }
 
   // --- Energy drain / recovery ---
@@ -369,10 +387,15 @@ export function processStruggle(
   xml = updateStomachTag(newStomContent)
   xml = setStat(xml, 'Energy', energy)
 
+  // Verify the write-back actually persisted indigestion into the XML
+  const verifyMatch = xml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
   spindle.log.info(
-    `Struggle tick: indigestion ${indigestion.toFixed(1)}%, energy ${energy.toFixed(1)}, ` +
-      `${numFighting} fighting prey, fatigue ${stomachFatigue.toFixed(1)}`,
+    `[Struggle] WRITE-BACK: indigestion=${indigestion.toFixed(2)}, ` +
+      `xml attr="${verifyMatch ? verifyMatch[1] : 'MISSING'}", ` +
+      `energy=${energy.toFixed(1)}, ${numFighting} fighting, fatigue=${stomachFatigue.toFixed(1)}`,
   )
+
+  return { xml, struggleEvents }
 
   return { xml, struggleEvents }
 }
