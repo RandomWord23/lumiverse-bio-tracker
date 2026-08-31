@@ -10,6 +10,7 @@ import {
   setToastSettings,
   engineToggles,
   setEngineToggles,
+  promptSheets,
 } from './backend/state'
 
 import {
@@ -193,16 +194,35 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   if (committedMessageIds.has(messageId)) return
   if (!update) return
 
-  const list = snapshots.get(chatId) || []
-  const chatIndex = list.length
-  const finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
-  committedMessageIds.add(messageId)
+  // ─── Determine if contentProcessor (Tier 1) already ran ──────
+  // contentProcessor deletes the promptSheets entry after use.
+  // If the entry still exists, contentProcessor was skipped or
+  // failed — we must run commitUpdate ourselves.
+  // If the entry is gone, contentProcessor already computed the
+  // correct values and stored them in sheets.  We must NOT re-run
+  // commitUpdate — that would use the already-computed sheet as
+  // "old", making elapsed=0, skipping the tick, and overwriting
+  // sheets with the LLM's raw (indigestion=0) values.
+  let finalXml: string
 
-  // ─── Tier 2 fallback: rewrite visible chat text ──────────────
-  // Even if the content processor (Tier 1) already ran, this is
-  // idempotent — commitUpdate returns the same finalXml.  If the
-  // content processor was skipped or failed, this is the GUARANTEED
-  // path to correct the visible <sheet_update> block in the chat.
+  if (promptSheets.has(chatId)) {
+    // contentProcessor did NOT run — compute now
+    const list = snapshots.get(chatId) || []
+    const chatIndex = list.length
+    finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
+    committedMessageIds.add(messageId)
+    maybeToast('digestionTicks', 'info', '[GE] contentProcessor skipped — computed via commitUpdate')
+  } else {
+    // contentProcessor already ran — use its result directly
+    finalXml = sheets.get(chatId) || update
+    committedMessageIds.add(messageId)
+    maybeToast('digestionTicks', 'info', '[GE] contentProcessor already ran — using cached sheet')
+  }
+
+  // ─── Rewrite visible chat text with computed values ─────────
+  // This corrects the <sheet_update> block in the visible message,
+  // whether contentProcessor ran or not.  If contentProcessor
+  // already modified the content, this is a no-op (same finalXml).
   try {
     const modifiedContent = content.replace(
       /<sheet_update>[\s\S]*?<\/sheet_update>/i,
@@ -214,9 +234,12 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
         `[GENERATION_ENDED] Rewrote visible chat text for message ${messageId} ` +
           `(content len ${content.length} → ${modifiedContent.length})`,
       )
-      maybeToast('digestionTicks', 'success', 'Visible chat text updated with computed values')
-    } else {
-      maybeToast('digestionTicks', 'info', 'Sheet committed (content already correct)')
+      const indMatch = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+      maybeToast(
+        'digestionTicks',
+        'success',
+        `[GE] updateMessage done — indigestion=${indMatch ? indMatch[1] : 'MISSING'}`,
+      )
     }
   } catch (err) {
     spindle.log.error(`[GENERATION_ENDED] updateMessage fallback failed: ${err}`)
