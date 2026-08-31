@@ -234,16 +234,40 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   // This corrects the <sheet_update> block in the visible message,
   // whether contentProcessor ran or not.  If contentProcessor
   // already modified the content, this is a no-op (same finalXml).
+  //
+  // CRITICAL: payload.content may be a string OR an array of content
+  // parts (e.g. [{type:'text', text:'...'}]).  extractSheetUpdate
+  // handles both, but String.replace() only works on strings.  We
+  // must normalize to a plain string first via extractTextContent.
   try {
-    const modifiedContent = content.replace(
-      /<sheet_update>[\s\S]*?<\/sheet_update>/i,
-      `<sheet_update>\n${finalXml}\n</sheet_update>`,
-    )
-    if (modifiedContent !== content) {
+    const contentStr = extractTextContent(content)
+    const sheetRegex = /<sheet_update>[\s\S]*?<\/sheet_update>/i
+    const hasSheetBlock = sheetRegex.test(contentStr)
+
+    if (!hasSheetBlock) {
+      // The payload content doesn't contain a <sheet_update> block.
+      // This can happen if the LLM used a different tag format, or if
+      // the payload structure is unexpected.  Log + toast so we can
+      // diagnose instead of silently failing.
+      spindle.log.warn(
+        `[GENERATION_ENDED] No <sheet_update> block found in content ` +
+          `(type=${typeof content}, len=${contentStr.length}, ` +
+          `preview="${contentStr.slice(0, 200)}...")`,
+      )
+      maybeToast(
+        'digestionTicks',
+        'warning',
+        `[GE] No <sheet_update> in content — rewrite skipped (len=${contentStr.length})`,
+      )
+    } else {
+      const modifiedContent = contentStr.replace(
+        sheetRegex,
+        `<sheet_update>\n${finalXml}\n</sheet_update>`,
+      )
       await spindle.chat.updateMessage(chatId, messageId, { content: modifiedContent })
       spindle.log.info(
         `[GENERATION_ENDED] Rewrote visible chat text for message ${messageId} ` +
-          `(content len ${content.length} → ${modifiedContent.length})`,
+          `(content len ${contentStr.length} → ${modifiedContent.length})`,
       )
       const indMatch = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
       maybeToast(
@@ -254,7 +278,7 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
     }
   } catch (err) {
     spindle.log.error(`[GENERATION_ENDED] updateMessage fallback failed: ${err}`)
-    maybeToast('digestionTicks', 'warning', 'Sheet saved but visible text update failed')
+    maybeToast('digestionTicks', 'warning', `Sheet saved but visible text update failed: ${err}`)
   }
 })
 
