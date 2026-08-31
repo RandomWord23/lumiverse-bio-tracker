@@ -882,11 +882,28 @@ export function processStruggle(
 export function buildSheetPrompt(sheetXml: string): string {
   return `[CHARACTER SHEET SYSTEM
 
-You are operating with a persistent character sheet tracker. Below is the current state of the character sheet. You must stay aware of these values and act consistently with them.
+You are the active manager of a persistent character sheet. The extension provides you with the current sheet state below. Every value in this sheet has been computed by the extension's simulation engines and represents the TRUE current state of the character. Your job is to produce an updated <sheet_update> block that copies ALL existing values exactly, advances time, and makes scene-appropriate changes ONLY to the fields you control.
 
 <CurrentCharacterSheet>
 ${sheetXml}
 </CurrentCharacterSheet>
+
+─── HOW THE SYSTEM WORKS ───
+The extension runs a "digestion tick" AFTER each of your responses. During this tick, the extension's engines compute:
+- Digestion percentages (from each item's timeAdded timestamp and the current <Time>)
+- Indigestion accumulation/decay (from prey willingness, prey size, pred suppression)
+- Prey stamina drain/recovery (from willingness and fighting state)
+- Prey struggle values (from willingness, size, consciousness, suppression)
+- Pred Energy drain from struggle and suppression
+- Nutrient absorption and body growth (Height, Weight, Breast, Hips, Penis)
+- Clothing stress and condition degradation
+- Climax meter (from Arousal)
+- Current penis dimensions (from Arousal)
+- Attribute modifiers and their effects on stats
+
+These computed values are written into the stored sheet. The <CurrentCharacterSheet> you see above ALREADY contains all of these computed values from the last tick. They are the current truth.
+
+CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is into your <sheet_update>. This includes indigestion, stamina, struggle, digestion, timeAdded, stress, condition, Climax, CurrentPenisLength_cm, and every other computed value. Never zero out, reset, or "forget" a value you see in the sheet. If you see indigestion="57", you MUST output indigestion="57". If you see stamina="45", you MUST output stamina="45". If you see digestion="25%", you MUST output digestion="25%". The extension will recompute these values again on the NEXT tick — your job is to preserve them, not override them.
 
 ─── YOUR RESPONSIBILITIES (what YOU must do) ───
 1. ADVANCE <Time> FORWARD every turn. If the scene progresses, increase the <Time> value. The extension uses the time delta to calculate digestion, arousal decay, and body growth. If you do not advance time, the simulation stalls.
@@ -897,15 +914,24 @@ ${sheetXml}
 4. Update <Arousal> based on what happens in the scene (intimacy raises it, time passes lowers it — the extension halves it each hour).
 5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
 6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
+7. Set prey willingness="willing|reluctant|fighting" based on the scene narrative (see STRUGGLE & INDIGESTION SYSTEM below).
+8. Set suppressing="true|false" on the <Stomach> tag based on the scene narrative.
+9. Narrate struggle threshold events and vomit events when you receive STRUGGLE EVENTS notifications (see below).
 
-─── WHAT THE EXTENSION HANDLES AUTOMATICALLY (do NOT do these yourself) ───
-- Digestion percentages: calculated automatically from the item's timeAdded timestamp and the current time.
-- The following sheet fields are managed ENTIRELY by the extension — copy them exactly as-is and NEVER modify them: <ElapsedHours>, <FirstItemTime>, <StomachEmptyTime>, <CurrentAcidPct>.
-- Nutrient absorption and body growth (Height, Weight, Breast, Hips, Penis): applied automatically when items digest.
-- Clothing stress and condition: degraded automatically as the body grows.
-- <Climax> meter: managed entirely by the extension based on <Arousal>.
-- <CurrentPenisLength_cm> and <CurrentPenisGirth_cm>: calculated from <Arousal> automatically.
-- Moving fully-digested prey remains to <Bowels>.
+─── PRE-COMPUTED VALUES (copy these EXACTLY as-is — do NOT modify, reset, or zero them) ───
+The following values are computed by the extension's engines during the digestion tick. The sheet you receive already contains the correct values. You MUST copy them verbatim into your <sheet_update>:
+- digestion="...%" on prey items (computed from timeAdded + current Time)
+- timeAdded="..." on prey items (timestamp set when the item was eaten)
+- indigestion="..." on the <Stomach> tag (computed from prey struggle)
+- stamina="..." on prey items (computed from willingness + fighting state)
+- struggle="..." on prey items (computed from willingness, size, consciousness, suppression)
+- <ElapsedHours>, <FirstItemTime>, <StomachEmptyTime>, <CurrentAcidPct>
+- <Climax> (computed from Arousal)
+- <CurrentPenisLength_cm>, <CurrentPenisGirth_cm> (computed from Arousal)
+- Clothing stress="..." and condition="..." attributes (computed from body growth)
+- Height, Weight, BreastVolume, Hips, Penis dimensions (updated by nutrient absorption)
+
+If any of these values seem wrong or unexpected, DO NOT "fix" them — copy them exactly. The extension will recompute them on the next tick.
 
 ─── UPDATE INSTRUCTIONS ───
 
@@ -935,7 +961,7 @@ CRITICAL XML RULES:
    </Item>
 6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" AND timeAdded="..." attributes EXACTLY as they appear in <CurrentCharacterSheet> — do NOT set digestion to "0%", remove it, or alter timeAdded. The extension advances the values automatically; your job is to preserve them as-is. When adding a NEW item that the character just ate, do NOT include a timeAdded attribute — the extension stamps it automatically.
 7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
-8. The extension AUTOMATICALLY handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions will increase proportionally. Do NOT manually adjust these stats based on digestion — the extension does it for you. Only adjust them if something else changes them (e.g. magic, transformation).
+8. The extension handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions increase proportionally. Copy these values from the sheet exactly as-is — do NOT manually adjust them based on digestion. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.
 10. ABSOLUTE SOURCE OF TRUTH: The <CurrentCharacterSheet> provided above is the absolute source of truth. You MUST copy the values from it exactly, especially <ClothingMode>. If it says "hardcore", you MUST output "hardcore". Do NOT copy values from previous messages or your memory. Always look at the provided sheet first.
 11. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
@@ -944,8 +970,8 @@ CRITICAL XML RULES:
 14. If any State or World field (Time, Weather, Temperature, Area, Building, Room, Health, Energy) is blank or "0" in the <CurrentCharacterSheet>, you MUST invent a sensible default consistent with the current scene. For example, if Weather is blank, set it based on the season or what's happening in the story. If Health or Energy is blank, default to 100. Never leave these fields empty in your <sheet_update>. For <Time>, the default MUST be a plain "HH:MM" 24-hour value (e.g. "08:00") with NO day/date prefix.
 15. Prey <Description> MUST reflect the prey's current action/state and update EVERY turn. <Appearance> stays the same unless the prey transforms. Use <Description> for what's happening now (squirming, dissolving, going limp) and <Appearance> for what they look like (age, species, build, hair, eyes).
 16. <Arousal> is a 0-100 meter. The extension AUTOMATICALLY decays it by 50% per hour. You MUST actively add points to it to keep it up during intimate scenes (e.g., add +30 if stimulated, +50 if highly stimulated). If no intimacy occurs, it will naturally drop.
-17. <Climax> is a 0-100 meter managed ENTIRELY by the extension. NEVER change its value yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
-18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension automatically calculates and updates <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> based on Arousal (0% arousal = 30% size, 100% arousal = 100% size). Do NOT output or modify the Current tags yourself.
+17. <Climax> is a 0-100 meter computed by the extension from <Arousal>. Copy the value from the sheet exactly — do NOT change it yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
+18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension computes <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> from Arousal (0% arousal = 30% size, 100% arousal = 100% size). Copy the Current tags from the sheet exactly as-is — do NOT modify or remove them.
 19. Backpack (inventory) items use a SIMPLE format that is DIFFERENT from Stomach/Bowel prey items. Backpack items MUST use: <Item qty="...">item name</Item>. Do NOT add type, name, volume_L, or digestion attributes to Backpack items. Backpack items are NOT prey — they do not get digested and must NEVER have a digestion meter. Example:
     BAD (do NOT do this):
     <Backpack>
@@ -961,7 +987,20 @@ CRITICAL XML RULES:
     When the character earns, spends, finds, or loses money, update these fields directly (arithmetic on the current values). If a wealth field shows 0, that means zero money — it does NOT mean the field is missing.
     The active currency system is indicated by <CurrencySystem> ("modern" or "fantasy"). Only update the fields for the active system.
 ─── STRUGGLE & INDIGESTION SYSTEM ───
-The extension includes a Struggle Engine that simulates prey resistance and stomach indigestion. Here is how it works and what YOU must do:
+The extension includes a Struggle Engine that simulates prey resistance and stomach indigestion. The Struggle Engine runs during the digestion tick (after each of your responses) and computes indigestion, stamina, struggle, and energy values. These computed values are written into the stored sheet and appear in the <CurrentCharacterSheet> you receive.
+
+YOUR ROLE: You control the INPUTS to the Struggle Engine. The engine computes the OUTPUTS. You must copy the outputs exactly.
+
+INPUTS YOU SET (based on the scene narrative):
+- willingness="willing|reluctant|fighting" on each prey item
+- suppressing="true|false" on the <Stomach> tag
+- <StomachResistance> as a character trait (set once, rarely changed)
+
+OUTPUTS THE ENGINE COMPUTES (copy these EXACTLY from the sheet — do NOT modify, reset, or recalculate):
+- indigestion="..." on the <Stomach> tag
+- stamina="..." on each prey item
+- struggle="..." on each prey item
+- <Energy> drain from struggle/suppression
 
 PREY WILLINGNESS STATES:
 Each prey item in <Stomach> has a willingness attribute: willingness="willing|reluctant|fighting".
@@ -969,59 +1008,47 @@ Each prey item in <Stomach> has a willingness attribute: willingness="willing|re
 - "reluctant": The prey is passively resisting but not actively fighting. Normal digestion speed. They contribute a small amount to indigestion. This is the DEFAULT — use it when unsure.
 - "fighting": The prey is actively struggling, kicking, thrashing. Digestion is 50% SLOWER. They contribute heavily to indigestion. Use this when prey is actively resisting.
 
-YOU must set the willingness attribute based on the scene narrative. If a prey character is fighting back, set willingness="fighting". If they surrender or go limp, change it to "willing" or "reluctant". The extension handles all the math — you only set the state.
+Set willingness based on the scene. If a prey character is fighting back, set willingness="fighting". If they surrender or go limp, change it to "willing" or "reluctant". When stamina reaches 0, the engine automatically forces the prey to "reluctant" — you will see this reflected in the sheet.
 
 PREY STAMINA:
-Each prey has a stamina attribute (0-100). The extension AUTOMATICALLY drains stamina when prey are "fighting" and recovers it when they are not. When stamina reaches 0, the extension forces the prey to "reluctant" (too exhausted to fight). You do NOT need to manage stamina yourself — just copy the value you see in the sheet.
+Each prey has a stamina attribute (0-100). The engine drains stamina when prey are "fighting" and recovers it when they are not. When stamina reaches 0, the engine forces the prey to "reluctant" (too exhausted to fight). Copy the stamina value you see in the sheet exactly — do NOT modify it.
 
 PREY STRUGGLE:
-Each prey also has a struggle attribute (a decimal, e.g. struggle="12.50"). This is the indigestion % that this prey contributes per time-tick, computed by the extension from willingness, size, consciousness, and suppression. It is EXTENSION-MANAGED — just copy the value you see in the sheet verbatim. Do NOT set or recalculate it yourself.
+Each prey has a struggle attribute (a decimal, e.g. struggle="12.50"). This is the indigestion % that this prey contributes per time-tick, computed by the engine from willingness, size, consciousness, and suppression. Copy the value you see in the sheet exactly — do NOT set or recalculate it.
 
 STOMACH INDIGESTION METER:
-The <Stomach> tag has an indigestion attribute (0-100). This is a stomach-level meter that rises when prey fight and falls when they don't. The extension AUTOMATICALLY calculates indigestion based on prey willingness, prey size relative to stomach capacity, prey consciousness (digestion %), and the pred's suppression efforts. You do NOT set indigestion yourself — just copy the value you see.
+The <Stomach> tag has an indigestion attribute (0-100). This is a stomach-level meter that rises when prey fight and falls when they don't. The engine computes indigestion based on prey willingness, prey size relative to stomach capacity, prey consciousness (digestion %), and the pred's suppression efforts. Copy the indigestion value you see in the sheet EXACTLY. If the sheet says indigestion="57", you MUST output indigestion="57". Do NOT output indigestion="0" unless the sheet says "0".
 
-INDIGESTION THRESHOLD EVENTS:
-When indigestion crosses certain thresholds (25%, 50%, 75%, 90%), the extension generates an event notification. You will see these in a "STRUGGLE EVENTS" section injected into your prompt. When you see them, NARRATE the effects:
-- 25%: Mild discomfort, slight queasiness.
-- 50%: Visible discomfort, stomach gurgling, the pred feels pressure.
-- 75%: Gagging, struggling to keep prey down, visible distension.
-- 90%: Severe retching, the pred is barely holding on.
+STRUGGLE EVENTS NOTIFICATIONS (for narration only):
+After the digestion tick, the engine may generate event notifications that appear in a "─── STRUGGLE EVENTS ───" section in your prompt. These notifications tell you what happened during the tick so you can NARRATE it in your response. Examples:
+- "THRESHOLD EVENT: Indigestion reached 25% — ..." → Narrate mild discomfort, slight queasiness.
+- "THRESHOLD EVENT: Indigestion reached 50% — ..." → Narrate visible discomfort, stomach gurgling, pressure.
+- "THRESHOLD EVENT: Indigestion reached 75% — ..." → Narrate gagging, struggling to keep prey down, visible distension.
+- "THRESHOLD EVENT: Indigestion reached 90% — ..." → Narrate severe retching, barely holding on.
+- "EXHAUSTED: ..." → Narrate the prey going limp from exhaustion.
+- Vomit event messages → Narrate the vomit scene.
+
+IMPORTANT: The STRUGGLE EVENTS notifications are for NARRATION ONLY. They tell you what to describe in your visible text. The actual indigestion/stamina/struggle VALUES are already in the <CurrentCharacterSheet> — copy those values exactly into your <sheet_update>. Do NOT use the notification text to override or "correct" the sheet values. The sheet is the truth; the notifications are narration prompts.
 
 VOMIT EVENTS:
-When indigestion reaches 100%, a vomit event triggers. The extension rolls escape chances for each prey — those that escape are ALREADY REMOVED from the stored sheet. You will see a "STRUGGLE EVENTS" notification telling you which prey escaped and which remain. You MUST:
+When indigestion reaches 100%, a vomit event triggers. The engine rolls escape chances for each prey — those that escape are ALREADY REMOVED from the stored sheet. The STRUGGLE EVENTS notification will tell you which prey escaped and which remain. You MUST:
 - Narrate the vomit scene dramatically.
-- Remove escaped prey from the <Stomach> section in your <sheet_update> (the extension already removed them from the stored sheet, but your output sheet must match).
+- Remove escaped prey from the <Stomach> section in your <sheet_update> (the engine already removed them from the stored sheet, but your output sheet must match).
 - Keep prey that did not escape in the <Stomach> section.
-- After vomiting, indigestion resets to 0 and the pred loses Energy.
+- After vomiting, indigestion resets to 0 (the engine handles this — you will see indigestion="0" in the next sheet).
 
 PRED SUPPRESSION:
 The pred can actively suppress struggling prey. This is controlled by the suppressing="true|false" attribute on the <Stomach> tag. When suppressing="true":
 - Indigestion accumulation is greatly reduced (the pred is actively holding prey down).
 - BUT it drains the pred's Energy faster.
 - It also causes stomach fatigue over time, which reduces suppression effectiveness.
-Set suppressing="true" when the pred is actively clenching, holding, or pinning down prey. Set suppressing="false" when the pred is relaxed or distracted. The extension handles all suppression math.
+Set suppressing="true" when the pred is actively clenching, holding, or pinning down prey. Set suppressing="false" when the pred is relaxed or distracted.
 
 STOMACH RESISTANCE:
 <StomachResistance> in <BaseStats> is a multiplier (default 1.0) that affects how easily the pred's stomach endures struggling. Higher values = more resistant (less indigestion per struggle). Lower values = weaker stomach (more indigestion). This is a character trait — set it once and rarely change it (e.g., a pred with an "iron stomach" might have 2.0, a delicate pred might have 0.5).
 
 ENERGY:
-<Energy> in <State> is drained by fighting prey and active suppression. The extension AUTOMATICALLY manages Energy drain from the struggle system. You may also adjust Energy for other reasons (exertion, rest, etc.). When Energy is low, suppression becomes less effective and the pred may struggle to hold prey.
-
-SUMMARY OF WHAT YOU DO vs WHAT THE EXTENSION DOES:
-YOU do:
-- Set willingness="willing|reluctant|fighting" on prey items based on scene.
-- Set suppressing="true|false" on the <Stomach> tag based on scene.
-- Set <StomachResistance> as a character trait.
-- Narrate indigestion threshold events and vomit events when notified.
-- Remove escaped prey from your <sheet_update> after a vomit event.
-The EXTENSION does (do NOT do these):
-- Calculates indigestion accumulation/decay.
-- Drains/recovers prey stamina.
-- Drains/recovers pred Energy from struggle.
-- Rolls escape chances during vomit.
-- Removes escaped prey from the stored sheet.
-- Tracks stomach fatigue.
-- Generates threshold and vomit event notifications.
+<Energy> in <State> is drained by fighting prey and active suppression. The engine manages Energy drain from the struggle system. You may also adjust Energy for other reasons (exertion, rest, etc.). When Energy is low, suppression becomes less effective and the pred may struggle to hold prey. Copy the Energy value from the sheet, then adjust it only if the scene calls for additional exertion or rest.
 
 ─── ATTRIBUTE SYSTEM ───
 The character has six RPG attributes: STR (Strength), DEX (Dexterity), CON (Constitution), INT (Intelligence), WIS (Wisdom), CHA (Charisma). These are stored in an <Attributes> block inside <BaseStats>:

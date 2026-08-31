@@ -619,7 +619,7 @@ export async function promptInterceptor(messages: any[], context: any) {
         struggleNotification =
           '\n\n─── STRUGGLE EVENTS ───\n' +
           events.join('\n') +
-          '\n\nIMPORTANT: The events above were triggered by the Struggle Engine. You MUST narrate them in your response. If prey escaped during a vomit event, they have ALREADY been removed from the stored sheet — make sure your <sheet_update> does not include them in <Stomach>.'
+          '\n\nThese events are for NARRATION ONLY — describe what happened in your visible text. The actual indigestion, stamina, and struggle VALUES are already in the <CurrentCharacterSheet> above. Copy those values exactly into your <sheet_update>. Do NOT use these notifications to override sheet values. If prey escaped during a vomit event, they have ALREADY been removed from the stored sheet — make sure your <sheet_update> does not include them in <Stomach>.'
       }
     } catch {
       // ignore parse errors
