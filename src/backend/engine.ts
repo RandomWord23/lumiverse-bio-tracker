@@ -395,7 +395,8 @@ export function digestItemsInContent(
   ctx: {
     baseDigRate: number
     acidMultiplier: number
-    elapsed: number
+    /** Current value of the monotonic <ElapsedHours> clock. */
+    currentElapsed: number
     oldDigestionMap: Map<string, number>
   },
 ): {
@@ -431,12 +432,31 @@ export function digestItemsInContent(
       else if (willingness === 'fighting') speedMult *= 0.5
     }
 
-    let digNum = parseFloat(getAttrFromString(attrs, 'digestion').replace('%', '')) || 0
+    // ABSOLUTE DIGESTION: each item carries a timeAdded timestamp on the
+    // monotonic clock; digestion is recomputed from scratch every tick:
+    //   digestion = baseDigRate * speedMult * acidMult * (now - timeAdded)
+    // Self-healing — skipped ticks, crashes, and rollbacks cannot lose time.
+    let timeAdded = parseFloat(getAttrFromString(attrs, 'timeAdded'))
+    let oldDigNum = ctx.oldDigestionMap.get(name) ?? 0
+
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      // Migration / new item: no timestamp yet.
+      if (oldDigNum > 0) {
+        // Legacy item with progress but no timestamp — back-calculate
+        // timeAdded from its current digestion level.
+        timeAdded = ctx.currentElapsed - oldDigNum / (ctx.baseDigRate * speedMult * ctx.acidMultiplier)
+      } else {
+        // Brand-new item (or LLM dropped the attribute) — starts now.
+        timeAdded = ctx.currentElapsed
+      }
+    }
+
+    let digNum = Math.min(
+      100,
+      ctx.baseDigRate * speedMult * ctx.acidMultiplier * Math.max(0, ctx.currentElapsed - timeAdded),
+    )
     // Prevent rollback: never let digestion drop below the previously stored value
-    const oldDigNum = ctx.oldDigestionMap.get(name) ?? 0
     digNum = Math.max(digNum, oldDigNum)
-    const digIncrease = ctx.baseDigRate * speedMult * ctx.acidMultiplier * ctx.elapsed
-    digNum = Math.min(100, digNum + digIncrease)
 
     if (digNum >= 100) {
       const numVol = parseFloat(vol) || 0
@@ -465,10 +485,11 @@ export function digestItemsInContent(
       const stamina = getAttrFromString(attrs, 'stamina') || '100'
       preyAttrs = ` willingness="${willingness}" stamina="${stamina}"`
     }
+    const tsAttr = ` timeAdded="${timeAdded.toFixed(2)}"`
     if (isSelfClosing) {
-      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${preyAttrs} />`
+      return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${tsAttr}${preyAttrs} />`
     }
-    return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${preyAttrs}>${inner}</Item>`
+    return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${tsAttr}${preyAttrs}>${inner}</Item>`
   }
 
   content = content.replace(
@@ -866,6 +887,8 @@ ${sheetXml}
 
 ─── YOUR RESPONSIBILITIES (what YOU must do) ───
 1. ADVANCE <Time> FORWARD every turn. If the scene progresses, increase the <Time> value. The extension uses the time delta to calculate digestion, arousal decay, and body growth. If you do not advance time, the simulation stalls.
+   FORMAT RULE: <Time> must contain ONLY a 24-hour clock value in "HH:MM" form (e.g. "10:23", "14:30"). Do NOT prefix it with a day, date, or any other text — "Day 1, 10:23" is INVALID and breaks the simulation. Correct: <Time>10:23</Time>. Incorrect: <Time>Day 1, 10:23</Time>.
+   MANDATORY RULE: You MUST ALWAYS include a <Time> tag in every <sheet_update>. NEVER omit it, even if you think time didn't change — copy the previous value verbatim. If <Time> is missing from the sheet, the extension cannot calculate digestion and the simulation stalls completely.
 2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
 3. Add <Item> entries to <Stomach> or <Bowels> when the character eats or is eaten. Remove them only if the item was regurgitated or otherwise exits the body.
 4. Update <Arousal> based on what happens in the scene (intimacy raises it, time passes lowers it — the extension halves it each hour).
@@ -873,7 +896,8 @@ ${sheetXml}
 6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
 
 ─── WHAT THE EXTENSION HANDLES AUTOMATICALLY (do NOT do these yourself) ───
-- Digestion percentages: calculated from <Time> delta automatically.
+- Digestion percentages: calculated automatically from the item's timeAdded timestamp and the current time.
+- The following sheet fields are managed ENTIRELY by the extension — copy them exactly as-is and NEVER modify them: <ElapsedHours>, <FirstItemTime>, <StomachEmptyTime>, <CurrentAcidPct>.
 - Nutrient absorption and body growth (Height, Weight, Breast, Hips, Penis): applied automatically when items digest.
 - Clothing stress and condition: degraded automatically as the body grows.
 - <Climax> meter: managed entirely by the extension based on <Arousal>.
@@ -906,7 +930,7 @@ CRITICAL XML RULES:
      <Description>Squirming helplessly as acids rise past her waist.</Description>
      <BoundGear>blue dress, leather boots</BoundGear>
    </Item>
-6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" value EXACTLY as it appears in <CurrentCharacterSheet> — do NOT set it to "0%" or remove it. The extension advances the value automatically; your job is to preserve it as-is.
+6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" AND timeAdded="..." attributes EXACTLY as they appear in <CurrentCharacterSheet> — do NOT set digestion to "0%", remove it, or alter timeAdded. The extension advances the values automatically; your job is to preserve them as-is. When adding a NEW item that the character just ate, do NOT include a timeAdded attribute — the extension stamps it automatically.
 7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
 8. The extension AUTOMATICALLY handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions will increase proportionally. Do NOT manually adjust these stats based on digestion — the extension does it for you. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.
@@ -914,7 +938,7 @@ CRITICAL XML RULES:
 11. The <sheet_update> block is invisible to the user — do not mention it in your visible text.
 12. If absolutely nothing on the sheet changed, you may omit the block.
 13. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
-14. If any State or World field (Time, Weather, Temperature, Area, Building, Room, Health, Energy) is blank or "0" in the <CurrentCharacterSheet>, you MUST invent a sensible default consistent with the current scene. For example, if Weather is blank, set it based on the season or what's happening in the story. If Health or Energy is blank, default to 100. Never leave these fields empty in your <sheet_update>.
+14. If any State or World field (Time, Weather, Temperature, Area, Building, Room, Health, Energy) is blank or "0" in the <CurrentCharacterSheet>, you MUST invent a sensible default consistent with the current scene. For example, if Weather is blank, set it based on the season or what's happening in the story. If Health or Energy is blank, default to 100. Never leave these fields empty in your <sheet_update>. For <Time>, the default MUST be a plain "HH:MM" 24-hour value (e.g. "08:00") with NO day/date prefix.
 15. Prey <Description> MUST reflect the prey's current action/state and update EVERY turn. <Appearance> stays the same unless the prey transforms. Use <Description> for what's happening now (squirming, dissolving, going limp) and <Appearance> for what they look like (age, species, build, hair, eyes).
 16. <Arousal> is a 0-100 meter. The extension AUTOMATICALLY decays it by 50% per hour. You MUST actively add points to it to keep it up during intimate scenes (e.g., add +30 if stimulated, +50 if highly stimulated). If no intimacy occurs, it will naturally drop.
 17. <Climax> is a 0-100 meter managed ENTIRELY by the extension. NEVER change its value yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
@@ -928,7 +952,11 @@ CRITICAL XML RULES:
     <Backpack>
       <Item qty="1">Waterskin</Item>
     </Backpack>
-
+    MONEY/WEALTH IS NOT AN ITEM. Never put money, coins, or cash in <Backpack>. Wealth is tracked in dedicated BaseStats fields:
+    - Modern settings: <CashBalance> — a plain number (no $ symbol, no commas). Example: <CashBalance>1500</CashBalance>.
+    - Fantasy settings: <Gold>, <Silver>, <Copper> — each a plain whole number of that coin. Example: <Gold>12</Gold><Silver>50</Silver><Copper>3</Copper>.
+    When the character earns, spends, finds, or loses money, update these fields directly (arithmetic on the current values). If a wealth field shows 0, that means zero money — it does NOT mean the field is missing.
+    The active currency system is indicated by <CurrencySystem> ("modern" or "fantasy"). Only update the fields for the active system.
 ─── STRUGGLE & INDIGESTION SYSTEM ───
 The extension includes a Struggle Engine that simulates prey resistance and stomach indigestion. Here is how it works and what YOU must do:
 

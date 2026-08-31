@@ -913,6 +913,13 @@ export function setup(ctx: SpindleFrontendContext) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
+    // ALWAYS emit <Time> even when empty — if the field is omitted on manual
+    // sync, the stored sheet loses its time reference and every subsequent
+    // digestion tick is skipped ("extension forgot the time" bug).
+    const timeInput = document.querySelector('.bt-scrape[data-id="Time"]') as HTMLInputElement
+    if (timeInput && !/<Time>/i.test(xml)) {
+      xml += `    <Time>${timeInput.value.trim() || '00:00'}</Time>\n`
+    }
     const arousalInput = document.getElementById('bt-arousal-slider') as HTMLInputElement
     const arousalVal = parseInt(arousalInput?.value || '0')
     xml += `    <Arousal>${arousalVal}</Arousal>\n`
@@ -926,6 +933,19 @@ export function setup(ctx: SpindleFrontendContext) {
         xml += `    <${id}>${val}</${id}>\n`
       }
     })
+    // ALWAYS emit the active currency fields (defaulting to 0) even when
+    // empty — otherwise the LLM never sees that wealth fields exist and
+    // starts stuffing money into <Backpack> as inventory items.
+    const currencySelect = document.getElementById('bt-currency-type') as HTMLSelectElement
+    if (currencySelect?.value === 'fantasy') {
+      for (const ck of ['Gold', 'Silver', 'Copper']) {
+        const cInput = document.querySelector(`.bt-scrape[data-id="${ck}"]`) as HTMLInputElement
+        xml += `    <${ck}>${cInput?.value.trim() || '0'}</${ck}>\n`
+      }
+    } else {
+      const cashInput = document.querySelector('.bt-scrape[data-id="CashBalance"]') as HTMLInputElement
+      xml += `    <CashBalance>${cashInput?.value.trim() || '0'}</CashBalance>\n`
+    }
     // Attributes block inside BaseStats
     const attrKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
     let attrXml = `    <Attributes>`

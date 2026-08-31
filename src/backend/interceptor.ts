@@ -46,16 +46,56 @@ export async function runDigestionTick(
       const match = xml.match(/<Time>(.*?)<\/Time>/i)
       if (!match) return null
       const timeStr = match[1].trim()
-      const parts = timeStr.split(':').map(Number)
-      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        return parts[0] + parts[1] / 60
+      // The LLM sometimes prefixes the time with a day/date label
+      // (e.g. "Day 1, 10:23"). Extract the LAST HH:MM pattern so we
+      // ignore any leading prose and still get a valid hour value.
+      const hmMatch = timeStr.match(/(\d{1,2}):(\d{2})\s*(?:[ap]\.?m\.?)?$/i)
+      if (hmMatch) {
+        let h = parseInt(hmMatch[1], 10)
+        const m = parseInt(hmMatch[2], 10)
+        const ampm = hmMatch[3]
+        if (ampm) {
+          const isPm = /p/i.test(ampm)
+          if (isPm && h < 12) h += 12
+          if (!isPm && h === 12) h = 0
+        }
+        return h + m / 60
       }
+      // Fallback: bare decimal hour (e.g. "14.5")
       const h = parseFloat(timeStr)
       return isNaN(h) ? null : h
     }
 
-    const oldTime = getTimeHours(oldXml)
-    const newTime = getTimeHours(newXml)
+    let oldTime = getTimeHours(oldXml)
+    let newTime = getTimeHours(newXml)
+
+    // Bug fix: if the LLM omitted <Time> from its <sheet_update>, carry the
+    // previous time forward instead of dropping it. Otherwise the stored
+    // sheet loses its time reference and every future tick is skipped
+    // ("extension forgot the time" loop).
+    if (newTime === null && oldTime !== null) {
+      const oldTimeTag = oldXml.match(/<Time>(.*?)<\/Time>/i)
+      if (oldTimeTag) {
+        newXml = newXml.replace(
+          /<Time>.*?<\/Time>/i,
+          `<Time>${oldTimeTag[1]}</Time>`,
+        )
+        if (!/<Time>/i.test(newXml)) {
+          // No <Time> tag at all in the new sheet — inject one.
+          newXml = newXml.includes('<BaseStats>')
+            ? newXml.replace(/<BaseStats>/i, `<BaseStats>\n    <Time>${oldTimeTag[1]}</Time>`)
+            : `<Time>${oldTimeTag[1]}</Time>\n${newXml}`
+        }
+        newTime = oldTime
+        spindle.log.info(`LLM omitted <Time>; carried forward previous time ${oldTimeTag[1].trim()}`)
+      }
+    }
+    // Symmetric case: old sheet lost its time earlier (legacy/manual sync) —
+    // adopt the new time so the reference is re-established.
+    if (oldTime === null && newTime !== null) {
+      oldTime = newTime
+      spindle.log.info('Old sheet had no <Time>; re-established time reference from new sheet')
+    }
 
     if (oldTime === null || newTime === null) {
       maybeToast('digestionSkips', 'info', 'Digestion tick skipped: missing time')
@@ -106,42 +146,59 @@ export async function runDigestionTick(
     let acidLevel = 0
 
     if (engineToggles.digestionEngine) {
-      // Read acid level and config stats from the OLD (stored) sheet so the
-      // LLM cannot artificially lower acid or inflate digestion rates.
-      acidLevel = getStat(oldXml, 'CurrentAcidPct')
-    const baseDigRate = (getStat(oldXml, 'BaseDigestionRate') || 25) * (1 + (modifiers.BaseDigestionRate || 0))
+      // ── ABSOLUTE / TIMESTAMP-BASED MODEL ──────────────────────────────
+      // All digestion state is stored as absolute timestamps on a monotonic
+      // clock (<ElapsedHours>, summed from every tick's time delta). This
+      // makes the system self-healing: if a tick is skipped, crashes, or is
+      // rolled back, the next tick simply recomputes everything from the
+      // timestamps. No accumulators, no drift, no "lost time" bugs.
+      const baseDigRate = (getStat(oldXml, 'BaseDigestionRate') || 25) * (1 + (modifiers.BaseDigestionRate || 0))
     const acidRiseRate = (getStat(oldXml, 'AcidRiseRate') || 10) * (1 + (modifiers.AcidRiseRate || 0))
+
+    // Monotonic clock: total hours elapsed since the RP started.
+    const newElapsed = getStat(oldXml, 'ElapsedHours') + elapsed
+
+    // Acid is a pure function of two timestamps:
+    //   <FirstItemTime>     — when the current batch of items first appeared (0 = no batch)
+    //   <StomachEmptyTime>  — when the stomach last became empty (0 = not emptied since batch)
+    // Items present:  acid = min(100, riseRate * (now - firstItemTime))
+    // Just emptied:   acid decays at the same rate from its peak:
+    //                 acid = max(0, riseRate * (2*emptyTime - firstItemTime - now))
+    let firstItemTime = getStat(oldXml, 'FirstItemTime')
+    let stomachEmptyTime = getStat(oldXml, 'StomachEmptyTime')
 
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
     const hasItems = stomachContents.includes('<Item')
 
     if (hasItems) {
-      acidLevel = Math.min(100, acidLevel + acidRiseRate * elapsed)
+      if (firstItemTime <= 0) {
+        // A new batch of items appeared — start the acid ramp-up.
+        firstItemTime = newElapsed
+        stomachEmptyTime = 0
+      }
+      acidLevel = Math.min(100, acidRiseRate * Math.max(0, newElapsed - firstItemTime))
+    } else if (firstItemTime > 0) {
+      // Stomach just emptied (or is empty after a batch) — acid decays.
+      if (stomachEmptyTime <= 0) {
+        stomachEmptyTime = newElapsed
+      }
+      acidLevel = Math.max(0, acidRiseRate * (2 * stomachEmptyTime - firstItemTime - newElapsed))
+      if (acidLevel <= 0) {
+        // Fully decayed — reset the batch so the next item starts fresh.
+        firstItemTime = 0
+        stomachEmptyTime = 0
+      }
     } else {
-      acidLevel = Math.max(0, acidLevel - acidRiseRate * elapsed)
+      acidLevel = 0
     }
 
     const acidMultiplier = 1 + acidLevel / 100
 
-    updatedXml = newXml.replace(
-      /<CurrentAcidPct>.*?<\/CurrentAcidPct>/i,
-      `<CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>`,
-    )
-
-    if (!updatedXml.includes('<CurrentAcidPct>')) {
-      if (updatedXml.includes('</BaseStats>')) {
-        updatedXml = updatedXml.replace(
-          /<\/BaseStats>/i,
-          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </BaseStats>`,
-        )
-      } else if (updatedXml.includes('</State>')) {
-        updatedXml = updatedXml.replace(
-          /<\/State>/i,
-          `    <CurrentAcidPct>${acidLevel.toFixed(2)}</CurrentAcidPct>\n  </State>`,
-        )
-      }
-    }
+    updatedXml = setStat(updatedXml, 'ElapsedHours', newElapsed)
+    updatedXml = setStat(updatedXml, 'FirstItemTime', firstItemTime)
+    updatedXml = setStat(updatedXml, 'StomachEmptyTime', stomachEmptyTime)
+    updatedXml = setStat(updatedXml, 'CurrentAcidPct', acidLevel)
 
     // Build a map of item name -> digestion % from the old (stored) sheet
     // so we can prevent the LLM from accidentally rolling back digestion values.
@@ -175,7 +232,7 @@ export async function runDigestionTick(
     const stomResult = digestItemsInContent(stomContent, {
       baseDigRate,
       acidMultiplier,
-      elapsed,
+      currentElapsed: newElapsed,
       oldDigestionMap,
     })
     stomContent = stomResult.content
@@ -183,7 +240,7 @@ export async function runDigestionTick(
     const bowResult = digestItemsInContent(bowContent, {
       baseDigRate,
       acidMultiplier,
-      elapsed,
+      currentElapsed: newElapsed,
       oldDigestionMap,
     })
     bowContent = bowResult.content
