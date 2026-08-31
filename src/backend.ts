@@ -190,7 +190,18 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
 
   if (payload.error) return
   if (!chatId || !messageId || !content) return
-  if (chatId !== activeChatId) return
+  // ── Relax activeChatId guard ──────────────────────────────────
+  // Previously this returned early when chatId !== activeChatId, which
+  // silently skipped the Tier 2 fallback (commitUpdate + updateMessage
+  // rewrite) whenever the user switched chats during generation or
+  // activeChatId was stale/null.  All computation and storage below
+  // uses chatId from the payload, not activeChatId, so it is safe to
+  // proceed.  We log the mismatch for diagnostics.
+  if (chatId !== activeChatId) {
+    spindle.log.info(
+      `[GENERATION_ENDED] chatId ${chatId} !== activeChatId ${activeChatId} — proceeding anyway`,
+    )
+  }
   if (committedMessageIds.has(messageId)) return
   if (!update) return
 

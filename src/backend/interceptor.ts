@@ -611,6 +611,17 @@ export async function contentProcessor(
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml)
 
+  // ── Mark this message as committed ──────────────────────────────
+  // Without this, if GENERATION_ENDED is skipped (e.g. chatId mismatch),
+  // the promptInterceptor safety net re-commits the same message on the
+  // next turn.  That re-commit uses the already-computed sheet as "old",
+  // producing elapsed=0, which overwrites the computed values with the
+  // LLM's raw (digestion=0%) output — corrupting the baseline for all
+  // future turns.
+  if (ctx.messageId) {
+    committedMessageIds.add(ctx.messageId)
+  }
+
   // ── Clean up the prompt-time snapshot ────────────────────────────
   promptSheets.delete(chatId)
 
