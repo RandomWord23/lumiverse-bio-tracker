@@ -294,10 +294,10 @@ export async function runDigestionTick(
     })
     bowContent = bowResult.content
 
-    const totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
-    let wasteCount = stomResult.wasteCount + bowResult.wasteCount
+    totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
+    wasteCount = stomResult.wasteCount + bowResult.wasteCount
     const accumulatedWasteVol = stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
-    const totalItemCount = stomResult.itemCount + bowResult.itemCount
+    totalItemCount = stomResult.itemCount + bowResult.itemCount
 
     if (stomResult.newRemains.length > 0) {
       bowContent += '\n' + stomResult.newRemains.join('\n')
