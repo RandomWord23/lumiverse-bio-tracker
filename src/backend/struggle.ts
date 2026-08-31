@@ -235,10 +235,18 @@ export function processStruggle(
   }
 
   // --- Update indigestion (accumulate or decay) ---
-  if (anyFighting) {
+  // Indigestion accumulates from ALL prey with non-zero struggle (fighting
+  // AND reluctant — reluctant prey still struggle at 25% intensity). It only
+  // decays when ALL prey are willing (no struggle at all) or the stomach is
+  // empty. The previous code only accumulated when at least one prey was
+  // "fighting", which meant reluctant prey (the default willingness) never
+  // generated any indigestion — it stayed at 0 forever.
+  const hasStruggle = totalIndigestionGain > 0
+  if (hasStruggle) {
     indigestion = Math.min(100, indigestion + totalIndigestionGain)
     spindle.log.info(
-      `[Struggle] ACCUMULATE: +${totalIndigestionGain.toFixed(2)} → indigestion=${indigestion.toFixed(2)}`,
+      `[Struggle] ACCUMULATE: +${totalIndigestionGain.toFixed(2)} → indigestion=${indigestion.toFixed(2)}` +
+        ` (fighting=${numFighting}, totalPrey=${preyData.length})`,
     )
   } else {
     const allWilling = preyData.every((p) => p.willingness === 'willing')

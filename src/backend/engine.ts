@@ -14,7 +14,7 @@ import {
 
 export function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
   if (toastSettings[category] === false) return
-  spindle.toast[type](message)
+  spindle.toast[type](message, { duration: 8000 })
 }
 
 export function sheetPath(chatId: string) {
@@ -181,13 +181,28 @@ export function setStat(xml: string, tag: string, value: number): string {
   if (regex.test(xml)) {
     return xml.replace(regex, replacement)
   }
+  // Tag doesn't exist yet — inject it. Try several insertion points in
+  // order of preference: inside <BaseStats>, after the first opening tag,
+  // or prepend to the document as a last resort.
   if (xml.includes('</BaseStats>')) {
     return xml.replace(
       /<\/BaseStats>/i,
       `    <${tag}>${value.toFixed(2)}</${tag}>\n  </BaseStats>`,
     )
   }
-  return xml
+  // No </BaseStats> — try inserting after the first opening tag (e.g. <CharacterSheet>)
+  const firstTagMatch = xml.match(/<(\w+)[^>]*>/)
+  if (firstTagMatch) {
+    const firstTag = firstTagMatch[0]
+    const firstTagEnd = xml.indexOf(firstTag) + firstTag.length
+    return (
+      xml.slice(0, firstTagEnd) +
+      `\n  <${tag}>${value.toFixed(2)}</${tag}>` +
+      xml.slice(firstTagEnd)
+    )
+  }
+  // Last resort: prepend
+  return `<${tag}>${value.toFixed(2)}</${tag}>\n${xml}`
 }
 
 export function deriveCondition(
@@ -397,6 +412,11 @@ export function digestItemsInContent(
     /** Current value of the monotonic <ElapsedHours> clock. */
     currentElapsed: number
     oldDigestionMap: Map<string, number>
+    /** Map of item name -> timeAdded from the previous tick's stored sheet.
+     *  The LLM never includes timeAdded in its output, so without this map
+     *  every item would be treated as brand-new (timeAdded = currentElapsed)
+     *  and digestion would always compute to 0. */
+    oldTimeAddedMap: Map<string, number>
   },
 ): {
   content: string
@@ -435,17 +455,27 @@ export function digestItemsInContent(
     // monotonic clock; digestion is recomputed from scratch every tick:
     //   digestion = baseDigRate * speedMult * acidMult * (now - timeAdded)
     // Self-healing — skipped ticks, crashes, and rollbacks cannot lose time.
-    let timeAdded = parseFloat(getAttrFromString(attrs, 'timeAdded'))
+    // The LLM never includes the engine-injected timeAdded attribute in its
+    // output, so we must look it up from the old (stored) sheet's map first.
+    // Only fall back to the LLM's attribute or back-calculation if the old
+    // sheet doesn't have it (truly new item or legacy migration).
+    let timeAdded = ctx.oldTimeAddedMap.get(name) ?? NaN
     let oldDigNum = ctx.oldDigestionMap.get(name) ?? 0
 
     if (isNaN(timeAdded) || timeAdded <= 0) {
-      // Migration / new item: no timestamp yet.
+      // Not in oldTimeAddedMap — try the LLM's attribute (rare, but possible
+      // if the LLM copied it from the prompt).
+      timeAdded = parseFloat(getAttrFromString(attrs, 'timeAdded'))
+    }
+
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      // Migration / new item: no timestamp from any source.
       if (oldDigNum > 0) {
         // Legacy item with progress but no timestamp — back-calculate
         // timeAdded from its current digestion level.
         timeAdded = ctx.currentElapsed - oldDigNum / (ctx.baseDigRate * speedMult * ctx.acidMultiplier)
       } else {
-        // Brand-new item (or LLM dropped the attribute) — starts now.
+        // Brand-new item — starts now.
         timeAdded = ctx.currentElapsed
       }
     }

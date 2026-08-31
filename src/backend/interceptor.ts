@@ -173,6 +173,13 @@ export async function runDigestionTick(
     let totalItemCount = 0
     let acidLevel = 0
 
+    maybeToast(
+      'digestionTicks',
+      'info',
+      `[DIAG] digestionEngine=${engineToggles.digestionEngine} struggleEngine=${engineToggles.struggleEngine} ` +
+        `| modifiers keys=${Object.keys(modifiers).join(',') || 'NONE'}`,
+    )
+
     if (engineToggles.digestionEngine) {
       // ── ABSOLUTE / TIMESTAMP-BASED MODEL ──────────────────────────────
       // All digestion state is stored as absolute timestamps on a monotonic
@@ -228,12 +235,16 @@ export async function runDigestionTick(
     updatedXml = setStat(updatedXml, 'StomachEmptyTime', stomachEmptyTime)
     updatedXml = setStat(updatedXml, 'CurrentAcidPct', acidLevel)
 
-    // Build a map of item name -> digestion % from the old (stored) sheet
-    // so we can prevent the LLM from accidentally rolling back digestion values.
+    // Build maps of item name -> digestion % AND item name -> timeAdded from
+    // the old (stored) sheet. The timeAdded map is critical: the LLM never
+    // includes the engine-injected timeAdded attribute in its output, so
+    // without this map every item would be treated as brand-new on every tick
+    // (timeAdded = currentElapsed → digestion = rate × 0 = 0).
     // IMPORTANT: Only scan Stomach and Bowels sections — Backpack items use a
     // different format (no digestion attribute) and including them would cause
     // name collisions and incorrect clamping.
     const oldDigestionMap = new Map<string, number>()
+    const oldTimeAddedMap = new Map<string, number>()
     const oldStomMatch = oldXml.match(/<Stomach[^>]*>([\s\S]*?)<\/Stomach>/i)
     const oldBowMatch = oldXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
     const oldDigestiveContent = [
@@ -248,8 +259,16 @@ export async function runDigestionTick(
       if (oldName) {
         const oldDig = parseFloat(getAttrFromString(oldAttrs, 'digestion').replace('%', '')) || 0
         oldDigestionMap.set(oldName, oldDig)
+        const oldTimeAdded = parseFloat(getAttrFromString(oldAttrs, 'timeAdded'))
+        if (!isNaN(oldTimeAdded) && oldTimeAdded > 0) {
+          oldTimeAddedMap.set(oldName, oldTimeAdded)
+        }
       }
     }
+    spindle.log.info(
+      `[DigestionTick] oldTimeAddedMap: ${oldTimeAddedMap.size} entries, ` +
+        `oldDigestionMap: ${oldDigestionMap.size} entries`,
+    )
 
     const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
     const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
@@ -262,6 +281,7 @@ export async function runDigestionTick(
       acidMultiplier,
       currentElapsed: newElapsed,
       oldDigestionMap,
+      oldTimeAddedMap,
     })
     stomContent = stomResult.content
 
@@ -270,6 +290,7 @@ export async function runDigestionTick(
       acidMultiplier,
       currentElapsed: newElapsed,
       oldDigestionMap,
+      oldTimeAddedMap,
     })
     bowContent = bowResult.content
 
@@ -320,6 +341,25 @@ export async function runDigestionTick(
 
     } // end digestionEngine
 
+    // ── DIAGNOSTIC: show computed digestion values after engine block ──
+    const diagAcidMatch = updatedXml.match(/<CurrentAcidPct>(.*?)<\/CurrentAcidPct>/i)
+    const diagStomItems = updatedXml.match(/<Stomach[^>]*>([\s\S]*?)<\/Stomach>/i)
+    const diagItemDigestions: string[] = []
+    if (diagStomItems) {
+      const itemRegex = /<Item\s+[^>]*?name="([^"]*)"[^>]*?digestion="([^"]*)"/gi
+      let m: RegExpExecArray | null
+      while ((m = itemRegex.exec(diagStomItems[1])) !== null) {
+        diagItemDigestions.push(`${m[1]}=${m[2]}`)
+      }
+    }
+    maybeToast(
+      'digestionTicks',
+      'info',
+      `[DIAG-postEngine] acid=${diagAcidMatch ? diagAcidMatch[1] : 'MISSING'} ` +
+        `items=${totalItemCount} digestedVol=${totalDigestedVol.toFixed(2)}L ` +
+        `| ${diagItemDigestions.join(', ') || 'NO ITEMS WITH DIGESTION'}`,
+    )
+
     // Normalize Backpack items: strip digestion/type/volume_L attributes that
     // the LLM may have erroneously added. Backpack items use the simple
     // <Item qty="...">name</Item> format — they are NOT prey and should never
@@ -348,6 +388,12 @@ export async function runDigestionTick(
       updatedXml = struggleResult.xml
       // Verify indigestion survived into updatedXml after processStruggle
       const postStruggleInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+      maybeToast(
+        'digestionTicks',
+        'info',
+        `[DIAG-postStruggle] indigestion=${postStruggleInd ? postStruggleInd[1] : 'MISSING'} ` +
+          `events=${struggleResult.struggleEvents.length}`,
+      )
       spindle.log.info(
         `[DigestionTick] After processStruggle: indigestion attr="${postStruggleInd ? postStruggleInd[1] : 'MISSING'}"`,
       )
@@ -491,6 +537,14 @@ export async function runDigestionTick(
 
     // Final verification: log indigestion in the XML being returned
     const finalInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+    const finalAcid = updatedXml.match(/<CurrentAcidPct>(.*?)<\/CurrentAcidPct>/i)
+    maybeToast(
+      'digestionTicks',
+      'info',
+      `[DIAG-FINAL] acid=${finalAcid ? finalAcid[1] : 'MISSING'} ` +
+        `indigestion=${finalInd ? finalInd[1] : 'MISSING'} ` +
+        `items=${totalItemCount} digestedVol=${totalDigestedVol.toFixed(2)}L`,
+    )
     spindle.log.info(
       `[DigestionTick] RETURN: indigestion="${finalInd ? finalInd[1] : 'MISSING'}"`,
     )
