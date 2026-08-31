@@ -460,7 +460,8 @@ export function digestItemsInContent(
 
     let preyAttrs = ''
     if (type === 'Prey') {
-      const willingness = getAttrFromString(attrs, 'willingness') || 'reluctant'
+      const rawWillingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+      const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
       const stamina = getAttrFromString(attrs, 'stamina') || '100'
       preyAttrs = ` willingness="${willingness}" stamina="${stamina}"`
     }
@@ -888,7 +889,7 @@ CRITICAL XML RULES:
 2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format.
    VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist".
 3. The <Equip> tag MUST ALWAYS have an elasticity attribute. Valid values are "rigid", "standard", "stretchy", or "magic". Never omit it. If the extension has added stress="..." or condition="..." attributes to an Equip tag, copy them exactly as-is. Do NOT modify or remove them.
-4. Stomach and Bowel contents MUST use the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag. Items can be inside <Stomach> or <Bowels> (for full-tour scenarios).
+4. Stomach and Bowel contents MUST use the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag. Items can be inside <Stomach> or <Bowels> (for full-tour scenarios). Backpack (inventory) items use a DIFFERENT, simpler format — see rule 19.
 5. Prey identity, action, and gear go in SEPARATE tags. NEVER mix them:
    - <Appearance> = static identity (age, species, gender, build, hair, eyes). Stays the same unless the prey transforms.
    - <Description> = current dynamic action/state (squirming, dissolving, going limp). Updates EVERY turn.
@@ -905,7 +906,7 @@ CRITICAL XML RULES:
      <Description>Squirming helplessly as acids rise past her waist.</Description>
      <BoundGear>blue dress, leather boots</BoundGear>
    </Item>
-6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag.
+6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" value EXACTLY as it appears in <CurrentCharacterSheet> — do NOT set it to "0%" or remove it. The extension advances the value automatically; your job is to preserve it as-is.
 7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
 8. The extension AUTOMATICALLY handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions will increase proportionally. Do NOT manually adjust these stats based on digestion — the extension does it for you. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.
@@ -918,6 +919,15 @@ CRITICAL XML RULES:
 16. <Arousal> is a 0-100 meter. The extension AUTOMATICALLY decays it by 50% per hour. You MUST actively add points to it to keep it up during intimate scenes (e.g., add +30 if stimulated, +50 if highly stimulated). If no intimacy occurs, it will naturally drop.
 17. <Climax> is a 0-100 meter managed ENTIRELY by the extension. NEVER change its value yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
 18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension automatically calculates and updates <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> based on Arousal (0% arousal = 30% size, 100% arousal = 100% size). Do NOT output or modify the Current tags yourself.
+19. Backpack (inventory) items use a SIMPLE format that is DIFFERENT from Stomach/Bowel prey items. Backpack items MUST use: <Item qty="...">item name</Item>. Do NOT add type, name, volume_L, or digestion attributes to Backpack items. Backpack items are NOT prey — they do not get digested and must NEVER have a digestion meter. Example:
+    BAD (do NOT do this):
+    <Backpack>
+      <Item type="Food" name="Waterskin" volume_L="" digestion="14.06%">Full</Item>
+    </Backpack>
+    GOOD (do this):
+    <Backpack>
+      <Item qty="1">Waterskin</Item>
+    </Backpack>
 
 ─── STRUGGLE & INDIGESTION SYSTEM ───
 The extension includes a Struggle Engine that simulates prey resistance and stomach indigestion. Here is how it works and what YOU must do:

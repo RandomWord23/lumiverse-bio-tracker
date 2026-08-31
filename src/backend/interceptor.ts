@@ -145,10 +145,19 @@ export async function runDigestionTick(
 
     // Build a map of item name -> digestion % from the old (stored) sheet
     // so we can prevent the LLM from accidentally rolling back digestion values.
+    // IMPORTANT: Only scan Stomach and Bowels sections — Backpack items use a
+    // different format (no digestion attribute) and including them would cause
+    // name collisions and incorrect clamping.
     const oldDigestionMap = new Map<string, number>()
+    const oldStomMatch = oldXml.match(/<Stomach[^>]*>([\s\S]*?)<\/Stomach>/i)
+    const oldBowMatch = oldXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
+    const oldDigestiveContent = [
+      oldStomMatch ? oldStomMatch[1] : '',
+      oldBowMatch ? oldBowMatch[1] : '',
+    ].join('\n')
     const oldItemRegex = /<Item\s+([^>]+?)[\s/]*>/gi
     let oldItemMatch: RegExpExecArray | null
-    while ((oldItemMatch = oldItemRegex.exec(oldXml)) !== null) {
+    while ((oldItemMatch = oldItemRegex.exec(oldDigestiveContent)) !== null) {
       const oldAttrs = oldItemMatch[1]
       const oldName = getAttrFromString(oldAttrs, 'name')
       if (oldName) {
@@ -225,6 +234,29 @@ export async function runDigestionTick(
     )
 
     } // end digestionEngine
+
+    // Normalize Backpack items: strip digestion/type/volume_L attributes that
+    // the LLM may have erroneously added. Backpack items use the simple
+    // <Item qty="...">name</Item> format — they are NOT prey and should never
+    // have a digestion meter. This prevents the UI from breaking (frontend
+    // parser reads textContent as the item name, so <Item name="Waterskin"
+    // digestion="14.06%">Full</Item> would display as "Full" instead of
+    // "Waterskin"). This runs regardless of the digestionEngine toggle since
+    // it is a format-correction step, not a digestion calculation.
+    updatedXml = updatedXml.replace(
+      /<Backpack([^>]*)>([\s\S]*?)<\/Backpack>/gi,
+      (match, attrs, inner) => {
+        const normalizedInner = inner.replace(
+          /<Item\s+([^>]*?)(?:\s*\/\s*>|>([\s\S]*?)<\/Item>)/gi,
+          (itemMatch: string, itemAttrs: string, textContent: string | undefined) => {
+            const qty = getAttrFromString(itemAttrs, 'qty') || '1'
+            const name = getAttrFromString(itemAttrs, 'name') || (textContent || '').trim()
+            return `<Item qty="${qty}">${name}</Item>`
+          },
+        )
+        return `<Backpack${attrs}>${normalizedInner}</Backpack>`
+      },
+    )
 
     if (engineToggles.struggleEngine) {
       const struggleResult = processStruggle(updatedXml, oldXml, elapsed, modifiers.StomachResistance || 0, modifiers.EnergyDrain || 0)

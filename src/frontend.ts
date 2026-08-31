@@ -983,7 +983,14 @@ export function setup(ctx: SpindleFrontendContext) {
 
     xml += `    <Status belly="${bellyStatus}" mobility="${mobility}" />\n`
     const suppressing = (document.getElementById('bt-suppressing-toggle') as HTMLInputElement)?.checked ? 'true' : 'false'
-    xml += `    <Stomach current="${stomFill}" max="${stomMax}" suppressing="${suppressing}">\n`
+    const indBar = document.getElementById('bt-indigestion-bar')
+    const indigestion = indBar?.dataset.indigestion || '0'
+    const indigestionEvents = indBar?.dataset.indigestionEvents || ''
+    const fatigueInfo = document.getElementById('bt-fatigue-info')
+    const stomachFatigue = fatigueInfo?.dataset.stomachFatigue || '0'
+    let stomAttrs = `current="${stomFill}" max="${stomMax}" suppressing="${suppressing}" indigestion="${indigestion}" stomachFatigue="${stomachFatigue}"`
+    if (indigestionEvents) stomAttrs += ` indigestionEvents="${indigestionEvents}"`
+    xml += `    <Stomach ${stomAttrs}>\n`
 
     document.querySelectorAll('#stomach-container .vital-slot').forEach((el) => {
       const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown'
@@ -1460,9 +1467,14 @@ export function setup(ctx: SpindleFrontendContext) {
     const stomachNode = doc.querySelector('Stomach')
     if (stomachNode) {
       const indigestion = parseFloat(stomachNode.getAttribute('indigestion') || '0') || 0
+      const indigestionEvents = stomachNode.getAttribute('indigestionEvents') || ''
       const indBar = document.getElementById('bt-indigestion-bar')
       const indVal = document.getElementById('bt-indigestion-val')
-      if (indBar) indBar.style.width = `${Math.min(100, Math.max(0, indigestion))}%`
+      if (indBar) {
+        indBar.style.width = `${Math.min(100, Math.max(0, indigestion))}%`
+        indBar.dataset.indigestion = String(indigestion)
+        indBar.dataset.indigestionEvents = indigestionEvents
+      }
       if (indVal) indVal.textContent = `${Math.round(indigestion)}%`
 
       const suppressing = stomachNode.getAttribute('suppressing') === 'true'
@@ -1474,6 +1486,7 @@ export function setup(ctx: SpindleFrontendContext) {
       const stomachFatigue = parseFloat(stomachNode.getAttribute('stomachFatigue') || '0') || 0
       const fatigueInfo = document.getElementById('bt-fatigue-info')
       if (fatigueInfo) {
+        fatigueInfo.dataset.stomachFatigue = String(stomachFatigue)
         if (stomachFatigue > 20) fatigueInfo.textContent = `Fatigue: High (${Math.round(stomachFatigue)})`
         else if (stomachFatigue > 10) fatigueInfo.textContent = `Fatigue: Moderate (${Math.round(stomachFatigue)})`
         else if (stomachFatigue > 0) fatigueInfo.textContent = `Fatigue: Low (${Math.round(stomachFatigue)})`
@@ -1504,7 +1517,8 @@ export function setup(ctx: SpindleFrontendContext) {
         const gearNode = itemNode.querySelector('BoundGear')
         ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
 
-        const willingness = getAttr(itemNode, 'willingness') || 'reluctant'
+        const rawWillingness = (getAttr(itemNode, 'willingness') || 'reluctant').toLowerCase()
+        const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
         const willingnessSelect = div.querySelector('.v-willingness') as HTMLSelectElement
         if (willingnessSelect) willingnessSelect.value = willingness
 
@@ -1554,7 +1568,8 @@ export function setup(ctx: SpindleFrontendContext) {
             const gearNode = child.querySelector('BoundGear')
             ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
 
-            const willingness = getAttr(child, 'willingness') || 'reluctant'
+            const rawWillingness = (getAttr(child, 'willingness') || 'reluctant').toLowerCase()
+            const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
             const willingnessSelect = div.querySelector('.v-willingness') as HTMLSelectElement
             if (willingnessSelect) willingnessSelect.value = willingness
 
