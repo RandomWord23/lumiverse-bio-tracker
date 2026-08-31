@@ -124,6 +124,22 @@ export async function runDigestionTick(
 
     let elapsed = newTime - oldTime
 
+    // ── DIAGNOSTIC: show time values on mobile ──────────────────────
+    const oldTimeRaw = oldXml.match(/<Time>(.*?)<\/Time>/i)
+    const newTimeRaw = newXml.match(/<Time>(.*?)<\/Time>/i)
+    maybeToast(
+      'digestionTicks',
+      'info',
+      `[DIAG] oldTime=${oldTime}h newTime=${newTime}h elapsed=${elapsed.toFixed(4)}h ` +
+        `| oldRaw="${oldTimeRaw ? oldTimeRaw[1].trim() : 'NONE'}" ` +
+        `newRaw="${newTimeRaw ? newTimeRaw[1].trim() : 'NONE'}"`,
+    )
+    spindle.log.info(
+      `[DIAG] oldTime=${oldTime}h newTime=${newTime}h elapsed=${elapsed.toFixed(4)}h ` +
+        `| oldRaw="${oldTimeRaw ? oldTimeRaw[1].trim() : 'NONE'}" ` +
+        `newRaw="${newTimeRaw ? newTimeRaw[1].trim() : 'NONE'}"`,
+    )
+
     if (elapsed < 0) {
       if (elapsed < -12) {
         elapsed += 24
@@ -505,7 +521,24 @@ export async function commitUpdate(
   // This decouples us from the race condition where GENERATION_ENDED
   // might fire before the content processor — we always compute from
   // the pre-generation state, not the potentially-updated sheets Map.
-  const oldSheet = promptSheets.get(chatId) ?? sheets.get(chatId) ?? ''
+  const promptSheet = promptSheets.get(chatId)
+  const cachedSheet = sheets.get(chatId)
+  const oldSheet = promptSheet ?? cachedSheet ?? ''
+  const oldSheetTime = oldSheet.match(/<Time>(.*?)<\/Time>/i)
+  const newSheetTime = sheetXml.match(/<Time>(.*?)<\/Time>/i)
+  maybeToast(
+    'digestionTicks',
+    'info',
+    `[DIAG-commit] source=${promptSheet ? 'promptSheets' : cachedSheet ? 'sheets' : 'EMPTY'} ` +
+      `| oldTime="${oldSheetTime ? oldSheetTime[1].trim() : 'NONE'}" ` +
+      `newTime="${newSheetTime ? newSheetTime[1].trim() : 'NONE'}" ` +
+      `| oldSheetLen=${oldSheet.length}`,
+  )
+  spindle.log.info(
+    `[DIAG-commit] source=${promptSheet ? 'promptSheets' : cachedSheet ? 'sheets' : 'EMPTY'} ` +
+      `| oldTime="${oldSheetTime ? oldSheetTime[1].trim() : 'NONE'}" ` +
+      `newTime="${newSheetTime ? newSheetTime[1].trim() : 'NONE'}"`,
+  )
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
 
   // Verify indigestion in the final XML before saving
@@ -584,10 +617,21 @@ export async function contentProcessor(
   // promptSheets stores the exact sheet the LLM saw in the prompt.  This
   // decouples us from the race condition where GENERATION_ENDED might
   // fire before this processor and update sheets.get(chatId).
-  let oldSheet = promptSheets.get(chatId) ?? sheets.get(chatId)
+  const promptSheetCP = promptSheets.get(chatId)
+  const cachedSheetCP = sheets.get(chatId)
+  let oldSheet = promptSheetCP ?? cachedSheetCP
   if (oldSheet === undefined) {
     oldSheet = (await loadChatSheet(chatId)) || ''
   }
+  const cpOldTime = oldSheet.match(/<Time>(.*?)<\/Time>/i)
+  const cpNewTime = update.match(/<Time>(.*?)<\/Time>/i)
+  maybeToast(
+    'digestionTicks',
+    'info',
+    `[DIAG-cp] source=${promptSheetCP ? 'promptSheets' : cachedSheetCP ? 'sheets' : 'loaded'} ` +
+      `| oldTime="${cpOldTime ? cpOldTime[1].trim() : 'NONE'}" ` +
+      `newTime="${cpNewTime ? cpNewTime[1].trim() : 'NONE'}"`,
+  )
 
   // ── Run the digestion tick (the real computation) ───────────────
   // This is the same function commitUpdate calls — it computes
@@ -727,6 +771,15 @@ export async function promptInterceptor(messages: any[], context: any) {
   // runDigestionTick, decoupling them from the race condition where
   // GENERATION_ENDED might update sheets.get(chatId) first.
   promptSheets.set(chatId, sheet)
+  const promptTimeTag = sheet.match(/<Time>(.*?)<\/Time>/i)
+  maybeToast(
+    'digestionTicks',
+    'info',
+    `[DIAG-prompt] promptSheets.set | Time="${promptTimeTag ? promptTimeTag[1].trim() : 'NONE'}" | sheetLen=${sheet.length}`,
+  )
+  spindle.log.info(
+    `[DIAG-prompt] promptSheets.set | Time="${promptTimeTag ? promptTimeTag[1].trim() : 'NONE'}"`,
+  )
 
   let populateInstructions = ''
   const populateFields = await spindle.variables.chat.get(
