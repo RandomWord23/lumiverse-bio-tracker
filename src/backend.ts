@@ -27,6 +27,7 @@ import {
   commitUpdate,
   rollbackOnDelete,
   promptInterceptor,
+  contentProcessor,
 } from './backend/interceptor'
 
 spindle.onFrontendMessage(async (msg: any) => {
@@ -150,6 +151,19 @@ spindle.onFrontendMessage(async (msg: any) => {
 })
 
 spindle.registerInterceptor(promptInterceptor, 50)
+
+// ── Tier 1: Message Content Processor ───────────────────────────
+// Runs BEFORE the message reaches the database.  This is the primary
+// processing path: it intercepts the LLM's <sheet_update> block,
+// runs runDigestionTick to compute dynamic attributes (indigestion,
+// stamina, struggle, digestion %, acid, climax, etc.), and replaces
+// the block with the fully-computed XML.  The message is then
+// persisted with correct values on first paint.
+//
+// If this handler throws or times out (10 000 ms), Lumiverse passes
+// the un-mutated content forward and GENERATION_ENDED (Tier 2) acts
+// as a fallback via commitUpdate.
+spindle.registerMessageContentProcessor(contentProcessor, 50)
 
 spindle.on('GENERATION_ENDED', async (payload: any) => {
   const { chatId, messageId, content } = payload

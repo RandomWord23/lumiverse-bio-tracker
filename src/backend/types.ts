@@ -89,3 +89,24 @@ export interface PreyData {
   inner: string | null
   isSelfClosing: boolean
 }
+
+// ---------------------------------------------------------------------------
+// Message Content Processor types
+// ---------------------------------------------------------------------------
+
+/** Context object passed to spindle.registerMessageContentProcessor handlers. */
+export interface MessageContentProcessorCtx {
+  chatId: string
+  messageId?: string
+  content: string
+  extra?: Record<string, unknown>
+  origin: 'create' | 'update' | 'swipe_add' | 'swipe_update' | 'render'
+  swipeIndex?: number
+  userId: string
+}
+
+/** Return value from a message content processor handler. */
+export interface MessageContentProcessorResult {
+  content?: string
+  extra?: Record<string, unknown>
+}

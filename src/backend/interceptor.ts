@@ -36,6 +36,11 @@ import {
   saveChatSnapshots,
 } from './storage'
 
+import {
+  type MessageContentProcessorCtx,
+  type MessageContentProcessorResult,
+} from './types'
+
 export async function runDigestionTick(
   newXml: string,
   oldXml: string,
@@ -515,6 +520,94 @@ export async function commitUpdate(
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
   }
   spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
+}
+
+/**
+ * ── Tier 1: Message Content Processor ──────────────────────────────
+ *
+ * This is the PRIMARY processing path.  It runs BEFORE the message row
+ * reaches the database (or the UI on first paint), so the values the user
+ * sees in chat are the fully-computed t1 values, not the stale values the
+ * LLM copied from the previous tick.
+ *
+ * Pipeline:
+ *   promptInterceptor (inject stale sheet)
+ *     → LLM generates <sheet_update> with stale copied values
+ *       → contentProcessor (THIS)            ← run digestion tick here
+ *         → DB write with computed values
+ *           → GENERATION_ENDED (Tier 2 fallback / snapshot tracking)
+ *
+ * If this handler succeeds, the stored sheet and the message text both
+ * contain the correct computed values.  When GENERATION_ENDED fires next,
+ * commitUpdate calls runDigestionTick again — but the time-delta is 0
+ * (the sheet was already advanced), so the tick is a harmless no-op.
+ *
+ * If this handler throws or times out (10 000 ms budget), Lumiverse passes
+ * the un-mutated content forward.  Tier 2 (GENERATION_ENDED) then catches
+ * it as a real fallback and computes the values via commitUpdate.
+ */
+export async function contentProcessor(
+  ctx: MessageContentProcessorCtx,
+): Promise<MessageContentProcessorResult | void> {
+  // ── Guard: only process "create" origin (new assistant messages) ──
+  // "render" is display-only / non-persisting and fires twice per message.
+  // "update" / "swipe_update" are manual edits — respect the user's text.
+  // "swipe_add" needs per-branch "old sheet" tracking; deferred for now.
+  if (ctx.origin !== 'create') return
+
+  // ── Guard: only process messages that contain a sheet update ──────
+  // User messages and system messages never contain <sheet_update>.
+  // This is a cheap string check before any regex or async work.
+  if (!ctx.content.includes('<sheet_update>')) return
+
+  const chatId = ctx.chatId
+  const update = extractSheetUpdate(ctx.content)
+  if (!update) return
+
+  // ── Load the "old" sheet (the current stored state) ──────────────
+  // This is the sheet the LLM saw when it generated this message.
+  // runDigestionTick uses the time-delta between old and new to compute
+  // elapsed hours and advance all dynamic attributes.
+  let oldSheet = sheets.get(chatId)
+  if (oldSheet === undefined) {
+    oldSheet = (await loadChatSheet(chatId)) || ''
+  }
+
+  // ── Run the digestion tick (the real computation) ───────────────
+  // This is the same function commitUpdate calls — it computes
+  // indigestion, stamina, struggle, digestion %, acid, climax, nutrient
+  // absorption, and clothing stress from the time-delta.
+  const finalXml = await runDigestionTick(update, oldSheet, chatId)
+
+  // ── Replace the <sheet_update> block in the message content ──────
+  // The LLM's original block contained stale copied values.  We swap it
+  // for the fully-computed XML so the persisted message is a self-
+  // contained, accurate snapshot of the completed turn.
+  const modifiedContent = ctx.content.replace(
+    /<sheet_update>[\s\S]*?<\/sheet_update>/i,
+    `<sheet_update>\n${finalXml}\n</sheet_update>`,
+  )
+
+  // ── Persist the computed sheet + update in-memory cache ──────────
+  // This keeps sheets.get(chatId) in sync so the next promptInterceptor
+  // sees the correct values.  If we skip this, the safety-net in
+  // promptInterceptor (lines ~581) would re-commit from the message text.
+  await saveChatSheet(chatId, finalXml)
+  sheets.set(chatId, finalXml)
+
+  // ── Notify the frontend panel so the UI updates immediately ──────
+  if (chatId === activeChatId) {
+    spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
+  }
+
+  const indMatch = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+  spindle.log.info(
+    `[contentProcessor] chat ${chatId} (origin=${ctx.origin}): ` +
+      `computed indigestion="${indMatch ? indMatch[1] : 'MISSING'}", ` +
+      `content replaced (len ${ctx.content.length} → ${modifiedContent.length})`,
+  )
+
+  return { content: modifiedContent }
 }
 
 export async function rollbackOnDelete(chatId: string, messageId: string) {
