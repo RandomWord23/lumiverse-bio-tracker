@@ -152,34 +152,34 @@ spindle.onFrontendMessage(async (msg: any) => {
 spindle.registerInterceptor(promptInterceptor, 50)
 
 spindle.on('GENERATION_ENDED', async (payload: any) => {
-  if (payload.error) return
-
   const { chatId, messageId, content } = payload
+  const update = content ? extractSheetUpdate(content) : null
+
+  // ─── Populate completion notification ──────────────────────
+  // Clean up populatePending regardless of error/success — prevents
+  // a failed or aborted populate generation from blocking all future
+  // populate attempts (the flag would otherwise stay set forever).
+  if (chatId) {
+    const populatePending = await spindle.variables.chat.get(
+      chatId,
+      'populatePending',
+    )
+    if (populatePending) {
+      await spindle.variables.chat.delete(chatId, 'populatePending')
+      spindle.sendToFrontend({
+        type: 'POPULATE_DONE',
+        success: !!update,
+      })
+    }
+  }
+
+  if (payload.error) return
   if (!chatId || !messageId || !content) return
   if (chatId !== activeChatId) return
   if (pendingGenerationType === 'swipe' || pendingGenerationType === 'regenerate') {
     return
   }
   if (committedMessageIds.has(messageId)) return
-
-  const update = extractSheetUpdate(content)
-
-  // ─── Populate completion notification ──────────────────────
-  // If a populate generation just finished, notify the frontend
-  // so the button can reset (regardless of whether a sheet_update
-  // was produced).
-  const populatePending = await spindle.variables.chat.get(
-    chatId,
-    'populatePending',
-  )
-  if (populatePending) {
-    await spindle.variables.chat.delete(chatId, 'populatePending')
-    spindle.sendToFrontend({
-      type: 'POPULATE_DONE',
-      success: !!update,
-    })
-  }
-
   if (!update) return
 
   const list = snapshots.get(chatId) || []
@@ -188,6 +188,21 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   committedMessageIds.add(messageId)
 
   maybeToast('digestionTicks', 'success', 'Sheet updated - digestion tick applied')
+})
+
+// ─── Generation stopped safety net ───────────────────────────
+// GENERATION_ENDED may or may not fire after a manual abort. This
+// handler ensures pending populate state is always cleaned up so
+// a stopped generation doesn't leave populatePending set forever.
+spindle.on('GENERATION_STOPPED', async (payload: any) => {
+  const chatId = payload?.chatId
+  if (!chatId) return
+  const populatePending = await spindle.variables.chat.get(chatId, 'populatePending')
+  if (populatePending) {
+    await spindle.variables.chat.delete(chatId, 'populatePending')
+    spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
+    spindle.log.info('Generation stopped — cleaned up pending populate flag')
+  }
 })
 
 spindle.on('CHAT_SWITCHED', async (payload: any) => {

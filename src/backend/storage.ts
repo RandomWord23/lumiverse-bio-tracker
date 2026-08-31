@@ -1,6 +1,6 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
-import { sheets, snapshots, committedMessageIds, setActiveChatId } from './state'
+import { sheets, snapshots, committedMessageIds, setActiveChatId, type Snapshot } from './state'
 import { sheetPath, snapshotsPath } from './engine'
 
 export async function loadChatSheet(chatId: string) {
@@ -20,21 +20,15 @@ export async function saveChatSheet(chatId: string, xml: string) {
 }
 
 export async function loadChatSnapshots(chatId: string) {
-  try {
-    const data = await spindle.storage.read(snapshotsPath(chatId))
-    if (data) {
-      snapshots.set(chatId, JSON.parse(data))
-    } else {
-      snapshots.set(chatId, [])
-    }
-  } catch (e) {
-    snapshots.set(chatId, [])
-  }
+  // getJson handles missing files and parse errors via the fallback option,
+  // eliminating the need for a manual try/catch + JSON.parse.
+  const data = await spindle.storage.getJson<Snapshot[]>(snapshotsPath(chatId), { fallback: [] })
+  snapshots.set(chatId, data)
 }
 
 export async function saveChatSnapshots(chatId: string) {
   const list = snapshots.get(chatId) || []
-  await spindle.storage.write(snapshotsPath(chatId), JSON.stringify(list))
+  await spindle.storage.setJson(snapshotsPath(chatId), list, { indent: 2 })
 }
 
 export async function switchToChat(chatId: string | null) {
