@@ -190,18 +190,38 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   if (payload.error) return
   if (!chatId || !messageId || !content) return
   if (chatId !== activeChatId) return
-  if (pendingGenerationType === 'swipe' || pendingGenerationType === 'regenerate') {
-    return
-  }
   if (committedMessageIds.has(messageId)) return
   if (!update) return
 
   const list = snapshots.get(chatId) || []
   const chatIndex = list.length
-  await commitUpdate(chatId, messageId, update, chatIndex)
+  const finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
   committedMessageIds.add(messageId)
 
-  maybeToast('digestionTicks', 'success', 'Sheet updated - digestion tick applied')
+  // ─── Tier 2 fallback: rewrite visible chat text ──────────────
+  // Even if the content processor (Tier 1) already ran, this is
+  // idempotent — commitUpdate returns the same finalXml.  If the
+  // content processor was skipped or failed, this is the GUARANTEED
+  // path to correct the visible <sheet_update> block in the chat.
+  try {
+    const modifiedContent = content.replace(
+      /<sheet_update>[\s\S]*?<\/sheet_update>/i,
+      `<sheet_update>\n${finalXml}\n</sheet_update>`,
+    )
+    if (modifiedContent !== content) {
+      await spindle.chat.updateMessage(chatId, messageId, { content: modifiedContent })
+      spindle.log.info(
+        `[GENERATION_ENDED] Rewrote visible chat text for message ${messageId} ` +
+          `(content len ${content.length} → ${modifiedContent.length})`,
+      )
+      maybeToast('digestionTicks', 'success', 'Visible chat text updated with computed values')
+    } else {
+      maybeToast('digestionTicks', 'info', 'Sheet committed (content already correct)')
+    }
+  } catch (err) {
+    spindle.log.error(`[GENERATION_ENDED] updateMessage fallback failed: ${err}`)
+    maybeToast('digestionTicks', 'warning', 'Sheet saved but visible text update failed')
+  }
 })
 
 // ─── Generation stopped safety net ───────────────────────────

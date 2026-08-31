@@ -12,6 +12,7 @@ import {
   setToastSettings,
   engineToggles,
   setEngineToggles,
+  promptSheets,
 } from './state'
 
 import { processStruggle } from './struggle'
@@ -498,8 +499,13 @@ export async function commitUpdate(
   messageId: string,
   sheetXml: string,
   chatIndex: number,
-) {
-  const oldSheet = sheets.get(chatId) || ''
+): Promise<string> {
+  // ── Use the prompt-time sheet as "old" if available ──────────
+  // promptSheets stores the exact sheet the LLM saw in the prompt.
+  // This decouples us from the race condition where GENERATION_ENDED
+  // might fire before the content processor — we always compute from
+  // the pre-generation state, not the potentially-updated sheets Map.
+  const oldSheet = promptSheets.get(chatId) ?? sheets.get(chatId) ?? ''
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
 
   // Verify indigestion in the final XML before saving
@@ -511,6 +517,7 @@ export async function commitUpdate(
   )
 
   await saveChatSheet(chatId, finalXml)
+  sheets.set(chatId, finalXml) // keep in-memory cache in sync
   const list = snapshots.get(chatId) || []
   list.push({ messageId, sheetXml: finalXml, chatIndex })
   snapshots.set(chatId, list)
@@ -520,6 +527,8 @@ export async function commitUpdate(
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
   }
   spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
+
+  return finalXml
 }
 
 /**
@@ -531,29 +540,34 @@ export async function commitUpdate(
  * LLM copied from the previous tick.
  *
  * Pipeline:
- *   promptInterceptor (inject stale sheet)
+ *   promptInterceptor (inject sheet, store in promptSheets)
  *     → LLM generates <sheet_update> with stale copied values
  *       → contentProcessor (THIS)            ← run digestion tick here
  *         → DB write with computed values
- *           → GENERATION_ENDED (Tier 2 fallback / snapshot tracking)
+ *           → GENERATION_ENDED (Tier 2 fallback + updateMessage rewrite)
  *
- * If this handler succeeds, the stored sheet and the message text both
- * contain the correct computed values.  When GENERATION_ENDED fires next,
- * commitUpdate calls runDigestionTick again — but the time-delta is 0
- * (the sheet was already advanced), so the tick is a harmless no-op.
+ * Origin handling:
+ *   - "create"      → process (new assistant message)
+ *   - "swipe_add"   → process (new swipe variant from LLM generation)
+ *   - "swipe_update"→ process (swipe edit — may be LLM regeneration)
+ *   - "update"      → SKIP (manual edit — respect user's text; updateMessage
+ *                     fallback in GENERATION_ENDED handles LLM responses
+ *                     saved via PUT /messages/:id)
+ *   - "render"      → SKIP (display-only, non-persisting, fires twice)
  *
  * If this handler throws or times out (10 000 ms budget), Lumiverse passes
  * the un-mutated content forward.  Tier 2 (GENERATION_ENDED) then catches
- * it as a real fallback and computes the values via commitUpdate.
+ * it as a real fallback and rewrites the visible text via updateMessage.
  */
 export async function contentProcessor(
   ctx: MessageContentProcessorCtx,
 ): Promise<MessageContentProcessorResult | void> {
-  // ── Guard: only process "create" origin (new assistant messages) ──
+  // ── Guard: skip display-only and manual-edit origins ────────────
   // "render" is display-only / non-persisting and fires twice per message.
-  // "update" / "swipe_update" are manual edits — respect the user's text.
-  // "swipe_add" needs per-branch "old sheet" tracking; deferred for now.
-  if (ctx.origin !== 'create') return
+  // "update" is a manual edit — respect the user's text.  The
+  // updateMessage fallback in GENERATION_ENDED handles LLM responses
+  // that Lumiverse saves via PUT /messages/:id (origin: "update").
+  if (ctx.origin === 'render' || ctx.origin === 'update') return
 
   // ── Guard: only process messages that contain a sheet update ──────
   // User messages and system messages never contain <sheet_update>.
@@ -564,11 +578,13 @@ export async function contentProcessor(
   const update = extractSheetUpdate(ctx.content)
   if (!update) return
 
-  // ── Load the "old" sheet (the current stored state) ──────────────
-  // This is the sheet the LLM saw when it generated this message.
-  // runDigestionTick uses the time-delta between old and new to compute
-  // elapsed hours and advance all dynamic attributes.
-  let oldSheet = sheets.get(chatId)
+  maybeToast('digestionTicks', 'info', `[CP] Running (origin=${ctx.origin})`)
+
+  // ── Load the "old" sheet — prefer the prompt-time snapshot ───────
+  // promptSheets stores the exact sheet the LLM saw in the prompt.  This
+  // decouples us from the race condition where GENERATION_ENDED might
+  // fire before this processor and update sheets.get(chatId).
+  let oldSheet = promptSheets.get(chatId) ?? sheets.get(chatId)
   if (oldSheet === undefined) {
     oldSheet = (await loadChatSheet(chatId)) || ''
   }
@@ -591,9 +607,12 @@ export async function contentProcessor(
   // ── Persist the computed sheet + update in-memory cache ──────────
   // This keeps sheets.get(chatId) in sync so the next promptInterceptor
   // sees the correct values.  If we skip this, the safety-net in
-  // promptInterceptor (lines ~581) would re-commit from the message text.
+  // promptInterceptor would re-commit from the message text.
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml)
+
+  // ── Clean up the prompt-time snapshot ────────────────────────────
+  promptSheets.delete(chatId)
 
   // ── Notify the frontend panel so the UI updates immediately ──────
   if (chatId === activeChatId) {
@@ -601,11 +620,13 @@ export async function contentProcessor(
   }
 
   const indMatch = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+  const indValue = indMatch ? indMatch[1] : 'MISSING'
   spindle.log.info(
     `[contentProcessor] chat ${chatId} (origin=${ctx.origin}): ` +
-      `computed indigestion="${indMatch ? indMatch[1] : 'MISSING'}", ` +
+      `computed indigestion="${indValue}", ` +
       `content replaced (len ${ctx.content.length} → ${modifiedContent.length})`,
   )
+  maybeToast('digestionTicks', 'success', `[CP] indigestion=${indValue}, content replaced`)
 
   return { content: modifiedContent }
 }
@@ -688,6 +709,13 @@ export async function promptInterceptor(messages: any[], context: any) {
       }
     }
   }
+
+  // ─── Store the prompt-time sheet snapshot ───────────────────
+  // This is the exact sheet XML the LLM sees in its prompt.  The
+  // contentProcessor and commitUpdate use it as the "old" sheet for
+  // runDigestionTick, decoupling them from the race condition where
+  // GENERATION_ENDED might update sheets.get(chatId) first.
+  promptSheets.set(chatId, sheet)
 
   let populateInstructions = ''
   const populateFields = await spindle.variables.chat.get(

@@ -11,6 +11,15 @@ export const sheets: Map<string, string> = new Map()
 export const snapshots: Map<string, Snapshot[]> = new Map()
 export const committedMessageIds: Set<string> = new Set()
 
+// ─── Prompt-time sheet snapshot ─────────────────────────────
+// Stores the exact sheet XML that was shown to the LLM in the most
+// recent promptInterceptor call for a given chat.  This decouples
+// contentProcessor and commitUpdate from the race condition with
+// GENERATION_ENDED: they use the pre-generation sheet (the one the
+// LLM actually saw) as the "old" sheet, not the potentially-already-
+// updated sheets.get(chatId).
+export const promptSheets: Map<string, string> = new Map()
+
 // ─── Settings (received from frontend) ──────────────────────
 export let toastSettings: Record<string, boolean> = {
   digestionTicks: true, climaxEvents: true, clothingDamage: true,
