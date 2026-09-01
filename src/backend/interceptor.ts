@@ -202,14 +202,23 @@ export async function runDigestionTick(
     let firstItemTime = getStat(oldXml, 'FirstItemTime')
     let stomachEmptyTime = getStat(oldXml, 'StomachEmptyTime')
 
+    const oldElapsed = getStat(oldXml, 'ElapsedHours')
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
     const hasItems = stomachContents.includes('<Item')
 
+    // Check if items existed in the old sheet too (for firstItemTime fallback)
+    const oldStomachMatch = oldXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
+    const oldStomachContents = oldStomachMatch ? oldStomachMatch[1].trim() : ''
+    const oldHasItems = oldStomachContents.includes('<Item')
+
     if (hasItems) {
       if (firstItemTime <= 0) {
-        // A new batch of items appeared — start the acid ramp-up.
-        firstItemTime = newElapsed
+        // No firstItemTime recorded. If items existed in the old sheet,
+        // they must have been present since at least the previous tick —
+        // default to oldElapsed so acid doesn't compute to 0. Only use
+        // newElapsed for truly new items (first appearance this tick).
+        firstItemTime = oldHasItems ? oldElapsed : newElapsed
         stomachEmptyTime = 0
       }
       acidLevel = Math.min(100, acidRiseRate * Math.max(0, newElapsed - firstItemTime))
@@ -280,6 +289,7 @@ export async function runDigestionTick(
       baseDigRate,
       acidMultiplier,
       currentElapsed: newElapsed,
+      oldElapsed: getStat(oldXml, 'ElapsedHours'),
       oldDigestionMap,
       oldTimeAddedMap,
     })
@@ -289,6 +299,7 @@ export async function runDigestionTick(
       baseDigRate,
       acidMultiplier,
       currentElapsed: newElapsed,
+      oldElapsed: getStat(oldXml, 'ElapsedHours'),
       oldDigestionMap,
       oldTimeAddedMap,
     })

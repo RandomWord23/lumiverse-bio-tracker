@@ -411,6 +411,11 @@ export function digestItemsInContent(
     acidMultiplier: number
     /** Current value of the monotonic <ElapsedHours> clock. */
     currentElapsed: number
+    /** Previous tick's <ElapsedHours> value (currentElapsed - elapsed).
+     *  Used as the fallback timeAdded for items that existed in the old
+     *  sheet but lack a timeAdded attribute — without this, they would
+     *  default to currentElapsed and compute 0 digestion. */
+    oldElapsed: number
     oldDigestionMap: Map<string, number>
     /** Map of item name -> timeAdded from the previous tick's stored sheet.
      *  The LLM never includes timeAdded in its output, so without this map
@@ -469,13 +474,19 @@ export function digestItemsInContent(
     }
 
     if (isNaN(timeAdded) || timeAdded <= 0) {
-      // Migration / new item: no timestamp from any source.
+      // No timestamp from oldTimeAddedMap or the LLM's attribute.
       if (oldDigNum > 0) {
         // Legacy item with progress but no timestamp — back-calculate
         // timeAdded from its current digestion level.
         timeAdded = ctx.currentElapsed - oldDigNum / (ctx.baseDigRate * speedMult * ctx.acidMultiplier)
+      } else if (ctx.oldDigestionMap.has(name)) {
+        // Item existed in the old sheet but had no timeAdded and no
+        // digestion progress. It must have been present at the previous
+        // tick, so default to oldElapsed (not currentElapsed, which
+        // would zero out the digestion calculation).
+        timeAdded = ctx.oldElapsed
       } else {
-        // Brand-new item — starts now.
+        // Truly brand-new item — starts now.
         timeAdded = ctx.currentElapsed
       }
     }
