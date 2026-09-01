@@ -186,12 +186,12 @@ export async function runDigestionTick(
     let firstItemTime = getStat(oldXml, 'FirstItemTime')
     let stomachEmptyTime = getStat(oldXml, 'StomachEmptyTime')
 
-    const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
+    const stomachMatch = newXml.match(/<Stomach(?![a-zA-Z])[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
     const hasItems = stomachContents.includes('<Item')
 
     // Check if items existed in the old sheet too (for firstItemTime fallback)
-    const oldStomachMatch = oldXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
+    const oldStomachMatch = oldXml.match(/<Stomach(?![a-zA-Z])[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const oldStomachContents = oldStomachMatch ? oldStomachMatch[1].trim() : ''
     const oldHasItems = oldStomachContents.includes('<Item')
 
@@ -241,7 +241,7 @@ export async function runDigestionTick(
     // name collisions and incorrect clamping.
     const oldDigestionMap = new Map<string, number>()
     const oldTimeAddedMap = new Map<string, number>()
-    const oldStomMatch = oldXml.match(/<Stomach[^>]*>([\s\S]*?)<\/Stomach>/i)
+    const oldStomMatch = oldXml.match(/<Stomach(?![a-zA-Z])[^>]*>([\s\S]*?)<\/Stomach>/i)
     const oldBowMatch = oldXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
     const oldDigestiveContent = [
       oldStomMatch ? oldStomMatch[1] : '',
@@ -261,7 +261,7 @@ export async function runDigestionTick(
         }
       }
     }
-    const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+    const stomMatch = updatedXml.match(/<Stomach(?![a-zA-Z])([^>]*)>([\s\S]*?)<\/Stomach>/i)
     const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
 
     let stomContent = stomMatch ? stomMatch[2].trim() : ''
@@ -319,7 +319,7 @@ export async function runDigestionTick(
     bowContent = bowContent.replace(/^\s*\n/gm, '').trim()
 
     updatedXml = updatedXml.replace(
-      /<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i,
+      /<Stomach(?![a-zA-Z])([^>]*)>[\s\S]*?<\/Stomach>/i,
       (match, attrs) => {
         return `<Stomach${attrs}>\n${stomContent}\n    </Stomach>`
       },

@@ -1206,7 +1206,7 @@ export function setup(ctx: SpindleFrontendContext) {
   ctx.onBackendMessage((msg: any) => {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       try {
-        const indMatch = msg.xml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+        const indMatch = msg.xml.match(/<Stomach(?![a-zA-Z])[^>]*\sindigestion="([^"]*)"/i)
         console.log(`[SHEET_UPDATED] received indigestion="${indMatch ? indMatch[1] : 'MISSING'}"`)
         populateFormFromXml(msg.xml)
       } catch (e) {

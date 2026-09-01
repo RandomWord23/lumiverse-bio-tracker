@@ -181,15 +181,19 @@ export function processAttributes(xml: string): Record<string, number> {
 }
 
 export function getStat(xml: string, tag: string): number {
-  const match = xml.match(new RegExp(`<${tag}>(.*?)<\\/${tag}>`, 'i'))
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>(.*?)<\\/${tag}>`, 'i'))
   return match ? parseFloat(match[1]) || 0 : 0
 }
 
 export function setStat(xml: string, tag: string, value: number): string {
-  const regex = new RegExp(`<${tag}>.*?<\\/${tag}>`, 'i')
-  const replacement = `<${tag}>${value.toFixed(2)}</${tag}>`
+  // Allow tags that carry attributes (e.g. <StomachResistance ...>1.0</...>)
+  // while preserving them on replacement.
+  const regex = new RegExp(`<${tag}(\\s[^>]*)?>.*?<\\/${tag}>`, 'i')
   if (regex.test(xml)) {
-    return xml.replace(regex, replacement)
+    return xml.replace(
+      regex,
+      (match, attrs) => `<${tag}${attrs || ''}>${value.toFixed(2)}</${tag}>`,
+    )
   }
   // Tag doesn't exist yet — inject it. Try several insertion points in
   // order of preference: inside <BaseStats>, after the first opening tag,

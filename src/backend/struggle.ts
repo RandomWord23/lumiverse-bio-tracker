@@ -13,14 +13,14 @@ export function processStruggle(
   const struggleEvents: string[] = []
 
   // --- Read stomach tag ---
-  const stomMatch = xml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+  const stomMatch = xml.match(/<Stomach(?![a-zA-Z])([^>]*)>([\s\S]*?)<\/Stomach>/i)
   if (!stomMatch) return { xml, struggleEvents }
 
   const stomAttrs = stomMatch[1]
   const stomContent = stomMatch[2]
 
   // --- Read OLD stomach tag for clamping struggle state ---
-  const oldStomMatch = oldXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
+  const oldStomMatch = oldXml.match(/<Stomach(?![a-zA-Z])([^>]*)>([\s\S]*?)<\/Stomach>/i)
   const oldStomAttrs = oldStomMatch ? oldStomMatch[1] : ''
   const oldStomContent = oldStomMatch ? oldStomMatch[2] : ''
 
@@ -89,7 +89,7 @@ export function processStruggle(
   // --- Helper: write Stomach tag with updated attrs + content ---
   const updateStomachTag = (content: string): string => {
     return xml.replace(
-      /<Stomach([^>]*)>[\s\S]*?<\/Stomach>/i,
+      /<Stomach(?![a-zA-Z])([^>]*)>[\s\S]*?<\/Stomach>/i,
       (_match, attrs) => {
         let newAttrs = attrs
           .replace(/\s+indigestion="[^"]*"/gi, '')
@@ -396,7 +396,7 @@ export function processStruggle(
   xml = setStat(xml, 'Energy', energy)
 
   // Verify the write-back actually persisted indigestion into the XML
-  const verifyMatch = xml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
+  const verifyMatch = xml.match(/<Stomach(?![a-zA-Z])[^>]*\sindigestion="([^"]*)"/i)
   spindle.log.info(
     `[Struggle] WRITE-BACK: indigestion=${indigestion.toFixed(2)}, ` +
       `xml attr="${verifyMatch ? verifyMatch[1] : 'MISSING'}", ` +
