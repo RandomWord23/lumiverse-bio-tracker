@@ -28,6 +28,7 @@ import {
   setStat,
   processClothingStress,
   digestItemsInContent,
+  clockDelta,
   buildSheetPrompt,
 } from './engine'
 
@@ -182,27 +183,32 @@ export async function runDigestionTick(
 
     if (engineToggles.digestionEngine) {
       // ── ABSOLUTE / TIMESTAMP-BASED MODEL ──────────────────────────────
-      // All digestion state is stored as absolute timestamps on a monotonic
-      // clock (<ElapsedHours>, summed from every tick's time delta). This
-      // makes the system self-healing: if a tick is skipped, crashes, or is
-      // rolled back, the next tick simply recomputes everything from the
+      // All digestion state is stored as absolute timestamps on the story
+      // clock (decimal hours, 0-24 range, from <Time>). This makes the
+      // system self-healing: if a tick is skipped, crashes, or is rolled
+      // back, the next tick simply recomputes everything from the
       // timestamps. No accumulators, no drift, no "lost time" bugs.
+      // Midnight wraparound is handled by clockDelta() in engine.ts.
       const baseDigRate = (getStat(oldXml, 'BaseDigestionRate') || 25) * (1 + (modifiers.BaseDigestionRate || 0))
     const acidRiseRate = (getStat(oldXml, 'AcidRiseRate') || 10) * (1 + (modifiers.AcidRiseRate || 0))
 
-    // Monotonic clock: total hours elapsed since the RP started.
-    const newElapsed = getStat(oldXml, 'ElapsedHours') + elapsed
+    // Story clock: the current <Time> value (decimal hours, 0-24).
+    // oldTime / newTime are already parsed above; they are the story clock
+    // timestamps used for all digestion calculations.
+    const newClock = newTime
+    const oldClock = oldTime
 
     // Acid is a pure function of two timestamps:
     //   <FirstItemTime>     — when the current batch of items first appeared (0 = no batch)
     //   <StomachEmptyTime>  — when the stomach last became empty (0 = not emptied since batch)
-    // Items present:  acid = min(100, riseRate * (now - firstItemTime))
+    // Items present:  acid = min(100, riseRate * clockDelta(now, firstItemTime))
     // Just emptied:   acid decays at the same rate from its peak:
-    //                 acid = max(0, riseRate * (2*emptyTime - firstItemTime - now))
+    //                 acid = max(0, riseRate * (riseDuration - decayDuration))
+    //                 where riseDuration  = clockDelta(emptyTime, firstItemTime)
+    //                       decayDuration = clockDelta(now, emptyTime)
     let firstItemTime = getStat(oldXml, 'FirstItemTime')
     let stomachEmptyTime = getStat(oldXml, 'StomachEmptyTime')
 
-    const oldElapsed = getStat(oldXml, 'ElapsedHours')
     const stomachMatch = newXml.match(/<Stomach[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
     const hasItems = stomachContents.includes('<Item')
@@ -216,18 +222,23 @@ export async function runDigestionTick(
       if (firstItemTime <= 0) {
         // No firstItemTime recorded. If items existed in the old sheet,
         // they must have been present since at least the previous tick —
-        // default to oldElapsed so acid doesn't compute to 0. Only use
-        // newElapsed for truly new items (first appearance this tick).
-        firstItemTime = oldHasItems ? oldElapsed : newElapsed
+        // default to oldClock so acid doesn't compute to 0. Only use
+        // newClock for truly new items (first appearance this tick).
+        firstItemTime = oldHasItems ? oldClock : newClock
         stomachEmptyTime = 0
       }
-      acidLevel = Math.min(100, acidRiseRate * Math.max(0, newElapsed - firstItemTime))
+      acidLevel = Math.min(100, acidRiseRate * clockDelta(newClock, firstItemTime))
     } else if (firstItemTime > 0) {
       // Stomach just emptied (or is empty after a batch) — acid decays.
+      // Peak acid = riseRate * (emptyTime - firstItemTime), then decays at
+      // the same rate for (now - emptyTime). Net = riseRate * (rise - decay).
+      // clockDelta handles midnight wraparound on both legs.
       if (stomachEmptyTime <= 0) {
-        stomachEmptyTime = newElapsed
+        stomachEmptyTime = newClock
       }
-      acidLevel = Math.max(0, acidRiseRate * (2 * stomachEmptyTime - firstItemTime - newElapsed))
+      const riseDuration = clockDelta(stomachEmptyTime, firstItemTime)
+      const decayDuration = clockDelta(newClock, stomachEmptyTime)
+      acidLevel = Math.max(0, acidRiseRate * (riseDuration - decayDuration))
       if (acidLevel <= 0) {
         // Fully decayed — reset the batch so the next item starts fresh.
         firstItemTime = 0
@@ -239,7 +250,6 @@ export async function runDigestionTick(
 
     const acidMultiplier = 1 + acidLevel / 100
 
-    updatedXml = setStat(updatedXml, 'ElapsedHours', newElapsed)
     updatedXml = setStat(updatedXml, 'FirstItemTime', firstItemTime)
     updatedXml = setStat(updatedXml, 'StomachEmptyTime', stomachEmptyTime)
     updatedXml = setStat(updatedXml, 'CurrentAcidPct', acidLevel)
@@ -288,8 +298,8 @@ export async function runDigestionTick(
     const stomResult = digestItemsInContent(stomContent, {
       baseDigRate,
       acidMultiplier,
-      currentElapsed: newElapsed,
-      oldElapsed: getStat(oldXml, 'ElapsedHours'),
+      currentClock: newClock,
+      oldClock,
       oldDigestionMap,
       oldTimeAddedMap,
     })
@@ -298,8 +308,8 @@ export async function runDigestionTick(
     const bowResult = digestItemsInContent(bowContent, {
       baseDigRate,
       acidMultiplier,
-      currentElapsed: newElapsed,
-      oldElapsed: getStat(oldXml, 'ElapsedHours'),
+      currentClock: newClock,
+      oldClock,
       oldDigestionMap,
       oldTimeAddedMap,
     })

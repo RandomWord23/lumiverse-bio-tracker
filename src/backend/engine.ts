@@ -12,6 +12,16 @@ import {
   stressMultipliers,
 } from './types'
 
+/** Compute elapsed hours between two story-clock timestamps (0-24 range),
+ *  handling midnight wraparound. If the raw delta is < -12 we assume the
+ *  clock crossed midnight and add 24. The result is clamped to >= 0 so
+ *  rollback / same-tick situations don't produce negative digestion. */
+export function clockDelta(now: number, then: number): number {
+  let d = now - then
+  if (d < -12) d += 24
+  return Math.max(0, d)
+}
+
 export function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
   if (toastSettings[category] === false) return
   spindle.toast[type](message, { duration: 8000 })
@@ -409,17 +419,17 @@ export function digestItemsInContent(
   ctx: {
     baseDigRate: number
     acidMultiplier: number
-    /** Current value of the monotonic <ElapsedHours> clock. */
-    currentElapsed: number
-    /** Previous tick's <ElapsedHours> value (currentElapsed - elapsed).
+    /** Current story-clock time (decimal hours, 0-24 range, from <Time>). */
+    currentClock: number
+    /** Previous tick's story-clock time (from <Time> in the old sheet).
      *  Used as the fallback timeAdded for items that existed in the old
      *  sheet but lack a timeAdded attribute — without this, they would
-     *  default to currentElapsed and compute 0 digestion. */
-    oldElapsed: number
+     *  default to currentClock and compute 0 digestion. */
+    oldClock: number
     oldDigestionMap: Map<string, number>
     /** Map of item name -> timeAdded from the previous tick's stored sheet.
      *  The LLM never includes timeAdded in its output, so without this map
-     *  every item would be treated as brand-new (timeAdded = currentElapsed)
+     *  every item would be treated as brand-new (timeAdded = currentClock)
      *  and digestion would always compute to 0. */
     oldTimeAddedMap: Map<string, number>
   },
@@ -457,8 +467,9 @@ export function digestItemsInContent(
     }
 
     // ABSOLUTE DIGESTION: each item carries a timeAdded timestamp on the
-    // monotonic clock; digestion is recomputed from scratch every tick:
-    //   digestion = baseDigRate * speedMult * acidMult * (now - timeAdded)
+    // story clock (decimal hours, 0-24 range, from <Time>); digestion is
+    // recomputed from scratch every tick:
+    //   digestion = baseDigRate * speedMult * acidMult * clockDelta(now, timeAdded)
     // Self-healing — skipped ticks, crashes, and rollbacks cannot lose time.
     // The LLM never includes the engine-injected timeAdded attribute in its
     // output, so we must look it up from the old (stored) sheet's map first.
@@ -477,23 +488,26 @@ export function digestItemsInContent(
       // No timestamp from oldTimeAddedMap or the LLM's attribute.
       if (oldDigNum > 0) {
         // Legacy item with progress but no timestamp — back-calculate
-        // timeAdded from its current digestion level.
-        timeAdded = ctx.currentElapsed - oldDigNum / (ctx.baseDigRate * speedMult * ctx.acidMultiplier)
+        // timeAdded from its current digestion level. clockDelta handles
+        // midnight wraparound so the back-calculated timestamp is correct
+        // even if the item was added before midnight.
+        timeAdded = ctx.currentClock - oldDigNum / (ctx.baseDigRate * speedMult * ctx.acidMultiplier)
+        if (timeAdded < 0) timeAdded += 24
       } else if (ctx.oldDigestionMap.has(name)) {
         // Item existed in the old sheet but had no timeAdded and no
         // digestion progress. It must have been present at the previous
-        // tick, so default to oldElapsed (not currentElapsed, which
+        // tick, so default to oldClock (not currentClock, which
         // would zero out the digestion calculation).
-        timeAdded = ctx.oldElapsed
+        timeAdded = ctx.oldClock
       } else {
         // Truly brand-new item — starts now.
-        timeAdded = ctx.currentElapsed
+        timeAdded = ctx.currentClock
       }
     }
 
     let digNum = Math.min(
       100,
-      ctx.baseDigRate * speedMult * ctx.acidMultiplier * Math.max(0, ctx.currentElapsed - timeAdded),
+      ctx.baseDigRate * speedMult * ctx.acidMultiplier * clockDelta(ctx.currentClock, timeAdded),
     )
     // Prevent rollback: never let digestion drop below the previously stored value
     digNum = Math.max(digNum, oldDigNum)
@@ -598,7 +612,7 @@ The following values are computed by the extension's engines during the digestio
 - indigestion="..." on the <Stomach> tag (computed from prey struggle)
 - stamina="..." on prey items (computed from willingness + fighting state)
 - struggle="..." on prey items (computed from willingness, size, consciousness, suppression)
-- <ElapsedHours>, <FirstItemTime>, <StomachEmptyTime>, <CurrentAcidPct>
+- <FirstItemTime>, <StomachEmptyTime>, <CurrentAcidPct> (story-clock timestamps, 0-24h)
 - <Climax> (computed from Arousal)
 - <CurrentPenisLength_cm>, <CurrentPenisGirth_cm> (computed from Arousal)
 - Clothing stress="..." and condition="..." attributes (computed from body growth)
