@@ -222,12 +222,10 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
     const chatIndex = list.length
     finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
     committedMessageIds.add(messageId)
-    maybeToast('digestionTicks', 'info', '[GE] contentProcessor skipped — computed via commitUpdate')
   } else {
     // contentProcessor already ran — use its result directly
     finalXml = sheets.get(chatId) || update
     committedMessageIds.add(messageId)
-    maybeToast('digestionTicks', 'info', '[GE] contentProcessor already ran — using cached sheet')
   }
 
   // ─── Rewrite visible chat text with computed values ─────────
@@ -247,17 +245,12 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
     if (!hasSheetBlock) {
       // The payload content doesn't contain a <sheet_update> block.
       // This can happen if the LLM used a different tag format, or if
-      // the payload structure is unexpected.  Log + toast so we can
-      // diagnose instead of silently failing.
+      // the payload structure is unexpected.  Log so we can diagnose
+      // instead of silently failing.
       spindle.log.warn(
         `[GENERATION_ENDED] No <sheet_update> block found in content ` +
           `(type=${typeof content}, len=${contentStr.length}, ` +
           `preview="${contentStr.slice(0, 200)}...")`,
-      )
-      maybeToast(
-        'digestionTicks',
-        'warning',
-        `[GE] No <sheet_update> in content — rewrite skipped (len=${contentStr.length})`,
       )
     } else {
       const modifiedContent = contentStr.replace(
@@ -268,12 +261,6 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
       spindle.log.info(
         `[GENERATION_ENDED] Rewrote visible chat text for message ${messageId} ` +
           `(content len ${contentStr.length} → ${modifiedContent.length})`,
-      )
-      const indMatch = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
-      maybeToast(
-        'digestionTicks',
-        'success',
-        `[GE] updateMessage done — indigestion=${indMatch ? indMatch[1] : 'MISSING'}`,
       )
     }
   } catch (err) {

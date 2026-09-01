@@ -125,22 +125,6 @@ export async function runDigestionTick(
 
     let elapsed = newTime - oldTime
 
-    // ── DIAGNOSTIC: show time values on mobile ──────────────────────
-    const oldTimeRaw = oldXml.match(/<Time>(.*?)<\/Time>/i)
-    const newTimeRaw = newXml.match(/<Time>(.*?)<\/Time>/i)
-    maybeToast(
-      'digestionTicks',
-      'info',
-      `[DIAG] oldTime=${oldTime}h newTime=${newTime}h elapsed=${elapsed.toFixed(4)}h ` +
-        `| oldRaw="${oldTimeRaw ? oldTimeRaw[1].trim() : 'NONE'}" ` +
-        `newRaw="${newTimeRaw ? newTimeRaw[1].trim() : 'NONE'}"`,
-    )
-    spindle.log.info(
-      `[DIAG] oldTime=${oldTime}h newTime=${newTime}h elapsed=${elapsed.toFixed(4)}h ` +
-        `| oldRaw="${oldTimeRaw ? oldTimeRaw[1].trim() : 'NONE'}" ` +
-        `newRaw="${newTimeRaw ? newTimeRaw[1].trim() : 'NONE'}"`,
-    )
-
     if (elapsed < 0) {
       if (elapsed < -12) {
         elapsed += 24
@@ -173,13 +157,6 @@ export async function runDigestionTick(
     let wasteCount = 0
     let totalItemCount = 0
     let acidLevel = 0
-
-    maybeToast(
-      'digestionTicks',
-      'info',
-      `[DIAG] digestionEngine=${engineToggles.digestionEngine} struggleEngine=${engineToggles.struggleEngine} ` +
-        `| modifiers keys=${Object.keys(modifiers).join(',') || 'NONE'}`,
-    )
 
     if (engineToggles.digestionEngine) {
       // ── ABSOLUTE / TIMESTAMP-BASED MODEL ──────────────────────────────
@@ -284,11 +261,6 @@ export async function runDigestionTick(
         }
       }
     }
-    spindle.log.info(
-      `[DigestionTick] oldTimeAddedMap: ${oldTimeAddedMap.size} entries, ` +
-        `oldDigestionMap: ${oldDigestionMap.size} entries`,
-    )
-
     const stomMatch = updatedXml.match(/<Stomach([^>]*)>([\s\S]*?)<\/Stomach>/i)
     const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
 
@@ -362,25 +334,6 @@ export async function runDigestionTick(
 
     } // end digestionEngine
 
-    // ── DIAGNOSTIC: show computed digestion values after engine block ──
-    const diagAcidMatch = updatedXml.match(/<CurrentAcidPct>(.*?)<\/CurrentAcidPct>/i)
-    const diagStomItems = updatedXml.match(/<Stomach[^>]*>([\s\S]*?)<\/Stomach>/i)
-    const diagItemDigestions: string[] = []
-    if (diagStomItems) {
-      const itemRegex = /<Item\s+[^>]*?name="([^"]*)"[^>]*?digestion="([^"]*)"/gi
-      let m: RegExpExecArray | null
-      while ((m = itemRegex.exec(diagStomItems[1])) !== null) {
-        diagItemDigestions.push(`${m[1]}=${m[2]}`)
-      }
-    }
-    maybeToast(
-      'digestionTicks',
-      'info',
-      `[DIAG-postEngine] acid=${diagAcidMatch ? diagAcidMatch[1] : 'MISSING'} ` +
-        `items=${totalItemCount} digestedVol=${totalDigestedVol.toFixed(2)}L ` +
-        `| ${diagItemDigestions.join(', ') || 'NO ITEMS WITH DIGESTION'}`,
-    )
-
     // Normalize Backpack items: strip digestion/type/volume_L attributes that
     // the LLM may have erroneously added. Backpack items use the simple
     // <Item qty="...">name</Item> format — they are NOT prey and should never
@@ -407,17 +360,6 @@ export async function runDigestionTick(
     if (engineToggles.struggleEngine) {
       const struggleResult = processStruggle(updatedXml, oldXml, elapsed, modifiers.StomachResistance || 0, modifiers.EnergyDrain || 0)
       updatedXml = struggleResult.xml
-      // Verify indigestion survived into updatedXml after processStruggle
-      const postStruggleInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
-      maybeToast(
-        'digestionTicks',
-        'info',
-        `[DIAG-postStruggle] indigestion=${postStruggleInd ? postStruggleInd[1] : 'MISSING'} ` +
-          `events=${struggleResult.struggleEvents.length}`,
-      )
-      spindle.log.info(
-        `[DigestionTick] After processStruggle: indigestion attr="${postStruggleInd ? postStruggleInd[1] : 'MISSING'}"`,
-      )
       if (struggleResult.struggleEvents.length > 0) {
         await spindle.variables.chat.set(
           chatId,
@@ -556,19 +498,6 @@ export async function runDigestionTick(
         `${wasteCount} moved to bowels, ${totalDigestedVol.toFixed(2)}L digested`,
     )
 
-    // Final verification: log indigestion in the XML being returned
-    const finalInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
-    const finalAcid = updatedXml.match(/<CurrentAcidPct>(.*?)<\/CurrentAcidPct>/i)
-    maybeToast(
-      'digestionTicks',
-      'info',
-      `[DIAG-FINAL] acid=${finalAcid ? finalAcid[1] : 'MISSING'} ` +
-        `indigestion=${finalInd ? finalInd[1] : 'MISSING'} ` +
-        `items=${totalItemCount} digestedVol=${totalDigestedVol.toFixed(2)}L`,
-    )
-    spindle.log.info(
-      `[DigestionTick] RETURN: indigestion="${finalInd ? finalInd[1] : 'MISSING'}"`,
-    )
     return updatedXml
   } catch (e) {
     spindle.log.error(`Digestion tick failed: ${e}`)
@@ -576,11 +505,6 @@ export async function runDigestionTick(
     // indigestion/struggle values from processStruggle) instead of the
     // raw LLM output. This prevents a late-stage error from discarding
     // computed values that the user already saw toasts for.
-    const catchInd = updatedXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
-    spindle.log.info(
-      `[DigestionTick] CATCH RETURN: indigestion="${catchInd ? catchInd[1] : 'MISSING'}" ` +
-        `(preserved from last successful step)`,
-    )
     return updatedXml
   }
 }
@@ -599,30 +523,7 @@ export async function commitUpdate(
   const promptSheet = promptSheets.get(chatId)
   const cachedSheet = sheets.get(chatId)
   const oldSheet = promptSheet ?? cachedSheet ?? ''
-  const oldSheetTime = oldSheet.match(/<Time>(.*?)<\/Time>/i)
-  const newSheetTime = sheetXml.match(/<Time>(.*?)<\/Time>/i)
-  maybeToast(
-    'digestionTicks',
-    'info',
-    `[DIAG-commit] source=${promptSheet ? 'promptSheets' : cachedSheet ? 'sheets' : 'EMPTY'} ` +
-      `| oldTime="${oldSheetTime ? oldSheetTime[1].trim() : 'NONE'}" ` +
-      `newTime="${newSheetTime ? newSheetTime[1].trim() : 'NONE'}" ` +
-      `| oldSheetLen=${oldSheet.length}`,
-  )
-  spindle.log.info(
-    `[DIAG-commit] source=${promptSheet ? 'promptSheets' : cachedSheet ? 'sheets' : 'EMPTY'} ` +
-      `| oldTime="${oldSheetTime ? oldSheetTime[1].trim() : 'NONE'}" ` +
-      `newTime="${newSheetTime ? newSheetTime[1].trim() : 'NONE'}"`,
-  )
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
-
-  // Verify indigestion in the final XML before saving
-  const commitInd = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
-  spindle.log.info(
-    `[commitUpdate] message ${messageId}: ` +
-      `oldSheet indigestion="${(oldSheet.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i) || [])[1] || 'MISSING'}", ` +
-      `finalXml indigestion="${commitInd ? commitInd[1] : 'MISSING'}"`,
-  )
 
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml) // keep in-memory cache in sync
@@ -686,8 +587,6 @@ export async function contentProcessor(
   const update = extractSheetUpdate(ctx.content)
   if (!update) return
 
-  maybeToast('digestionTicks', 'info', `[CP] Running (origin=${ctx.origin})`)
-
   // ── Load the "old" sheet — prefer the prompt-time snapshot ───────
   // promptSheets stores the exact sheet the LLM saw in the prompt.  This
   // decouples us from the race condition where GENERATION_ENDED might
@@ -698,16 +597,6 @@ export async function contentProcessor(
   if (oldSheet === undefined) {
     oldSheet = (await loadChatSheet(chatId)) || ''
   }
-  const cpOldTime = oldSheet.match(/<Time>(.*?)<\/Time>/i)
-  const cpNewTime = update.match(/<Time>(.*?)<\/Time>/i)
-  maybeToast(
-    'digestionTicks',
-    'info',
-    `[DIAG-cp] source=${promptSheetCP ? 'promptSheets' : cachedSheetCP ? 'sheets' : 'loaded'} ` +
-      `| oldTime="${cpOldTime ? cpOldTime[1].trim() : 'NONE'}" ` +
-      `newTime="${cpNewTime ? cpNewTime[1].trim() : 'NONE'}"`,
-  )
-
   // ── Run the digestion tick (the real computation) ───────────────
   // This is the same function commitUpdate calls — it computes
   // indigestion, stamina, struggle, digestion %, acid, climax, nutrient
@@ -748,15 +637,6 @@ export async function contentProcessor(
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
   }
-
-  const indMatch = finalXml.match(/<Stomach[^>]*\sindigestion="([^"]*)"/i)
-  const indValue = indMatch ? indMatch[1] : 'MISSING'
-  spindle.log.info(
-    `[contentProcessor] chat ${chatId} (origin=${ctx.origin}): ` +
-      `computed indigestion="${indValue}", ` +
-      `content replaced (len ${ctx.content.length} → ${modifiedContent.length})`,
-  )
-  maybeToast('digestionTicks', 'success', `[CP] indigestion=${indValue}, content replaced`)
 
   return { content: modifiedContent }
 }
@@ -846,15 +726,6 @@ export async function promptInterceptor(messages: any[], context: any) {
   // runDigestionTick, decoupling them from the race condition where
   // GENERATION_ENDED might update sheets.get(chatId) first.
   promptSheets.set(chatId, sheet)
-  const promptTimeTag = sheet.match(/<Time>(.*?)<\/Time>/i)
-  maybeToast(
-    'digestionTicks',
-    'info',
-    `[DIAG-prompt] promptSheets.set | Time="${promptTimeTag ? promptTimeTag[1].trim() : 'NONE'}" | sheetLen=${sheet.length}`,
-  )
-  spindle.log.info(
-    `[DIAG-prompt] promptSheets.set | Time="${promptTimeTag ? promptTimeTag[1].trim() : 'NONE'}"`,
-  )
 
   let populateInstructions = ''
   const populateFields = await spindle.variables.chat.get(
