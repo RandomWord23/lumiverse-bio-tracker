@@ -96,8 +96,9 @@ export function processStruggle(
           .replace(/\s+stomachFatigue="[^"]*"/gi, '')
           .replace(/\s+indigestionEvents="[^"]*"/gi, '')
           .trim()
-        newAttrs += ` indigestion="${indigestion.toFixed(2)}" stomachFatigue="${stomachFatigue.toFixed(2)}" indigestionEvents="${triggeredStr}"`
-        return `<Stomach${newAttrs}>\n${content}\n    </Stomach>`
+        if (newAttrs) newAttrs += ' '
+        newAttrs += `indigestion="${indigestion.toFixed(2)}" stomachFatigue="${stomachFatigue.toFixed(2)}" indigestionEvents="${triggeredStr}"`
+        return `<Stomach ${newAttrs}>\n${content}\n    </Stomach>`
       },
     )
   }
