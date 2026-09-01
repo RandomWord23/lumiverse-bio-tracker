@@ -22,6 +22,34 @@ export function clockDelta(now: number, then: number): number {
   return Math.max(0, d)
 }
 
+/** Convert a decimal-hour story-clock value (0-24 range) to a 24-hour
+ *  "HH:MM" string for display in the character sheet. This avoids the
+ *  ambiguity of decimal hours (e.g. 8.36 being misread as 8:36) that
+ *  confuses the LLM. */
+export function decimalToClock(decimal: number): string {
+  const h = Math.floor(decimal) % 24
+  const m = Math.round((decimal - Math.floor(decimal)) * 60)
+  // Handle minute rounding overflow (e.g. 59.999 → 60)
+  if (m >= 60) {
+    return decimalToClock(decimal + 1 / 60)
+  }
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+/** Parse a time value that may be in "HH:MM" clock format or legacy
+ *  decimal-hour format, returning decimal hours (0-24 range). */
+export function clockToDecimal(value: string): number {
+  const trimmed = value.trim()
+  const hmMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/)
+  if (hmMatch) {
+    const h = parseInt(hmMatch[1], 10)
+    const m = parseInt(hmMatch[2], 10)
+    return h + m / 60
+  }
+  const h = parseFloat(trimmed)
+  return isNaN(h) ? 0 : h
+}
+
 export function maybeToast(category: string, type: 'success' | 'warning' | 'error' | 'info', message: string) {
   if (toastSettings[category] === false) return
   spindle.toast[type](message, { duration: 8000 })
@@ -217,6 +245,44 @@ export function setStat(xml: string, tag: string, value: number): string {
   }
   // Last resort: prepend
   return `<${tag}>${value.toFixed(2)}</${tag}>\n${xml}`
+}
+
+/** Like setStat, but writes the value as a 24-hour "HH:MM" clock string
+ *  instead of a decimal number. Used for story-clock timestamp tags
+ *  (FirstItemTime, StomachEmptyTime) so the LLM doesn't misread them. */
+export function setStatClock(xml: string, tag: string, value: number): string {
+  const clockStr = value <= 0 ? '00:00' : decimalToClock(value)
+  const regex = new RegExp(`<${tag}(\\s[^>]*)?>.*?<\\/${tag}>`, 'i')
+  if (regex.test(xml)) {
+    return xml.replace(
+      regex,
+      (match, attrs) => `<${tag}${attrs || ''}>${clockStr}</${tag}>`,
+    )
+  }
+  if (xml.includes('</BaseStats>')) {
+    return xml.replace(
+      /<\/BaseStats>/i,
+      `    <${tag}>${clockStr}</${tag}>\n  </BaseStats>`,
+    )
+  }
+  const firstTagMatch = xml.match(/<(\w+)[^>]*>/)
+  if (firstTagMatch) {
+    const firstTag = firstTagMatch[0]
+    const firstTagEnd = xml.indexOf(firstTag) + firstTag.length
+    return (
+      xml.slice(0, firstTagEnd) +
+      `\n  <${tag}>${clockStr}</${tag}>` +
+      xml.slice(firstTagEnd)
+    )
+  }
+  return `<${tag}>${clockStr}</${tag}>\n${xml}`
+}
+
+/** Like getStat, but parses a "HH:MM" clock string (or legacy decimal)
+ *  back into decimal hours. Used for story-clock timestamp tags. */
+export function getStatClock(xml: string, tag: string): number {
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>(.*?)<\\/${tag}>`, 'i'))
+  return match ? clockToDecimal(match[1]) : 0
 }
 
 export function deriveCondition(
@@ -485,7 +551,7 @@ export function digestItemsInContent(
     if (isNaN(timeAdded) || timeAdded <= 0) {
       // Not in oldTimeAddedMap — try the LLM's attribute (rare, but possible
       // if the LLM copied it from the prompt).
-      timeAdded = parseFloat(getAttrFromString(attrs, 'timeAdded'))
+      timeAdded = clockToDecimal(getAttrFromString(attrs, 'timeAdded'))
     }
 
     if (isNaN(timeAdded) || timeAdded <= 0) {
@@ -543,7 +609,7 @@ export function digestItemsInContent(
       const stamina = getAttrFromString(attrs, 'stamina') || '100'
       preyAttrs = ` willingness="${willingness}" stamina="${stamina}"`
     }
-    const tsAttr = ` timeAdded="${timeAdded.toFixed(2)}"`
+    const tsAttr = ` timeAdded="${decimalToClock(timeAdded)}"`
     if (isSelfClosing) {
       return `<Item type="${type}" name="${name}" volume_L="${vol}" digestion="${digNum.toFixed(2)}%"${tsAttr}${preyAttrs} />`
     }
@@ -612,11 +678,12 @@ CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is in
 ─── PRE-COMPUTED VALUES (copy these EXACTLY as-is — do NOT modify, reset, or zero them) ───
 The following values are computed by the extension's engines during the digestion tick. The sheet you receive already contains the correct values. You MUST copy them verbatim into your <sheet_update>:
 - digestion="...%" on prey items (computed from timeAdded + current Time)
-- timeAdded="..." on prey items (timestamp set when the item was eaten)
+- timeAdded="HH:MM" on prey items (24-hour clock timestamp set when the item was eaten, e.g. timeAdded="14:30")
 - indigestion="..." on the <Stomach> tag (computed from prey struggle)
 - stamina="..." on prey items (computed from willingness + fighting state)
 - struggle="..." on prey items (computed from willingness, size, consciousness, suppression)
-- <FirstItemTime>, <StomachEmptyTime>, <CurrentAcidPct> (story-clock timestamps, 0-24h)
+- <FirstItemTime>, <StomachEmptyTime> (24-hour clock timestamps in "HH:MM" form, e.g. <FirstItemTime>14:30</FirstItemTime>)
+- <CurrentAcidPct> (current acid level percentage, 0-100)
 - <Climax> (computed from Arousal)
 - <CurrentPenisLength_cm>, <CurrentPenisGirth_cm> (computed from Arousal)
 - Clothing stress="..." and condition="..." attributes (computed from body growth)
@@ -650,7 +717,7 @@ CRITICAL XML RULES:
      <Description>Squirming helplessly as acids rise past her waist.</Description>
      <BoundGear>blue dress, leather boots</BoundGear>
    </Item>
-6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" AND timeAdded="..." attributes EXACTLY as they appear in <CurrentCharacterSheet> — do NOT set digestion to "0%", remove it, or alter timeAdded. The extension advances the values automatically; your job is to preserve them as-is. When adding a NEW item that the character just ate, do NOT include a timeAdded attribute — the extension stamps it automatically.
+6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" AND timeAdded="HH:MM" attributes EXACTLY as they appear in <CurrentCharacterSheet> — do NOT set digestion to "0%", remove it, or alter timeAdded. The timeAdded value is a 24-hour clock timestamp (e.g. timeAdded="14:30") indicating when the item was eaten — copy it verbatim. The extension advances the values automatically; your job is to preserve them as-is. When adding a NEW item that the character just ate, do NOT include a timeAdded attribute — the extension stamps it automatically.
 7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
 8. The extension handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions increase proportionally. Copy these values from the sheet exactly as-is — do NOT manually adjust them based on digestion. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.

@@ -26,6 +26,9 @@ import {
   collectModifiers,
   getStat,
   setStat,
+  getStatClock,
+  setStatClock,
+  clockToDecimal,
   processClothingStress,
   digestItemsInContent,
   clockDelta,
@@ -183,8 +186,8 @@ export async function runDigestionTick(
     //                 acid = max(0, riseRate * (riseDuration - decayDuration))
     //                 where riseDuration  = clockDelta(emptyTime, firstItemTime)
     //                       decayDuration = clockDelta(now, emptyTime)
-    let firstItemTime = getStat(oldXml, 'FirstItemTime')
-    let stomachEmptyTime = getStat(oldXml, 'StomachEmptyTime')
+    let firstItemTime = getStatClock(oldXml, 'FirstItemTime')
+    let stomachEmptyTime = getStatClock(oldXml, 'StomachEmptyTime')
 
     const stomachMatch = newXml.match(/<Stomach(?![a-zA-Z])[\s\S]*?>([\s\S]*?)<\/Stomach>/i)
     const stomachContents = stomachMatch ? stomachMatch[1].trim() : ''
@@ -227,8 +230,8 @@ export async function runDigestionTick(
 
     const acidMultiplier = 1 + acidLevel / 100
 
-    updatedXml = setStat(updatedXml, 'FirstItemTime', firstItemTime)
-    updatedXml = setStat(updatedXml, 'StomachEmptyTime', stomachEmptyTime)
+    updatedXml = setStatClock(updatedXml, 'FirstItemTime', firstItemTime)
+    updatedXml = setStatClock(updatedXml, 'StomachEmptyTime', stomachEmptyTime)
     updatedXml = setStat(updatedXml, 'CurrentAcidPct', acidLevel)
 
     // Build maps of item name -> digestion % AND item name -> timeAdded from
@@ -255,7 +258,7 @@ export async function runDigestionTick(
       if (oldName) {
         const oldDig = parseFloat(getAttrFromString(oldAttrs, 'digestion').replace('%', '')) || 0
         oldDigestionMap.set(oldName, oldDig)
-        const oldTimeAdded = parseFloat(getAttrFromString(oldAttrs, 'timeAdded'))
+        const oldTimeAdded = clockToDecimal(getAttrFromString(oldAttrs, 'timeAdded'))
         if (!isNaN(oldTimeAdded) && oldTimeAdded > 0) {
           oldTimeAddedMap.set(oldName, oldTimeAdded)
         }
