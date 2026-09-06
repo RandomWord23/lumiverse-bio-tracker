@@ -110,3 +110,45 @@ export interface MessageContentProcessorResult {
   content?: string
   extra?: Record<string, unknown>
 }
+
+// ---------------------------------------------------------------------------
+// Dice System types
+// ---------------------------------------------------------------------------
+
+/** A single die type configuration (e.g. { sides: 20, count: 2 } = two d20s). */
+export interface DiceConfig {
+  sides: number
+  count: number
+}
+
+/** A named section of dice (e.g. "Combat" with d20×2 + d6×3). */
+export interface DiceSection {
+  name: string
+  dice: DiceConfig[]
+}
+
+/** A die that has been rolled — has an index within its section and a value. */
+export interface RolledDie {
+  index: number
+  sides: number
+  value: number
+}
+
+/** A section whose dice have all been rolled. */
+export interface RolledSection {
+  name: string
+  dice: RolledDie[]
+}
+
+/** Parsed from an `<action_roll>` tag emitted by the LLM. */
+export interface ActionRoll {
+  type: string
+  section: string
+  attribute: string
+  dc: number
+  dieIndex: number
+  dieValue: number
+  modifier: number
+  total: number
+  result: 'success' | 'failure' | 'narrative'
+}

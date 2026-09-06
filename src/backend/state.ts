@@ -31,6 +31,7 @@ export let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
   struggleEngine: true, buffSystem: true,
   attributeSystem: false,
+  diceSystem: false,
 }
 
 // ─── Setters (writes must go through these to reassign the live bindings) ──

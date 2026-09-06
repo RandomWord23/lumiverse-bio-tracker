@@ -212,3 +212,39 @@ export function createInvItem(): HTMLElement {
   div.innerHTML = `<input type="number" class="bt-input d-qty" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1"><input type="text" class="bt-input full d-name" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name..."><button data-action="remove-inv" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;">✖</button>`
   return div
 }
+
+/**
+ * Create a single die entry row with sides input, count input, and
+ * a remove button. Used inside a dice section's dice container.
+ */
+export function createDiceEntry(): HTMLElement {
+  const div = document.createElement('div')
+  div.className = 'bt-dice-entry'
+  div.innerHTML = `
+    <span class="bt-dice-d-label" style="font-size: 12px; color: #aaa;">d</span>
+    <input type="number" class="bt-input bt-dice-sides" style="width: 50px; text-align: center; padding: 4px;" placeholder="6" value="6" min="2" max="1000">
+    <span class="bt-dice-x-label" style="font-size: 12px; color: #aaa; margin-left: 4px;">×</span>
+    <input type="number" class="bt-input bt-dice-count" style="width: 40px; text-align: center; padding: 4px; margin-left: 4px;" placeholder="1" value="1" min="1" max="100">
+    <button class="bt-remove-btn" data-action="remove-die" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 14px; margin-left: 6px;">✖</button>
+  `
+  return div
+}
+
+/**
+ * Create a named dice section container with a name input, a dice
+ * entries container, an "Add Die" button, and a remove button.
+ * Each section is an independent dice pool.
+ */
+export function createDiceSection(): HTMLElement {
+  const div = document.createElement('div')
+  div.className = 'bt-dice-section'
+  div.innerHTML = `
+    <div class="bt-dice-section-header" style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+      <input type="text" class="bt-input bt-dice-section-name" style="flex: 1; text-align: left; font-weight: bold;" placeholder="Section name (e.g. Combat, Social, Magic)...">
+      <button class="bt-remove-btn" data-action="remove-dice-section" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px;">✖</button>
+    </div>
+    <div class="bt-dice-container" style="margin-left: 12px; margin-bottom: 6px;"></div>
+    <button class="bt-add-btn bt-add-die" data-action="add-die" style="font-size: 11px; padding: 2px 8px; margin-left: 12px; margin-bottom: 4px;">+ Add Die</button>
+  `
+  return div
+}

@@ -8,6 +8,7 @@ import type {
   EngineToggles,
   UiSettings,
   BioTrackerSettings,
+  DicePreset,
 } from './types'
 
 // ─── Default settings ──────────────────────────────────────────
@@ -32,6 +33,7 @@ export const defaultEngineToggles: EngineToggles = {
   nutrientAbsorption: true,
   arousalClimax: true,
   struggleEngine: true,
+  diceSystem: false,
 }
 
 export const defaultUiSettings: UiSettings = {
@@ -52,6 +54,7 @@ export function loadSettings(): BioTrackerSettings {
         toast: { ...defaultToastSettings, ...(p.toast || {}) },
         engine: { ...defaultEngineToggles, ...(p.engine || {}) },
         ui: { ...defaultUiSettings, ...(p.ui || {}) },
+        dicePresets: (p.dicePresets as DicePreset[] | undefined) ?? [],
       }
     }
   } catch (e) {}
@@ -59,6 +62,7 @@ export function loadSettings(): BioTrackerSettings {
     toast: { ...defaultToastSettings },
     engine: { ...defaultEngineToggles },
     ui: { ...defaultUiSettings },
+    dicePresets: [],
   }
 }
 

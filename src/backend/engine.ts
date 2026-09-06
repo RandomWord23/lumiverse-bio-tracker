@@ -11,6 +11,13 @@ import {
   slotBodyMap,
   stressMultipliers,
 } from './types'
+import type {
+  DiceConfig,
+  DiceSection,
+  RolledDie,
+  RolledSection,
+  ActionRoll,
+} from './types'
 
 /** Compute elapsed hours between two story-clock timestamps (0-24 range),
  *  handling midnight wraparound. If the raw delta is < -12 we assume the
@@ -869,4 +876,228 @@ RULES:
   ...the complete updated sheet with ALL fields, not just changed ones...
 </CharacterSheet>
 </sheet_update>]`
+}
+
+// ---------------------------------------------------------------------------
+// Dice System helpers
+// ---------------------------------------------------------------------------
+
+/** Parse the <DicePool> block from sheet XML into DiceSection[]. */
+export function parseDiceConfig(sheetXml: string): DiceSection[] {
+  const poolMatch = sheetXml.match(/<DicePool>([\s\S]*?)<\/DicePool>/i)
+  if (!poolMatch) return []
+
+  const poolContent = poolMatch[1]
+  const sections: DiceSection[] = []
+
+  const sectionRegex = /<Section\s+name="([^"]*)"[^>]*>([\s\S]*?)<\/Section>/gi
+  let secMatch: RegExpExecArray | null
+  while ((secMatch = sectionRegex.exec(poolContent)) !== null) {
+    const name = secMatch[1]
+    const inner = secMatch[2]
+    const dice: DiceConfig[] = []
+
+    const dieRegex = /<Die\s+sides="(\d+)"\s+count="(\d+)"\s*\/>/gi
+    let dieMatch: RegExpExecArray | null
+    while ((dieMatch = dieRegex.exec(inner)) !== null) {
+      dice.push({ sides: parseInt(dieMatch[1], 10), count: parseInt(dieMatch[2], 10) })
+    }
+    sections.push({ name, dice })
+  }
+  return sections
+}
+
+/** Roll all dice in all sections. Each section's dice get sequential indices starting at 1. */
+export function rollDicePool(sections: DiceSection[]): RolledSection[] {
+  return sections.map((section) => {
+    const rolled: RolledDie[] = []
+    let index = 1
+    for (const cfg of section.dice) {
+      for (let i = 0; i < cfg.count; i++) {
+        rolled.push({
+          index,
+          sides: cfg.sides,
+          value: Math.floor(Math.random() * cfg.sides) + 1,
+        })
+        index++
+      }
+    }
+    return { name: section.name, dice: rolled }
+  })
+}
+
+/** Build the injection string shown to the LLM, listing all rolled dice grouped by section. */
+export function buildDicePoolPrompt(sections: RolledSection[]): string {
+  let out = '═══ DICE POOL ═══\n'
+  out += 'You have the following pre-rolled dice available, organized into sections.\n'
+  out += 'Within each section, you MUST use dice IN ORDER. Do NOT skip dice or use them out of order.\n'
+  out += 'You MAY use dice from multiple sections in one response.\n\n'
+
+  for (const section of sections) {
+    out += `SECTION: ${section.name}\n`
+    for (const die of section.dice) {
+      out += `  Die #${die.index}: d${die.sides} → ${die.value}\n`
+    }
+    out += '\n'
+  }
+
+  out += 'RULES:\n'
+  out += '1. When a character attempts an action with uncertain outcome, pick the most relevant section and consume the NEXT available die from it.\n'
+  out += '2. Emit: <action_roll type="escape" section="Combat" attribute="DEX" dc="15" die_used="1" />\n'
+  out += '3. die_used is the index WITHIN the section (starts at 1 for each section).\n'
+  out += '4. You MAY use multiple dice from different sections in one response.\n'
+  out += '5. Unused dice are discarded at end of turn.\n'
+  out += '6. You can see the die values above — use them to narrate the outcome.\n'
+  out += '7. If attribute and dc are provided, system computes: total = dieValue + attributeModifier vs dc.\n'
+  out += '═══ END DICE POOL ═══'
+  return out
+}
+
+/** Extract all <action_roll> tags from LLM content, in order of appearance. */
+export function parseActionRolls(content: string): ActionRoll[] {
+  const rolls: ActionRoll[] = []
+  const regex = /<action_roll\s+([^>]*?)\/>/gi
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(content)) !== null) {
+    const attrs = match[1]
+    const getAttr = (attr: string): string => {
+      const m = attrs.match(new RegExp(`${attr}="([^"]*)"`, 'i'))
+      return m ? m[1] : ''
+    }
+    rolls.push({
+      type: getAttr('type') || 'unknown',
+      section: getAttr('section') || '',
+      attribute: getAttr('attribute') || '',
+      dc: parseInt(getAttr('dc'), 10) || 0,
+      dieIndex: parseInt(getAttr('die_used'), 10) || 0,
+      dieValue: 0,
+      modifier: 0,
+      total: 0,
+      result: 'narrative',
+    })
+  }
+  return rolls
+}
+
+/** Validate that die_used values are strictly sequential within each section.
+ *  Returns { valid, errors } — lenient: logs warnings but doesn't reject. */
+export function validateRollOrder(rolls: ActionRoll[], pool: RolledSection[]): { valid: boolean; errors: string[] } {
+  const errors: string[] = []
+  const bySection: Record<string, ActionRoll[]> = {}
+
+  for (const roll of rolls) {
+    if (!bySection[roll.section]) bySection[roll.section] = []
+    bySection[roll.section].push(roll)
+  }
+
+  for (const [sectionName, sectionRolls] of Object.entries(bySection)) {
+    const poolSection = pool.find((s) => s.name === sectionName)
+    if (!poolSection) {
+      errors.push(`Section "${sectionName}" not found in dice pool`)
+      continue
+    }
+    let expected = 1
+    for (const roll of sectionRolls) {
+      if (roll.dieIndex !== expected) {
+        errors.push(`Section "${sectionName}": expected die_used=${expected}, got ${roll.dieIndex}`)
+      }
+      if (roll.dieIndex > poolSection.dice.length) {
+        errors.push(`Section "${sectionName}": die_used=${roll.dieIndex} exceeds available dice (${poolSection.dice.length})`)
+      }
+      expected = roll.dieIndex + 1
+    }
+  }
+  return { valid: errors.length === 0, errors }
+}
+
+/** Compute the result of a single roll: look up die value, compute modifier, determine success/failure. */
+export function computeRollResult(roll: ActionRoll, sheetXml: string, pool: RolledSection[]): ActionRoll {
+  const section = pool.find((s) => s.name === roll.section)
+  if (section) {
+    const die = section.dice.find((d) => d.index === roll.dieIndex)
+    if (die) {
+      roll.dieValue = die.value
+    } else {
+      spindle.log.warn(`Dice: die #${roll.dieIndex} not found in section "${roll.section}"`)
+    }
+  } else {
+    spindle.log.warn(`Dice: section "${roll.section}" not found in pool`)
+  }
+
+  // Compute modifier if attribute system is enabled and attribute is specified
+  if (engineToggles.attributeSystem && roll.attribute) {
+    const attrValue = getAttribute(sheetXml, roll.attribute)
+    if (attrValue > 0) {
+      roll.modifier = Math.floor((attrValue - 10) / 2)
+    }
+  }
+
+  roll.total = roll.dieValue + roll.modifier
+
+  if (roll.dc > 0) {
+    roll.result = roll.total >= roll.dc ? 'success' : 'failure'
+  } else {
+    roll.result = 'narrative'
+  }
+
+  return roll
+}
+
+/** Orchestrate full action-roll processing: parse → validate → compute → toast → strip tags.
+ *  Returns the cleaned content (with <action_roll> tags removed).
+ *  Async because chat variable get/delete are async RPC calls. */
+export async function processActionRolls(
+  sheetXml: string,
+  chatId: string,
+  content: string,
+  getChatVar: (chatId: string, key: string) => Promise<string | null>,
+  deleteChatVar: (chatId: string, key: string) => Promise<void>,
+): Promise<string> {
+  const stateJson = await getChatVar(chatId, 'dicePoolState')
+  if (!stateJson) return content
+
+  let pool: RolledSection[]
+  try {
+    pool = JSON.parse(stateJson)
+  } catch {
+    spindle.log.warn('Dice: failed to parse dicePoolState chat variable')
+    await deleteChatVar(chatId, 'dicePoolState')
+    return content
+  }
+
+  const rolls = parseActionRolls(content)
+  if (rolls.length === 0) {
+    // No rolls used — silently discard
+    await deleteChatVar(chatId, 'dicePoolState')
+    return content
+  }
+
+  const validation = validateRollOrder(rolls, pool)
+  if (!validation.valid) {
+    for (const err of validation.errors) {
+      spindle.log.warn(`Dice validation: ${err}`)
+    }
+  }
+
+  for (const roll of rolls) {
+    computeRollResult(roll, sheetXml, pool)
+
+    // Send toast notification
+    const modStr = roll.modifier !== 0 ? ` ${roll.modifier > 0 ? '+' : ''}${roll.modifier}` : ''
+    if (roll.result === 'success') {
+      maybeToast('dice', 'success', `🎲 [${roll.section}] ${roll.type}: ${roll.dieValue}${modStr} = ${roll.total} vs DC ${roll.dc} → Success!`)
+    } else if (roll.result === 'failure') {
+      maybeToast('dice', 'warning', `🎲 [${roll.section}] ${roll.type}: ${roll.dieValue}${modStr} = ${roll.total} vs DC ${roll.dc} → Failure`)
+    } else {
+      maybeToast('dice', 'info', `🎲 [${roll.section}] ${roll.type}: ${roll.dieValue}`)
+    }
+  }
+
+  // Strip <action_roll> tags from content
+  const cleanedContent = content.replace(/<action_roll\s+[^>]*?\/>/gi, '')
+
+  // Clean up chat variable
+  await deleteChatVar(chatId, 'dicePoolState')
+
+  return cleanedContent
 }

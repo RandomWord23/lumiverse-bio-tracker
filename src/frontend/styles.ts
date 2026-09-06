@@ -61,6 +61,21 @@ export const bioTrackerStylesheet = `
     .bt-flag-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; font-size: 11px; opacity: 0.25; padding: 2px 4px; z-index: 10; touch-action: manipulation; pointer-events: auto; }
     .bt-flag-btn[data-flagged="true"] { opacity: 1; }
     .bt-flag-wrap { position: relative; width: 100%; }
+    .bt-dice-section { background: #222; border: 1px solid #444; border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+    .bt-dice-section-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .bt-dice-section-name { flex: 1; text-align: left; font-weight: bold; }
+    .bt-dice-container { margin-left: 12px; margin-bottom: 6px; }
+    .bt-dice-entry { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; padding: 4px 6px; background: #1a1a1a; border-radius: 4px; border: 1px solid #333; }
+    .bt-dice-entry .bt-dice-sides { width: 50px; text-align: center; }
+    .bt-dice-entry .bt-dice-count { width: 40px; text-align: center; }
+    .bt-dice-entry .bt-remove-btn { position: static; font-size: 14px; }
+    .bt-dice-toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .bt-dice-toolbar .bt-add-btn { float: none; }
+    .bt-dice-preset-bar { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+    .bt-dice-preset-select { background: #111; border: 1px solid #444; color: #fff; border-radius: 4px; padding: 4px 8px; font-size: 12px; flex: 1; min-width: 120px; }
+    .bt-dice-preset-btn { background: #2a2a2a; color: #aaa; border: 1px solid #444; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+    .bt-dice-preset-btn:active { background: #444; }
+    .bt-dice-empty-hint { color: #666; font-size: 12px; text-align: center; padding: 20px; border: 1px dashed #444; border-radius: 6px; margin-bottom: 10px; }
   `
 
 /**

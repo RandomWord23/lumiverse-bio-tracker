@@ -33,6 +33,10 @@ import {
   digestItemsInContent,
   clockDelta,
   buildSheetPrompt,
+  parseDiceConfig,
+  rollDicePool,
+  buildDicePoolPrompt,
+  processActionRolls,
 } from './engine'
 
 import {
@@ -584,11 +588,27 @@ export async function contentProcessor(
   // ── Guard: only process messages that contain a sheet update ──────
   // User messages and system messages never contain <sheet_update>.
   // This is a cheap string check before any regex or async work.
-  if (!ctx.content.includes('<sheet_update>')) return
+  if (!ctx.content.includes('<sheet_update>') && !ctx.content.includes('<action_roll')) return
 
   const chatId = ctx.chatId
   const update = extractSheetUpdate(ctx.content)
-  if (!update) return
+  const hasActionRolls = ctx.content.includes('<action_roll')
+
+  // ── No sheet update and no action rolls — nothing to do ──────────
+  if (!update && !hasActionRolls) return
+
+  // ── Action-roll-only path: no <sheet_update> to process ──────────
+  // The LLM emitted <action_roll> tags but no sheet update.  We still
+  // need to process the dice rolls using the current cached sheet.
+  if (!update) {
+    const cachedSheet = sheets.get(chatId) ?? (await loadChatSheet(chatId)) ?? ''
+    const cleanedContent = await processActionRolls(
+      cachedSheet, chatId, ctx.content,
+      spindle.variables.chat.get, spindle.variables.chat.delete,
+    )
+    // Only return a result if content was modified (tags stripped)
+    return cleanedContent !== ctx.content ? { content: cleanedContent } : undefined
+  }
 
   // ── Load the "old" sheet — prefer the prompt-time snapshot ───────
   // promptSheets stores the exact sheet the LLM saw in the prompt.  This
@@ -610,10 +630,20 @@ export async function contentProcessor(
   // The LLM's original block contained stale copied values.  We swap it
   // for the fully-computed XML so the persisted message is a self-
   // contained, accurate snapshot of the completed turn.
-  const modifiedContent = ctx.content.replace(
+  let modifiedContent = ctx.content.replace(
     /<sheet_update>[\s\S]*?<\/sheet_update>/i,
     `<sheet_update>\n${finalXml}\n</sheet_update>`,
   )
+
+  // ── Process dice action rolls (if any) ───────────────────────────
+  // Strips <action_roll> tags from the content and emits toast
+  // notifications with roll results.  No-op if no dicePoolState exists.
+  if (hasActionRolls) {
+    modifiedContent = await processActionRolls(
+      finalXml, chatId, modifiedContent,
+      spindle.variables.chat.get, spindle.variables.chat.delete,
+    )
+  }
 
   // ── Persist the computed sheet + update in-memory cache ──────────
   // This keeps sheets.get(chatId) in sync so the next promptInterceptor
@@ -760,9 +790,27 @@ export async function promptInterceptor(messages: any[], context: any) {
     }
   }
 
+  // ─── Dice Pool: pre-roll dice and inject values into prompt ────
+  // If the dice system is enabled and the sheet has a <DicePool> config,
+  // we roll all dice NOW (before LLM generation) and store the results
+  // in a chat variable.  The rolled values are injected into the prompt
+  // so the LLM can consume them sequentially via <action_roll> tags.
+  // The contentProcessor picks up the stored state and processes any
+  // <action_roll> tags in the LLM's response.
+  let dicePoolInjection = ''
+  if (engineToggles.diceSystem) {
+    const diceSections = parseDiceConfig(sheet)
+    if (diceSections.length > 0) {
+      const rolledSections = rollDicePool(diceSections)
+      // Store the rolled pool for contentProcessor to consume
+      await spindle.variables.chat.set(chatId, 'dicePoolState', JSON.stringify(rolledSections))
+      dicePoolInjection = buildDicePoolPrompt(rolledSections)
+    }
+  }
+
   const injection = {
     role: 'system' as const,
-    content: buildSheetPrompt(sheet) + populateInstructions + struggleNotification,
+    content: buildSheetPrompt(sheet) + populateInstructions + struggleNotification + dicePoolInjection,
   }
 
   // ─── Strip <sheet_update> blocks from chat history ──────────

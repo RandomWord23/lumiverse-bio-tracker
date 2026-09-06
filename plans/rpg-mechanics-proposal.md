@@ -515,9 +515,13 @@ questSystem: false
 
 ---
 
-## Proposal 7: Dice-Roll Action Resolution
+## Proposal 7: Dice-Roll Action Resolution  ✅ IMPLEMENTED
 
-### Concept
+> **Status**: Implemented (2026-09-06). See [`plans/dice-system-implementation.md`](dice-system-implementation.md) for the full implementation plan.
+>
+> **Implemented approach**: Pre-Rolled Dice Pool (Approach A). The original concept below described a reactive D20 system where the LLM emits `<action_roll>` requests and the extension rolls after generation. The **actual implementation** uses a **pre-rolled** approach: the extension rolls all configured dice *before* LLM generation using `Math.random()`, injects the pre-rolled values into the prompt, and the LLM consumes them sequentially via `<action_roll section="..." die_used="N" />` tags. Named dice sections (e.g., "Combat", "Social", "Magic") act as independent pools. Dice are optional — if the LLM emits no `<action_roll>` tags, the pre-rolled values are silently discarded. Custom-sided dice (d7, d13, d100, etc.) are supported. Presets are saved/loaded via `localStorage`.
+
+### Concept (Original Design)
 
 A D20-style dice roll system for resolving contested actions with uncertain outcomes. The extension rolls dice using attribute modifiers and reports results to the LLM. This prevents the LLM from simply narrating success or failure — the dice decide.
 

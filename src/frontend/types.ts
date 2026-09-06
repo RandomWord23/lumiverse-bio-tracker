@@ -31,6 +31,7 @@ export interface EngineToggles {
   nutrientAbsorption: boolean
   arousalClimax: boolean
   struggleEngine: boolean
+  diceSystem: boolean
 }
 
 /**
@@ -49,6 +50,32 @@ export interface BioTrackerSettings {
   toast: ToastSettings
   engine: EngineToggles
   ui: UiSettings
+  dicePresets?: DicePreset[]
+}
+
+/**
+ * A single die configuration within a dice section.
+ */
+export interface DiceConfig {
+  sides: number
+  count: number
+}
+
+/**
+ * A named section of dice (e.g. "Combat", "Social", "Magic").
+ * Each section is an independent pool.
+ */
+export interface DiceSection {
+  name: string
+  dice: DiceConfig[]
+}
+
+/**
+ * A saved preset of dice sections that can be loaded into the dice tab.
+ */
+export interface DicePreset {
+  name: string
+  sections: DiceSection[]
 }
 
 /**

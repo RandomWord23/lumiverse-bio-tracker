@@ -8,6 +8,9 @@ import type {
   EngineToggleDef,
   BuffTargetDef,
   BioTrackerSettings,
+  DicePreset,
+  DiceSection,
+  DiceConfig,
 } from './frontend/types'
 import {
   defaultToastSettings,
@@ -28,6 +31,8 @@ import {
   createSkillItem,
   createTraitItem,
   createInvItem,
+  createDiceSection,
+  createDiceEntry,
 } from './frontend/components'
 
 export function setup(ctx: SpindleFrontendContext) {
@@ -60,6 +65,7 @@ export function setup(ctx: SpindleFrontendContext) {
       <button class="bt-tab-btn" data-tab="tab-inv">Inventory</button>
       <button class="bt-tab-btn" data-tab="tab-state">State</button>
       <button class="bt-tab-btn" data-tab="tab-vitals">Metabolism</button>
+      <button class="bt-tab-btn" data-tab="tab-dice">🎲</button>
       <button class="bt-tab-btn" data-tab="tab-settings">⚙️</button>
     </div>
     <div class="bt-content">
@@ -284,6 +290,23 @@ export function setup(ctx: SpindleFrontendContext) {
         <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
         <button class="bt-action-btn" id="bt-populate-btn" style="background: #2a2a2a; border-color: #555;">✨ Populate Flagged Fields</button>
       </div>
+      <div id="tab-dice" class="bt-tab-content">
+        <div class="bt-section-title" style="margin-top: 0;">🎲 DICE POOLS</div>
+        <div style="font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.5;">Create named sections of dice (e.g. Combat, Social, Magic). Each section is an independent pool. Dice are pre-rolled every turn and injected into the AI prompt. The AI consumes them via <code><action_roll></code> tags. If the AI doesn't use them, they are silently discarded.</div>
+        <div class="bt-dice-preset-bar">
+          <select class="bt-dice-preset-select" id="bt-dice-preset-select">
+            <option value="">— Presets —</option>
+          </select>
+          <button class="bt-dice-preset-btn" id="bt-dice-load-preset">📂 Load</button>
+          <button class="bt-dice-preset-btn" id="bt-dice-save-preset">💾 Save</button>
+          <button class="bt-dice-preset-btn" id="bt-dice-delete-preset">🗑 Delete</button>
+        </div>
+        <div class="bt-dice-toolbar">
+          <button class="bt-add-btn" id="add-dice-section-btn" style="float: none;">+ Add Section</button>
+        </div>
+        <div class="bt-dice-empty-hint" id="bt-dice-empty-hint">No dice sections yet. Click "Add Section" to create one.</div>
+        <div id="dice-sections-container"></div>
+      </div>
       <div id="tab-settings" class="bt-tab-content">
         <div class="bt-section-title" style="margin-top: 0;">🔔 TOAST ALERTS</div>
         <div id="bt-toast-settings"></div>
@@ -340,6 +363,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'struggleEngine', label: 'Struggle Engine', desc: 'Prey struggling, indigestion, and vomit events' },
     { key: 'buffSystem', label: 'Buff System', desc: 'Apply skill/trait percentage buffs to stats' },
     { key: 'attributeSystem', label: 'Attribute System', desc: 'Apply STR/DEX/CON/INT/WIS/CHA modifiers to engine stats' },
+    { key: 'diceSystem', label: 'Dice System', desc: 'Pre-roll dice pools for action resolution' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -792,6 +816,14 @@ export function setup(ctx: SpindleFrontendContext) {
       container?.appendChild(createBuffEntry(buffTargetDefs))
     } else if (action === 'remove-buff') {
       target.closest('.bt-buff-entry')?.remove()
+    } else if (action === 'add-die') {
+      const container = target.closest('.bt-dice-section')?.querySelector('.bt-dice-container')
+      container?.appendChild(createDiceEntry())
+    } else if (action === 'remove-die') {
+      target.closest('.bt-dice-entry')?.remove()
+    } else if (action === 'remove-dice-section') {
+      target.closest('.bt-dice-section')?.remove()
+      updateDiceEmptyHint()
     }
   })
 
@@ -829,6 +861,103 @@ export function setup(ctx: SpindleFrontendContext) {
   document.getElementById('add-inv-btn')?.addEventListener('click', () => {
     document.getElementById('inv-container')?.appendChild(createInvItem())
   })
+
+  // ─── Dice section & preset management ──────────────────────
+  function updateDiceEmptyHint() {
+    const container = document.getElementById('dice-sections-container')
+    const hint = document.getElementById('bt-dice-empty-hint')
+    if (hint) hint.style.display = (container?.children.length ?? 0) > 0 ? 'none' : 'block'
+  }
+
+  function refreshPresetDropdown() {
+    const select = document.getElementById('bt-dice-preset-select') as HTMLSelectElement
+    if (!select) return
+    const currentVal = select.value
+    select.innerHTML = '<option value="">— Presets —</option>'
+    const presets = currentSettings.dicePresets ?? []
+    presets.forEach((p) => {
+      const opt = document.createElement('option')
+      opt.value = p.name
+      opt.textContent = p.name
+      select.appendChild(opt)
+    })
+    if (currentVal) select.value = currentVal
+  }
+
+  function collectDiceSectionsFromUi(): DiceSection[] {
+    const sections: DiceSection[] = []
+    document.querySelectorAll('.bt-dice-section').forEach((el) => {
+      const name = (el.querySelector('.bt-dice-section-name') as HTMLInputElement)?.value.trim()
+      if (!name) return
+      const dice: DiceConfig[] = []
+      el.querySelectorAll('.bt-dice-entry').forEach((dieEl) => {
+        const sides = parseInt((dieEl.querySelector('.bt-dice-sides') as HTMLInputElement)?.value || '6') || 6
+        const count = parseInt((dieEl.querySelector('.bt-dice-count') as HTMLInputElement)?.value || '1') || 1
+        dice.push({ sides, count })
+      })
+      sections.push({ name, dice })
+    })
+    return sections
+  }
+
+  document.getElementById('add-dice-section-btn')?.addEventListener('click', () => {
+    document.getElementById('dice-sections-container')?.appendChild(createDiceSection())
+    updateDiceEmptyHint()
+  })
+
+  document.getElementById('bt-dice-load-preset')?.addEventListener('click', () => {
+    const select = document.getElementById('bt-dice-preset-select') as HTMLSelectElement
+    const presetName = select?.value
+    if (!presetName) return
+    const preset = (currentSettings.dicePresets ?? []).find((p) => p.name === presetName)
+    if (!preset) return
+    document.getElementById('dice-sections-container')!.innerHTML = ''
+    preset.sections.forEach((sec) => {
+      const sectionDiv = createDiceSection()
+      ;(sectionDiv.querySelector('.bt-dice-section-name') as HTMLInputElement).value = sec.name
+      sec.dice.forEach((d) => {
+        const dieDiv = createDiceEntry()
+        ;(dieDiv.querySelector('.bt-dice-sides') as HTMLInputElement).value = String(d.sides)
+        ;(dieDiv.querySelector('.bt-dice-count') as HTMLInputElement).value = String(d.count)
+        sectionDiv.querySelector('.bt-dice-container')?.appendChild(dieDiv)
+      })
+      document.getElementById('dice-sections-container')?.appendChild(sectionDiv)
+    })
+    updateDiceEmptyHint()
+  })
+
+  document.getElementById('bt-dice-save-preset')?.addEventListener('click', () => {
+    const name = prompt('Enter a name for this preset:')
+    if (!name || !name.trim()) return
+    const trimmed = name.trim()
+    const sections = collectDiceSectionsFromUi()
+    if (sections.length === 0) return
+    if (!currentSettings.dicePresets) currentSettings.dicePresets = []
+    const existingIdx = currentSettings.dicePresets.findIndex((p) => p.name === trimmed)
+    const preset: DicePreset = { name: trimmed, sections }
+    if (existingIdx >= 0) {
+      currentSettings.dicePresets[existingIdx] = preset
+    } else {
+      currentSettings.dicePresets.push(preset)
+    }
+    saveSettings(currentSettings)
+    refreshPresetDropdown()
+    const select = document.getElementById('bt-dice-preset-select') as HTMLSelectElement
+    if (select) select.value = trimmed
+  })
+
+  document.getElementById('bt-dice-delete-preset')?.addEventListener('click', () => {
+    const select = document.getElementById('bt-dice-preset-select') as HTMLSelectElement
+    const presetName = select?.value
+    if (!presetName) return
+    if (!confirm(`Delete preset "${presetName}"?`)) return
+    currentSettings.dicePresets = (currentSettings.dicePresets ?? []).filter((p) => p.name !== presetName)
+    saveSettings(currentSettings)
+    refreshPresetDropdown()
+  })
+
+  refreshPresetDropdown()
+  updateDiceEmptyHint()
 
   // ─── Flag buttons on fields ────────────────────────────────
   function addFlagButtons() {
@@ -1071,7 +1200,25 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     })
 
-    xml += `    </Bowels>\n  </DigestiveTract>\n</CharacterSheet>`
+    xml += `    </Bowels>\n  </DigestiveTract>\n`
+    // DicePool
+    const diceSections = document.querySelectorAll('.bt-dice-section')
+    if (diceSections.length > 0) {
+      xml += `  <DicePool>\n`
+      diceSections.forEach((el) => {
+        const name = (el.querySelector('.bt-dice-section-name') as HTMLInputElement)?.value.trim()
+        if (!name) return
+        xml += `    <Section name="${name}">\n`
+        el.querySelectorAll('.bt-dice-entry').forEach((dieEl) => {
+          const sides = (dieEl.querySelector('.bt-dice-sides') as HTMLInputElement)?.value.trim() || '6'
+          const count = (dieEl.querySelector('.bt-dice-count') as HTMLInputElement)?.value.trim() || '1'
+          xml += `      <Die sides="${sides}" count="${count}" />\n`
+        })
+        xml += `    </Section>\n`
+      })
+      xml += `  </DicePool>\n`
+    }
+    xml += `</CharacterSheet>`
     return xml
   }
 
@@ -1324,7 +1471,7 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── XML to form parser ────────────────────────────────────
   function populateFormFromXml(xml: string) {
     document.querySelectorAll(
-      '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot'
+      '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot, .bt-dice-section'
     ).forEach((el) => el.remove())
 
     document.querySelectorAll('.cloth-badge').forEach((el) => el.remove())
@@ -1631,6 +1778,27 @@ export function setup(ctx: SpindleFrontendContext) {
         }
       })
     }
+
+    // Parse DicePool
+    const dicePoolNode = doc.querySelector('DicePool')
+    if (dicePoolNode) {
+      dicePoolNode.querySelectorAll('Section').forEach((sectionNode) => {
+        const name = sectionNode.getAttribute('name') || ''
+        if (!name) return
+        const sectionDiv = createDiceSection()
+        ;(sectionDiv.querySelector('.bt-dice-section-name') as HTMLInputElement).value = name
+        sectionNode.querySelectorAll('Die').forEach((dieNode) => {
+          const sides = dieNode.getAttribute('sides') || '6'
+          const count = dieNode.getAttribute('count') || '1'
+          const dieDiv = createDiceEntry()
+          ;(dieDiv.querySelector('.bt-dice-sides') as HTMLInputElement).value = sides
+          ;(dieDiv.querySelector('.bt-dice-count') as HTMLInputElement).value = count
+          sectionDiv.querySelector('.bt-dice-container')?.appendChild(dieDiv)
+        })
+        document.getElementById('dice-sections-container')?.appendChild(sectionDiv)
+      })
+    }
+    updateDiceEmptyHint()
 
     updateCapacities()
   }
