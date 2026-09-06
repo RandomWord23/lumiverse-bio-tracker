@@ -31,6 +31,7 @@ import {
   clockToDecimal,
   processClothingStress,
   digestItemsInContent,
+  transitItemsInContent,
   clockDelta,
   buildSheetPrompt,
   parseDiceConfig,
@@ -274,6 +275,11 @@ export async function runDigestionTick(
     let stomContent = stomMatch ? stomMatch[2].trim() : ''
     let bowContent = bowMatch ? bowMatch[2].trim() : ''
 
+    // ── DIAGNOSTIC: log bowels content BEFORE digestItemsInContent ──
+    spindle.log.info(
+      `[runDigestionTick] bowels BEFORE digest: ${bowContent.slice(0, 400)}`,
+    )
+
     const stomResult = digestItemsInContent(stomContent, {
       baseDigRate,
       acidMultiplier,
@@ -284,26 +290,67 @@ export async function runDigestionTick(
     })
     stomContent = stomResult.content
 
-    const bowResult = digestItemsInContent(bowContent, {
-      baseDigRate,
-      acidMultiplier,
+    // Bowels prey TRANSIT (not digest). Only type="Prey" items transit;
+    // Food/Liquid/Remains stay inert. At 100% transit, prey move to stomach.
+    const baseTransitRate = baseDigRate * 2 // transit is always double digestion speed
+
+    // Build oldTransitMap from old bowels prey (mirror oldDigestionMap).
+    // Legacy chats may have digestion="X%" on bowels prey instead of transit;
+    // in that case oldTransitMap.get(name) returns 0 and transit is computed
+    // fresh from timeAdded (which IS in oldTimeAddedMap). See design doc
+    // "Legacy Chat Migration" section.
+    const oldTransitMap = new Map<string, number>()
+    const oldBowMatch2 = oldXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
+    if (oldBowMatch2) {
+      const oldBowRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+      let m: RegExpExecArray | null
+      while ((m = oldBowRegex.exec(oldBowMatch2[1])) !== null) {
+        const a = m[1]
+        if ((getAttrFromString(a, 'type') || 'Food') === 'Prey') {
+          const n = getAttrFromString(a, 'name')
+          if (n) {
+            const transitStr = getAttrFromString(a, 'transit')
+            const transitVal = transitStr ? parseFloat(transitStr.replace('%', '')) || 0 : 0
+            oldTransitMap.set(n, transitVal)
+          }
+        }
+      }
+    }
+
+    const bowResult = transitItemsInContent(bowContent, {
+      baseTransitRate,
       currentClock: newClock,
       oldClock,
-      oldDigestionMap,
+      oldTransitMap,
       oldTimeAddedMap,
     })
     bowContent = bowResult.content
 
-    totalDigestedVol = stomResult.totalDigestedVol + bowResult.totalDigestedVol
-    wasteCount = stomResult.wasteCount + bowResult.wasteCount
-    const accumulatedWasteVol = stomResult.accumulatedWasteVol + bowResult.accumulatedWasteVol
-    totalItemCount = stomResult.itemCount + bowResult.itemCount
+    // ── DIAGNOSTIC: log bowels content AFTER transitItemsInContent ──
+    spindle.log.info(
+      `[runDigestionTick] bowels AFTER transit: ${bowContent.slice(0, 400)}`,
+    )
+
+    // Transfer transit-complete prey into the stomach with fresh timeAdded.
+    // Each transferred prey arrives with digestion="0%" and starts digesting
+    // from the current clock — the full-tour arrival.
+    if (bowResult.transferredToStomach.length > 0) {
+      for (const item of bowResult.transferredToStomach) {
+        stomContent += '\n      ' + item
+      }
+      maybeToast('digestionTicks', 'info', `🚶 ${bowResult.transferredToStomach.length} prey transited from bowels to stomach.`)
+      spindle.log.info(`[runDigestionTick] TRANSIT: ${bowResult.transferredToStomach.length} prey moved bowels→stomach`)
+    }
+
+    // Bowels no longer digests — totals come only from the stomach result.
+    // Transit does not produce waste or remains (prey arrives intact).
+    totalDigestedVol = stomResult.totalDigestedVol
+    wasteCount = stomResult.wasteCount
+    const accumulatedWasteVol = stomResult.accumulatedWasteVol
+    totalItemCount = stomResult.itemCount + bowResult.transitCount
 
     if (stomResult.newRemains.length > 0) {
       bowContent += '\n' + stomResult.newRemains.join('\n')
-    }
-    if (bowResult.newRemains.length > 0) {
-      bowContent += '\n' + bowResult.newRemains.join('\n')
     }
 
     if (accumulatedWasteVol > 0) {
@@ -532,6 +579,12 @@ export async function commitUpdate(
   const oldSheet = promptSheet ?? cachedSheet ?? ''
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
 
+  // ── DIAGNOSTIC: log bowels section of finalXml ──
+  const bowMatchFinal = finalXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
+  spindle.log.info(
+    `[commitUpdate] chatId=${chatId} activeChatId=${activeChatId} match=${chatId === activeChatId} | bowels=${bowMatchFinal ? bowMatchFinal[1].trim().slice(0, 300) : 'NONE'}`,
+  )
+
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml) // keep in-memory cache in sync
   const list = snapshots.get(chatId) || []
@@ -541,6 +594,9 @@ export async function commitUpdate(
 
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
+    spindle.log.info(`[commitUpdate] SHEET_UPDATED sent to frontend`)
+  } else {
+    spindle.log.info(`[commitUpdate] SHEET_UPDATED SKIPPED — chatId mismatch`)
   }
   spindle.log.info(`Sheet committed for message ${messageId} in chat ${chatId}`)
 
@@ -626,6 +682,12 @@ export async function contentProcessor(
   // absorption, and clothing stress from the time-delta.
   const finalXml = await runDigestionTick(update, oldSheet, chatId)
 
+  // ── DIAGNOSTIC: log bowels section of finalXml in contentProcessor ──
+  const bowMatchCP = finalXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
+  spindle.log.info(
+    `[contentProcessor] chatId=${chatId} activeChatId=${activeChatId} match=${chatId === activeChatId} | bowels=${bowMatchCP ? bowMatchCP[1].trim().slice(0, 300) : 'NONE'}`,
+  )
+
   // ── Replace the <sheet_update> block in the message content ──────
   // The LLM's original block contained stale copied values.  We swap it
   // for the fully-computed XML so the persisted message is a self-
@@ -669,6 +731,9 @@ export async function contentProcessor(
   // ── Notify the frontend panel so the UI updates immediately ──────
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
+    spindle.log.info(`[contentProcessor] SHEET_UPDATED sent to frontend`)
+  } else {
+    spindle.log.info(`[contentProcessor] SHEET_UPDATED SKIPPED — chatId mismatch`)
   }
 
   return { content: modifiedContent }

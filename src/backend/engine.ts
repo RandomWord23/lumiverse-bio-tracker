@@ -643,6 +643,93 @@ export function digestItemsInContent(
   }
 }
 
+export function transitItemsInContent(
+  content: string,
+  ctx: {
+    baseTransitRate: number
+    currentClock: number
+    oldClock: number
+    oldTransitMap: Map<string, number>
+    oldTimeAddedMap: Map<string, number>
+  },
+): {
+  content: string
+  transferredToStomach: string[]
+  transitCount: number
+} {
+  const transferredToStomach: string[] = []
+  let transitCount = 0
+
+  const transitItem = (attrs: string, inner: string | null, isSelfClosing: boolean): string => {
+    const type = getAttrFromString(attrs, 'type') || 'Food'
+    // Only live Prey transit. Food/Liquid/Remains stay inert in bowels.
+    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs} />` : `<Item ${attrs}>${inner}</Item>`
+
+    const name = getAttrFromString(attrs, 'name')
+    const vol = getAttrFromString(attrs, 'volume_L')
+    transitCount++
+
+    let speedMult = 1
+    const willingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+    if (willingness === 'willing') speedMult *= 1.25
+    else if (willingness === 'fighting') speedMult *= 0.5
+
+    // Absolute transit — same timestamp model as digestion
+    let timeAdded = ctx.oldTimeAddedMap.get(name) ?? NaN
+    let oldTransitNum = ctx.oldTransitMap.get(name) ?? 0
+
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      timeAdded = clockToDecimal(getAttrFromString(attrs, 'timeAdded'))
+    }
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      if (oldTransitNum > 0) {
+        timeAdded = ctx.currentClock - oldTransitNum / (ctx.baseTransitRate * speedMult)
+        if (timeAdded < 0) timeAdded += 24
+      } else if (ctx.oldTransitMap.has(name)) {
+        timeAdded = ctx.oldClock
+      } else {
+        timeAdded = ctx.currentClock
+      }
+    }
+
+    let transitNum = Math.min(100, ctx.baseTransitRate * speedMult * clockDelta(ctx.currentClock, timeAdded))
+    transitNum = Math.max(transitNum, oldTransitNum)
+
+    if (transitNum >= 100) {
+      // Transfer to stomach — build fresh item with new timeAdded
+      const rawWillingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+      const willingnessClamped = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
+      const stamina = getAttrFromString(attrs, 'stamina') || '100'
+      const freshTimeAdded = decimalToClock(ctx.currentClock)
+      // Preserve inner (Appearance/Description/BoundGear) across the transfer
+      const innerStr = inner ?? ''
+      const item = `<Item type="Prey" name="${name}" volume_L="${vol}" digestion="0%" timeAdded="${freshTimeAdded}" willingness="${willingnessClamped}" stamina="${stamina}">${innerStr}</Item>`
+      transferredToStomach.push(item)
+      return '' // removed from bowels
+    }
+
+    // Still transiting
+    const preyAttrs = ` willingness="${willingness === 'willing' || willingness === 'fighting' ? willingness : 'reluctant'}" stamina="${getAttrFromString(attrs, 'stamina') || '100'}"`
+    const tsAttr = ` timeAdded="${decimalToClock(timeAdded)}"`
+    const transitAttr = ` transit="${transitNum.toFixed(2)}%"`
+    if (isSelfClosing) {
+      return `<Item type="Prey" name="${name}" volume_L="${vol}"${transitAttr}${tsAttr}${preyAttrs} />`
+    }
+    return `<Item type="Prey" name="${name}" volume_L="${vol}"${transitAttr}${tsAttr}${preyAttrs}>${inner}</Item>`
+  }
+
+  content = content.replace(
+    /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi,
+    (match, attrs, inner) => transitItem(attrs, inner, false),
+  )
+  content = content.replace(
+    /<Item\s+([^>]+?)\s*\/>/gi,
+    (match, attrs) => transitItem(attrs, null, true),
+  )
+
+  return { content, transferredToStomach, transitCount }
+}
+
 export function buildSheetPrompt(sheetXml: string): string {
   return `[CHARACTER SHEET SYSTEM
 
@@ -684,7 +771,8 @@ CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is in
 
 ─── PRE-COMPUTED VALUES (copy these EXACTLY as-is — do NOT modify, reset, or zero them) ───
 The following values are computed by the extension's engines during the digestion tick. The sheet you receive already contains the correct values. You MUST copy them verbatim into your <sheet_update>:
-- digestion="...%" on prey items (computed from timeAdded + current Time)
+- digestion="...%" on prey items in <Stomach> (computed from timeAdded + current Time)
+- transit="...%" on prey items in <Bowels> (computed from timeAdded + current Time — bowels prey transit, not digest)
 - timeAdded="HH:MM" on prey items (24-hour clock timestamp set when the item was eaten, e.g. timeAdded="14:30")
 - indigestion="..." on the <Stomach> tag (computed from prey struggle)
 - stamina="..." on prey items (computed from willingness + fighting state)
@@ -707,7 +795,7 @@ CRITICAL XML RULES:
 2. Clothing MUST be inside <Clothing> using the <Equip slot="..." elasticity="...">...</Equip> format.
    VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist".
 3. The <Equip> tag MUST ALWAYS have an elasticity attribute. Valid values are "rigid", "standard", "stretchy", or "magic". Never omit it. If the extension has added stress="..." or condition="..." attributes to an Equip tag, copy them exactly as-is. Do NOT modify or remove them.
-4. Stomach and Bowel contents MUST use the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format. Do not use a <Prey> tag. Items can be inside <Stomach> or <Bowels> (for full-tour scenarios). Backpack (inventory) items use a DIFFERENT, simpler format — see rule 19.
+4. Stomach and Bowel contents MUST use the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format for <Stomach> items. For <Bowels> prey items, use transit="...%" instead of digestion="...%" (see BOWELS TRANSIT SYSTEM below). Do not use a <Prey> tag. Items can be inside <Stomach> or <Bowels> (for full-tour scenarios). Backpack (inventory) items use a DIFFERENT, simpler format — see rule 19.
 5. Prey identity, action, and gear go in SEPARATE tags. NEVER mix them:
    - <Appearance> = static identity (age, species, gender, build, hair, eyes). Stays the same unless the prey transforms.
    - <Description> = current dynamic action/state (squirming, dissolving, going limp). Updates EVERY turn.
@@ -725,7 +813,7 @@ CRITICAL XML RULES:
      <BoundGear>blue dress, leather boots</BoundGear>
    </Item>
 6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" AND timeAdded="HH:MM" attributes EXACTLY as they appear in <CurrentCharacterSheet> — do NOT set digestion to "0%", remove it, or alter timeAdded. The timeAdded value is a 24-hour clock timestamp (e.g. timeAdded="14:30") indicating when the item was eaten — copy it verbatim. The extension advances the values automatically; your job is to preserve them as-is. When adding a NEW item that the character just ate, do NOT include a timeAdded attribute — the extension stamps it automatically.
-7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>.
+7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>. Similarly, if prey reaches 100% transit in the Bowels, the extension will AUTOMATICALLY move them to the Stomach — you do NOT need to move them yourself (see BOWELS TRANSIT SYSTEM below).
 8. The extension handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions increase proportionally. Copy these values from the sheet exactly as-is — do NOT manually adjust them based on digestion. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.
 10. ABSOLUTE SOURCE OF TRUTH: The <CurrentCharacterSheet> provided above is the absolute source of truth. You MUST copy the values from it exactly, especially <ClothingMode>. If it says "hardcore", you MUST output "hardcore". Do NOT copy values from previous messages or your memory. Always look at the provided sheet first.
@@ -870,6 +958,17 @@ RULES:
 4. The extension AUTOMATICALLY applies all buffs during the digestion tick. You do NOT need to calculate the modified values yourself — just set the raw base stats as normal and the extension applies the multipliers.
 5. When assigning a new Skill or Trait, consider whether it should have buffs. A "Strong Digestion" skill might have buffs="BaseDigestionRate:+25". A "Frail" trait might have buffs="StomachResistance:-30;BaseDigestionRate:-15".
 6. Copy existing 'buffs' attributes exactly as-is when updating the sheet. Do NOT modify or remove buffs unless the skill/trait itself changes.
+
+─── BOWELS TRANSIT SYSTEM ───
+Prey placed directly into the Bowels (for full-tour / reverse scenarios) do NOT digest there. Instead they TRANSIT through the bowels — a travel phase represented by the transit="X%" attribute. When transit reaches 100%, the extension AUTOMATICALLY moves the prey into the Stomach, where normal digestion begins (digestion starts at 0% with a fresh timeAdded).
+
+Rules for bowels prey:
+- Bowels prey use transit="X%" NOT digestion="X%". The extension computes transit automatically from timeAdded — copy it exactly, just like digestion.
+- Only type="Prey" items transit. Food, Liquid, and Remains in the Bowels are inert waste/processed matter — they do NOT transit and should keep their existing format.
+- When the extension moves a prey from Bowels to Stomach (transit hit 100%), the prey will appear in <Stomach> with digestion="0%" in the next sheet. Narrate the prey arriving in the stomach.
+- The struggle/indigestion system does NOT affect prey while they are in the Bowels — only once they reach the Stomach. Prey in the Bowels are traveling, not struggling.
+- Transit is FASTER than digestion (double speed). Willing prey transit even faster; fighting prey transit slower — same willingness modifiers as digestion.
+- Each prey transits INDEPENDENTLY based on its own timeAdded. Do NOT move a prey to <Stomach> yourself — the extension handles the transfer when transit reaches 100%.
 
 <sheet_update>
 <CharacterSheet>

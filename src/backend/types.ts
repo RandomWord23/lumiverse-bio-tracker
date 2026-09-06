@@ -91,6 +91,17 @@ export interface PreyData {
 }
 
 // ---------------------------------------------------------------------------
+// Bowels Transit System types
+// ---------------------------------------------------------------------------
+
+/** Return value from `transitItemsInContent` — processes bowels prey transit. */
+export interface TransitResult {
+  content: string
+  transferredToStomach: string[]
+  transitCount: number
+}
+
+// ---------------------------------------------------------------------------
 // Message Content Processor types
 // ---------------------------------------------------------------------------
 

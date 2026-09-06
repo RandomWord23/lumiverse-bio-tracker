@@ -787,14 +787,26 @@ export function setup(ctx: SpindleFrontendContext) {
       const slot = target.closest('.vital-slot')
       const statusSpan = slot?.querySelector('.item-status') as HTMLElement
       if (statusSpan && slot && !slot.classList.contains('is-liquid')) {
-        let text = 'Fully Conscious'
-        let color = '#4CAF50'
-        if (val >= 90) { text = 'Dead'; color = '#ff4444' }
-        else if (val >= 80) { text = 'Unconscious'; color = '#999' }
-        else if (val >= 70) { text = 'Drowsy'; color = '#ffeb3b' }
-        else if (val >= 50) { text = 'Conscious'; color = '#ff9800' }
-        statusSpan.innerText = text
-        statusSpan.style.color = color
+        if (slot.classList.contains('is-transit')) {
+          // Bowels transit: prey is travelling, not digesting
+          let text = 'Entering Bowels'
+          let color = '#4CAF50'
+          if (val >= 90) { text = 'Reaching Stomach'; color = '#ff9800' }
+          else if (val >= 70) { text = 'Deep in Bowels'; color = '#ffeb3b' }
+          else if (val >= 40) { text = 'In Transit'; color = '#8bc34a' }
+          else if (val >= 10) { text = 'Settling In'; color = '#4CAF50' }
+          statusSpan.innerText = text
+          statusSpan.style.color = color
+        } else {
+          let text = 'Fully Conscious'
+          let color = '#4CAF50'
+          if (val >= 90) { text = 'Dead'; color = '#ff4444' }
+          else if (val >= 80) { text = 'Unconscious'; color = '#999' }
+          else if (val >= 70) { text = 'Drowsy'; color = '#ffeb3b' }
+          else if (val >= 50) { text = 'Conscious'; color = '#ff9800' }
+          statusSpan.innerText = text
+          statusSpan.style.color = color
+        }
       }
     }
   })
@@ -1183,7 +1195,7 @@ export function setup(ctx: SpindleFrontendContext) {
         const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim()
         const appearance = (el.querySelector('.v-appearance') as HTMLTextAreaElement)?.value.trim()
 
-        let itemAttrs = `type="${type}" name="${name}" volume_L="${vol}" digestion="${dig}%"`
+        let itemAttrs = `type="${type}" name="${name}" volume_L="${vol}" transit="${dig}%"`
         if (type === 'Prey') {
           const willingness = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'reluctant'
           const staminaText = (el.querySelector('.v-stamina-val') as HTMLElement)?.textContent || '100%'
@@ -1354,7 +1366,10 @@ export function setup(ctx: SpindleFrontendContext) {
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       try {
         const indMatch = msg.xml.match(/<Stomach(?![a-zA-Z])[^>]*\sindigestion="([^"]*)"/i)
+        // ── DIAGNOSTIC: log bowels section received via SHEET_UPDATED ──
+        const bowMatch = msg.xml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
         console.log(`[SHEET_UPDATED] received indigestion="${indMatch ? indMatch[1] : 'MISSING'}"`)
+        console.log(`[SHEET_UPDATED] bowels=${bowMatch ? bowMatch[1].trim().slice(0, 400) : 'NONE'}`)
         populateFormFromXml(msg.xml)
       } catch (e) {
         console.error('[SHEET_UPDATED] populateFormFromXml failed:', e)
@@ -1461,6 +1476,9 @@ export function setup(ctx: SpindleFrontendContext) {
       if (msg && msg.swipes && msg.swipes[swipeId] !== undefined) {
         const swipeText = getSwipeText(msg.swipes[swipeId])
         const updateXml = extractSheetUpdateFromText(swipeText)
+        // ── DIAGNOSTIC: log bowels section from MESSAGE_SWIPED ──
+        const bowMatchSwipe = updateXml ? updateXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i) : null
+        console.log(`[MESSAGE_SWIPED] action=${payload.action} hasXml=${!!updateXml} bowels=${bowMatchSwipe ? bowMatchSwipe[1].trim().slice(0, 400) : 'NONE'}`)
         if (updateXml) {
           try { populateFormFromXml(updateXml) } catch (e) {}
         }
@@ -1727,12 +1745,19 @@ export function setup(ctx: SpindleFrontendContext) {
 
           ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(child, 'name')
           ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(child, 'volume_L')
-          ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(child, 'digestion') || '').replace('%', '')
+          ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(child, 'transit') || getAttr(child, 'digestion') || '').replace('%', '')
 
           // Swap stomach-vol → bowel-vol so volume counts toward bowel fill
           const volInput = div.querySelector('.v-vol') as HTMLInputElement
           volInput.classList.remove('stomach-vol')
           volInput.classList.add('bowel-vol')
+
+          // Mark as transit item and swap label Dig % → Transit %
+          div.classList.add('is-transit')
+          const digLabel = div.querySelector('.item-dig-input')?.parentElement
+          if (digLabel) digLabel.innerHTML = 'Transit %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0">'
+          // Re-set value after innerHTML swap
+          ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(child, 'transit') || getAttr(child, 'digestion') || '').replace('%', '')
 
           const type = getAttr(child, 'type') || 'Food'
           const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
