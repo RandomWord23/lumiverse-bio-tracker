@@ -78,17 +78,17 @@ export function setup(ctx: SpindleFrontendContext) {
           <button class="bt-sub-btn" data-sub="sub-attr">Attributes</button>
         </div>
         <div id="sub-app" class="bt-sub-content active">
-          <div class="bt-section-title" style="margin-top: 0;">IDENTITY & BASE</div>
+          <div class="bt-section-title first">IDENTITY & BASE</div>
           <input type="text" class="bt-input full bt-scrape" data-id="Name" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Species" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Age" id="bt-age"></div>
           <div class="bt-row">
             <span>Gender:</span>
-            <div style="display:flex; align-items:center; width: 65%;">
-              <div style="flex:1; position: relative;">
-                <input type="text" class="bt-input bt-scrape" data-id="Gender" style="width:100%; padding-right: 22px;" id="bt-gender">
+            <div class="bt-gender-row">
+              <div class="bt-gender-input-wrap">
+                <input type="text" class="bt-input bt-scrape bt-gender-input" data-id="Gender" id="bt-gender">
               </div>
-              <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
+              <span id="bt-gender-icon" class="bt-gender-icon"></span>
             </div>
           </div>
           <div class="bt-row"><span>Pronouns:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Pronouns" id="bt-pronouns"></div>
@@ -107,9 +107,9 @@ export function setup(ctx: SpindleFrontendContext) {
           <div class="bt-row"><span>Weight (kg):</span> <input type="number" class="bt-input bt-scrape" data-id="Weight_kg" id="bt-weight" value="60"></div>
           <div class="bt-row">
             <span>Breasts (ml):</span>
-            <div style="display:flex; align-items:center; width: 65%;">
-              <input type="number" class="bt-input bt-scrape" data-id="BreastVolume_ml" style="flex:1;" id="bt-breast-ml" value="0">
-              <span id="bt-breast-cup" style="width: 45px; text-align:right; font-weight:bold; color:#ff4444;">AA</span>
+            <div class="bt-breast-row">
+              <input type="number" class="bt-input bt-scrape bt-breast-ml" data-id="BreastVolume_ml" id="bt-breast-ml" value="0">
+              <span id="bt-breast-cup" class="bt-breast-cup">AA</span>
             </div>
           </div>
           <input type="text" class="bt-input full bt-scrape" data-id="BreastShape" placeholder="Breast descriptor (e.g., firm, perky)" id="bt-breast-desc">
@@ -118,39 +118,39 @@ export function setup(ctx: SpindleFrontendContext) {
           <div class="bt-row"><span>Stomach Resist:</span> <input type="number" class="bt-input bt-input-wide bt-scrape" data-id="StomachResistance" id="bt-stomach-resist" step="0.1" value="1.0"></div>
           <div class="bt-row">
             <span>Penis (L/G cm):</span>
-            <div style="display:flex; justify-content:space-between; width: 65%;">
+            <div class="bt-penis-row">
               <input type="number" class="bt-input bt-input-small bt-scrape" data-id="PenisLength_cm" placeholder="Len" id="bt-penis-len">
-              <span style="color:#666; margin-top:5px;">x</span>
+              <span class="bt-penis-x">x</span>
               <input type="number" class="bt-input bt-input-small bt-scrape" data-id="PenisGirth_cm" placeholder="Girth" id="bt-penis-girth">
             </div>
           </div>
           <input type="text" class="bt-input full bt-scrape" data-id="PenisShape" placeholder="Penis descriptor (e.g., uncut, veiny)" id="bt-penis-desc">
-          <div class="bt-row"><span>Current Size (L/G cm):</span> <span class="bt-value" id="bt-penis-current" style="color:#aaa;">0.0 x 0.0</span></div>
+          <div class="bt-row"><span>Current Size (L/G cm):</span> <span class="bt-value bt-current-size" id="bt-penis-current">0.0 x 0.0</span></div>
           <div class="bt-row"><span>Vagina:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Vagina" placeholder="Descriptor..." id="bt-vagina"></div>
-          <div style="font-size: 13px; margin-top: 15px; margin-bottom: 5px; color: #888;">Markings & Scars:</div>
+          <div class="bt-note">Markings & Scars:</div>
           <textarea class="bt-textarea bt-scrape" data-id="ScarsMarkings" rows="2" placeholder="Scars, Tattoos, Piercings..." id="bt-scars"></textarea>
         </div>
         <div id="sub-skills" class="bt-sub-content">
-          <div style="margin-bottom: 20px;">
-            <div class="bt-row"><span style="font-weight:bold;">Skills</span> <button class="bt-add-btn" id="add-skill-btn">+ Add</button></div>
+          <div class="bt-section-spacer">
+            <div class="bt-row"><span class="bt-bold">Skills</span> <button class="bt-add-btn" id="add-skill-btn">+ Add</button></div>
             <div id="skills-container"></div>
           </div>
           <div>
-            <div class="bt-row"><span style="font-weight:bold;">Traits</span> <button class="bt-add-btn" id="add-trait-btn">+ Add</button></div>
+            <div class="bt-row"><span class="bt-bold">Traits</span> <button class="bt-add-btn" id="add-trait-btn">+ Add</button></div>
             <div id="traits-container"></div>
           </div>
         </div>
         <div id="sub-attr" class="bt-sub-content">
-          <div class="bt-section-title" style="margin-top: 0;">ATTRIBUTES</div>
-          <div style="font-size: 12px; color: #888; margin-bottom: 12px;">Range 1–20 (default 10). Modifier = ⌊(score−10)/2⌋. The extension applies modifiers automatically.</div>
-          <div class="bt-row"><span>STR (Strength):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="STR" min="1" max="20" value="10" id="bt-attr-str" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-str" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
-          <div class="bt-row"><span>DEX (Dexterity):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="DEX" min="1" max="20" value="10" id="bt-attr-dex" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-dex" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
-          <div class="bt-row"><span>CON (Constitution):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="CON" min="1" max="20" value="10" id="bt-attr-con" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-con" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
-          <div class="bt-row"><span>INT (Intelligence):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="INT" min="1" max="20" value="10" id="bt-attr-int" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-int" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
-          <div class="bt-row"><span>WIS (Wisdom):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="WIS" min="1" max="20" value="10" id="bt-attr-wis" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-wis" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
-          <div class="bt-row"><span>CHA (Charisma):</span> <div style="display:flex; align-items:center; width: 65%;"><input type="number" class="bt-input bt-attr" data-attr="CHA" min="1" max="20" value="10" id="bt-attr-cha" style="flex:1;"><span class="bt-attr-mod" id="bt-attr-mod-cha" style="width:35px; text-align:right; font-weight:bold; color:#aaa;">+0</span></div></div>
+          <div class="bt-section-title first">ATTRIBUTES</div>
+          <div class="bt-hint">Range 1–20 (default 10). Modifier = ⌊(score−10)/2⌋. The extension applies modifiers automatically.</div>
+          <div class="bt-row"><span>STR (Strength):</span> <div class="bt-attr-row"><input type="number" class="bt-input bt-attr bt-attr-input" data-attr="STR" min="1" max="20" value="10" id="bt-attr-str"><span class="bt-attr-mod" id="bt-attr-mod-str">+0</span></div></div>
+          <div class="bt-row"><span>DEX (Dexterity):</span> <div class="bt-attr-row"><input type="number" class="bt-input bt-attr bt-attr-input" data-attr="DEX" min="1" max="20" value="10" id="bt-attr-dex"><span class="bt-attr-mod" id="bt-attr-mod-dex">+0</span></div></div>
+          <div class="bt-row"><span>CON (Constitution):</span> <div class="bt-attr-row"><input type="number" class="bt-input bt-attr bt-attr-input" data-attr="CON" min="1" max="20" value="10" id="bt-attr-con"><span class="bt-attr-mod" id="bt-attr-mod-con">+0</span></div></div>
+          <div class="bt-row"><span>INT (Intelligence):</span> <div class="bt-attr-row"><input type="number" class="bt-input bt-attr bt-attr-input" data-attr="INT" min="1" max="20" value="10" id="bt-attr-int"><span class="bt-attr-mod" id="bt-attr-mod-int">+0</span></div></div>
+          <div class="bt-row"><span>WIS (Wisdom):</span> <div class="bt-attr-row"><input type="number" class="bt-input bt-attr bt-attr-input" data-attr="WIS" min="1" max="20" value="10" id="bt-attr-wis"><span class="bt-attr-mod" id="bt-attr-mod-wis">+0</span></div></div>
+          <div class="bt-row"><span>CHA (Charisma):</span> <div class="bt-attr-row"><input type="number" class="bt-input bt-attr bt-attr-input" data-attr="CHA" min="1" max="20" value="10" id="bt-attr-cha"><span class="bt-attr-mod" id="bt-attr-mod-cha">+0</span></div></div>
           <div class="bt-section-title" style="margin-top: 15px;">DERIVED EFFECTS</div>
-          <div style="font-size: 12px; color: #888; line-height: 1.6;">
+          <div class="bt-hint">
             <div>STR → Stomach Resistance</div>
             <div>DEX → Arousal Decay</div>
             <div>CON → Acid Rise Rate, Health Regen</div>
@@ -162,22 +162,22 @@ export function setup(ctx: SpindleFrontendContext) {
       </div>
       <div id="tab-inv" class="bt-tab-content">
         <div class="bt-row">
-          <span style="font-weight:bold; color:#ff4444;">WEALTH</span>
-          <select id="bt-currency-type" class="bt-select bt-scrape" data-id="CurrencySystem" style="width: 100px;">
+          <span class="bt-accent-text">WEALTH</span>
+          <select id="bt-currency-type" class="bt-select bt-scrape bt-currency-select" data-id="CurrencySystem">
             <option value="modern">Modern ($)</option>
             <option value="fantasy">Fantasy (G/S/C)</option>
           </select>
         </div>
         <div id="currency-modern"><input type="number" class="bt-input full bt-scrape" data-id="CashBalance" id="bt-cash-modern" placeholder="Balance (e.g. 1500)"></div>
-        <div id="currency-fantasy" style="display:none; justify-content:space-between; gap:5px; margin-bottom:10px;">
-          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Gold" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#ffd700; font-weight:bold;">G</span></div>
-          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Silver" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#c0c0c0; font-weight:bold;">S</span></div>
-          <div style="flex:1; display:flex; align-items:center;"><input type="number" class="bt-input bt-scrape" data-id="Copper" style="width:100%;" placeholder="0"><span style="margin-left:5px; color:#cd7f32; font-weight:bold;">C</span></div>
+        <div id="currency-fantasy" class="bt-currency-fantasy">
+          <div class="bt-coin-row"><input type="number" class="bt-input bt-scrape bt-coin-input" data-id="Gold" placeholder="0"><span class="bt-coin-g">G</span></div>
+          <div class="bt-coin-row"><input type="number" class="bt-input bt-scrape bt-coin-input" data-id="Silver" placeholder="0"><span class="bt-coin-s">S</span></div>
+          <div class="bt-coin-row"><input type="number" class="bt-input bt-scrape bt-coin-input" data-id="Copper" placeholder="0"><span class="bt-coin-c">C</span></div>
         </div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           CLOTHING SLOTS
-          <select class="bt-select bt-scrape" data-id="ClothingMode" id="bt-cloth-mode" style="width:110px; border-color:#ff4444;">
+          <select class="bt-select bt-scrape bt-cloth-mode" data-id="ClothingMode" id="bt-cloth-mode">
             <option value="flavor">Mode: Flavor</option>
             <option value="hardcore">Mode: Hardcore</option>
           </select>
@@ -210,29 +210,29 @@ export function setup(ctx: SpindleFrontendContext) {
         <span class="slot-label">Back</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Back" placeholder="Backpack, Cape, Quiver">
         <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Waist" placeholder="Belt, Holster, Scabbard">
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           <span>BACKPACK / POCKETS</span>
           <button class="bt-add-btn" id="add-inv-btn">+ Add Item</button>
         </div>
-        <div id="inv-container" style="margin-top: 10px;"></div>
+        <div id="inv-container" class="bt-container-spacer"></div>
       </div>
       <div id="tab-state" class="bt-tab-content">
-        <div class="bt-section-title" style="margin-top:0;">CORE STATS</div>
+        <div class="bt-section-title first">CORE STATS</div>
         <div class="bt-row"><span>Health:</span> <input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100"></div>
         <div class="bt-row" style="align-items:center;">
           <span>Energy:</span>
           <input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100" style="width:60px;">
-          <div style="flex:1; display:flex; align-items:center; gap:6px; margin-left:8px;">
-            <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden;">
-              <div id="bt-energy-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s, background 0.3s;"></div>
+          <div class="bt-bar-wrap">
+            <div class="bt-bar-track-lg">
+              <div id="bt-energy-bar" class="bt-bar-fill-lg"></div>
             </div>
-            <span class="bt-value" id="bt-energy-status" style="min-width:65px; text-align:right; font-size:11px; color:#4CAF50;">Energetic</span>
+            <span class="bt-value bt-bar-status" id="bt-energy-status">Energetic</span>
           </div>
         </div>
         <div class="bt-section-title">VITALS</div>
-        <div id="bt-arousal-slot" style="margin-bottom: 15px;"></div>
-        <div id="bt-climax-slot" style="margin-bottom: 15px;"></div>
+        <div id="bt-arousal-slot" class="bt-slot-spacer"></div>
+        <div id="bt-climax-slot" class="bt-slot-spacer"></div>
         <div class="bt-section-title">WORLD STATE</div>
         <div class="bt-row"><span>Time:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Time" id="bt-time" placeholder="14:30"></div>
         <div class="bt-row"><span>Weather:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Weather" id="bt-weather" placeholder="Rainy"></div>
@@ -243,16 +243,16 @@ export function setup(ctx: SpindleFrontendContext) {
         <input type="text" class="bt-input full bt-scrape" data-id="Room" placeholder="Room (e.g. Back Alley)" id="bt-room">
       </div>
       <div id="tab-vitals" class="bt-tab-content">
-        <div class="bt-section-title" style="margin-top: 0;">METABOLIC ENGINE</div>
+        <div class="bt-section-title first">METABOLIC ENGINE</div>
         <div class="bt-row"><span>Acid Level (%):</span> <input type="number" class="bt-input bt-scrape" data-id="CurrentAcidPct" id="bt-acid-level" value="0"></div>
         <div class="bt-row"><span>Base Digestion (%/h):</span> <input type="number" class="bt-input bt-scrape" data-id="BaseDigestionRate" id="bt-dig-base" value="25"></div>
         <div class="bt-row"><span>Acid Rise (%/h):</span> <input type="number" class="bt-input bt-scrape" data-id="AcidRiseRate" id="bt-acid-rise" value="10"></div>
         <div class="bt-row"><span>Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="CapacityMultiplier" id="bt-cap-mult" step="0.1" value="1.0"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-row"><span>Belly Status:</span> <span class="bt-value" id="bt-belly-status" style="color:#aaa;">Flat</span></div>
-        <div class="bt-row"><span>Mobility:</span> <span class="bt-value" id="bt-mobility" style="color:#4CAF50;">Agile / Normal</span></div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <hr class="bt-divider">
+        <div class="bt-row"><span>Belly Status:</span> <span class="bt-value bt-current-size" id="bt-belly-status">Flat</span></div>
+        <div class="bt-row"><span>Mobility:</span> <span class="bt-value bt-success-text" id="bt-mobility">Agile / Normal</span></div>
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           <span>STOMACH PIPELINE</span>
           <button class="bt-add-btn" id="add-stomach-btn">+ Add Item</button>
         </div>
@@ -260,71 +260,71 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-stom-fill">0.00 L</span></div>
         <div class="bt-row" style="align-items:center;">
           <span>Indigestion:</span>
-          <div style="flex:1; display:flex; align-items:center; gap:6px; margin-left:8px;">
-            <div style="flex:1; height:14px; background:#1a1a1a; border:1px solid #333; border-radius:7px; overflow:hidden;">
-              <div id="bt-indigestion-bar" style="height:100%; width:0%; background:linear-gradient(90deg, #4CAF50, #FF9800, #f44336); transition:width 0.3s;"></div>
+          <div class="bt-bar-wrap">
+            <div class="bt-indigestion-track">
+              <div id="bt-indigestion-bar" class="bt-indigestion-fill"></div>
             </div>
-            <span class="bt-value" id="bt-indigestion-val" style="min-width:35px; text-align:right;">0%</span>
+            <span class="bt-value bt-indigestion-val" id="bt-indigestion-val">0%</span>
           </div>
         </div>
         <div class="bt-row" style="align-items:center;">
           <span>Suppressing:</span>
-          <label style="display:flex; align-items:center; gap:5px; margin-left:8px; cursor:pointer; font-size:12px;">
-            <input type="checkbox" id="bt-suppressing-toggle" style="width:auto; cursor:pointer;">
-            <span id="bt-suppressing-label" style="color:#666;">Passive</span>
+          <label class="bt-suppress-label">
+            <input type="checkbox" id="bt-suppressing-toggle" class="bt-suppress-toggle">
+            <span id="bt-suppressing-label" class="bt-suppress-text">Passive</span>
           </label>
-          <span style="font-size:11px; color:#555; margin-left:8px;" id="bt-fatigue-info"></span>
+          <span class="bt-fatigue-info" id="bt-fatigue-info"></span>
         </div>
         <div class="bt-row" style="align-items:center;">
           <span>Struggle Risk:</span>
-          <span class="bt-value" id="bt-struggle-risk" style="margin-left:8px; font-size:12px; font-weight:bold;">None</span>
-          <span style="font-size:11px; color:#555; margin-left:8px;" id="bt-struggle-detail"></span>
+          <span class="bt-value bt-struggle-risk" id="bt-struggle-risk">None</span>
+          <span class="bt-struggle-detail" id="bt-struggle-detail"></span>
         </div>
-        <div id="stomach-container" style="margin-top: 10px;"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <div id="stomach-container" class="bt-container-spacer"></div>
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           <span>BOWEL PIPELINE</span>
-          <button class="bt-add-btn" style="background: #4a3a2a; color: #d2b48c; border-color:#8b6b4a;" id="add-remains-btn">+ Remains</button>
+          <button class="bt-add-btn bt-zone-remains" id="add-remains-btn">+ Remains</button>
         </div>
         <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-bowel-max-disp">40.32 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-bowel-fill">0.00 L</span></div>
-        <div id="bowel-container" style="margin-top: 10px;"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <div id="bowel-container" class="bt-container-spacer"></div>
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           <span>WOMB</span>
-          <button class="bt-add-btn" style="background: #4a2a3a; color: #d2b4c8; border-color:#8b4a6a;" id="add-womb-btn">+ Add Prey</button>
+          <button class="bt-add-btn bt-zone-womb" id="add-womb-btn">+ Add Prey</button>
         </div>
         <div class="bt-row"><span>Womb Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="WombCapacityMultiplier" id="bt-womb-cap-mult" step="0.1" value="1.0"></div>
         <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-womb-max-disp">0.00 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-womb-fill">0.00 L</span></div>
-        <div id="womb-container" style="margin-top: 10px;"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <div id="womb-container" class="bt-container-spacer"></div>
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           <span>BALLS</span>
-          <button class="bt-add-btn" style="background: #2a3a4a; color: #b4c8d2; border-color:#4a6a8b;" id="add-balls-btn">+ Add Prey</button>
+          <button class="bt-add-btn bt-zone-balls" id="add-balls-btn">+ Add Prey</button>
         </div>
         <div class="bt-row"><span>Balls Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="BallsCapacityMultiplier" id="bt-balls-cap-mult" step="0.1" value="1.0"></div>
         <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-balls-max-disp">0.00 L</span></div>
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-balls-fill">0.00 L</span></div>
         <div class="bt-row"><span>Cum Volume:</span> <span class="bt-value" id="bt-cum-vol">0 ml</span></div>
-        <div id="balls-container" style="margin-top: 10px;"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <div id="balls-container" class="bt-container-spacer"></div>
+        <hr class="bt-divider">
+        <div class="bt-section-title flex">
           <span>LACTATION</span>
         </div>
-        <div class="bt-row"><span>Lactation Rate Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="LactationRateMultiplier" id="bt-lact-rate-mult" step="0.1" value="1.0"> <span id="bt-lact-rate-display" style="margin-left:8px; font-weight:bold; color:#4CAF50;">20 ml/h</span></div>
+        <div class="bt-row"><span>Lactation Rate Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="LactationRateMultiplier" id="bt-lact-rate-mult" step="0.1" value="1.0"> <span id="bt-lact-rate-display" class="bt-lact-display">20 ml/h</span></div>
         <div class="bt-row"><span>Milk Capacity:</span> <span class="bt-value" id="bt-milk-cap">0 ml</span></div>
-        <div class="bt-row"><span>Current Milk:</span> <input type="number" class="bt-input bt-scrape" data-id="MilkVolume_ml" id="bt-milk-ml" style="flex:1;" value="0"> <span id="bt-milk-status" style="width: 60px; text-align:right; font-weight:bold; color:#888;">Empty</span></div>
+        <div class="bt-row"><span>Current Milk:</span> <input type="number" class="bt-input bt-scrape bt-milk-input" data-id="MilkVolume_ml" id="bt-milk-ml" value="0"> <span id="bt-milk-status" class="bt-milk-status">Empty</span></div>
         <div class="bt-row"><span>Production Rate:</span> <span class="bt-value" id="bt-milk-rate">0 ml/h</span></div>
         <div class="bt-row"><span>Womb Boost:</span> <span class="bt-value" id="bt-milk-boost">1.0×</span></div>
-        <hr style="border-color: #333; margin: 15px 0;">
+        <hr class="bt-divider">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
-        <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
-        <button class="bt-action-btn" id="bt-populate-btn" style="background: #2a2a2a; border-color: #555;">✨ Populate Flagged Fields</button>
+        <button class="bt-action-btn secondary" id="bt-sync-chat-btn">🔄 Sync from Latest Message</button>
+        <button class="bt-action-btn secondary" id="bt-populate-btn">✨ Populate Flagged Fields</button>
       </div>
       <div id="tab-dice" class="bt-tab-content">
-        <div class="bt-section-title" style="margin-top: 0;">🎲 DICE POOLS</div>
-        <div style="font-size: 12px; color: #888; margin-bottom: 12px; line-height: 1.5;">Create named sections of dice (e.g. Combat, Social, Magic). Each section is an independent pool. Dice are pre-rolled every turn and injected into the AI prompt. The AI consumes them via <code><action_roll></code> tags. If the AI doesn't use them, they are silently discarded.</div>
+        <div class="bt-section-title first">🎲 DICE POOLS</div>
+        <div class="bt-hint">Create named sections of dice (e.g. Combat, Social, Magic). Each section is an independent pool. Dice are pre-rolled every turn and injected into the AI prompt. The AI consumes them via <code><action_roll></code> tags. If the AI doesn't use them, they are silently discarded.</div>
         <div class="bt-dice-preset-bar">
           <select class="bt-dice-preset-select" id="bt-dice-preset-select">
             <option value="">— Presets —</option>
@@ -334,18 +334,18 @@ export function setup(ctx: SpindleFrontendContext) {
           <button class="bt-dice-preset-btn" id="bt-dice-delete-preset">🗑 Delete</button>
         </div>
         <div class="bt-dice-toolbar">
-          <button class="bt-add-btn" id="add-dice-section-btn" style="float: none;">+ Add Section</button>
+          <button class="bt-add-btn" id="add-dice-section-btn">+ Add Section</button>
         </div>
         <div class="bt-dice-empty-hint" id="bt-dice-empty-hint">No dice sections yet. Click "Add Section" to create one.</div>
         <div id="dice-sections-container"></div>
       </div>
       <div id="tab-settings" class="bt-tab-content">
-        <div class="bt-section-title" style="margin-top: 0;">🔔 TOAST ALERTS</div>
+        <div class="bt-section-title first">🔔 TOAST ALERTS</div>
         <div id="bt-toast-settings"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
+        <hr class="bt-divider">
         <div class="bt-section-title">⚙️ ENGINE TOGGLES</div>
         <div id="bt-engine-settings"></div>
-        <hr style="border-color: #333; margin: 15px 0;">
+        <hr class="bt-divider">
         <div class="bt-section-title">🎨 UI SETTINGS</div>
         <div class="bt-slider-row">
           <span>Btn Opacity:</span>
@@ -365,8 +365,8 @@ export function setup(ctx: SpindleFrontendContext) {
           <div class="bt-switch" id="bt-set-autoopen" data-setting="autoOpen"></div>
         </div>
         <button class="bt-reset-btn" id="bt-set-reset-pos">📍 Reset Button Position</button>
-        <hr style="border-color: #333; margin: 15px 0;">
-        <button class="bt-reset-btn" id="bt-set-reset-all" style="color: #ff4444; border-color: #ff4444;">↺ Reset All Settings to Defaults</button>
+        <hr class="bt-divider">
+        <button class="bt-reset-btn danger" id="bt-set-reset-all">↺ Reset All Settings to Defaults</button>
       </div>
     </div>
   `
@@ -480,13 +480,8 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // ─── Floating Button ───────────────────────────────────────
   const floatingBtn = document.createElement('div')
+  floatingBtn.id = 'bt-floating-btn'
   floatingBtn.innerText = '📋'
-  Object.assign(floatingBtn.style, {
-    position: 'fixed', bottom: '80px', right: '20px', backgroundColor: '#333', color: '#fff',
-    width: '45px', height: '45px', display: 'flex', justifyContent: 'center', alignItems: 'center',
-    borderRadius: '10px', fontSize: '22px', cursor: 'pointer', zIndex: '9999', userSelect: 'none',
-    transition: 'opacity 0.3s ease', opacity: '0.4', border: '2px solid #555', boxSizing: 'border-box',
-  })
 
   const savedPos = localStorage.getItem('bio-tracker-btn-pos')
   if (savedPos) {
@@ -530,8 +525,8 @@ export function setup(ctx: SpindleFrontendContext) {
     if (!isDragging) return
     const touch = e.touches[0]
     if (Math.abs(touch.clientX - startX) > 5 || Math.abs(touch.clientY - startY) > 5) hasMoved = true
-    floatingBtn.style.left = initialLeft + (touch.clientX - startX) + 'px'
-    floatingBtn.style.top = initialTop + (touch.clientY - startY) + 'px'
+    floatingBtn.style.left = Math.max(0, Math.min(window.innerWidth - 45, initialLeft + (touch.clientX - startX))) + 'px'
+    floatingBtn.style.top = Math.max(0, Math.min(window.innerHeight - 45, initialTop + (touch.clientY - startY))) + 'px'
   }, { passive: true })
 
   document.addEventListener('touchend', () => {
@@ -798,12 +793,11 @@ export function setup(ctx: SpindleFrontendContext) {
 
   if (arousalSlot) {
     arousalSlot.innerHTML = `
-      <div class="bt-row" style="margin-bottom: 5px;">
-        <span style="font-weight: bold; color: #ff4466;">Arousal:</span>
-        <span class="bt-value" id="bt-arousal-val" style="color: #ff4466;">0%</span>
+      <div class="bt-row bt-vital-row">
+        <span class="bt-vital-label arousal">Arousal:</span>
+        <span class="bt-value bt-vital-val arousal" id="bt-arousal-val">0%</span>
       </div>
-      <input type="range" id="bt-arousal-slider" min="0" max="100" step="1" value="0" 
-        style="width: 100%; accent-color: #ff4466; margin-bottom: 10px; touch-action: manipulation;">
+      <input type="range" id="bt-arousal-slider" class="bt-vital-slider arousal" min="0" max="100" step="1" value="0">
     `
     const arousalInput = document.getElementById('bt-arousal-slider') as HTMLInputElement
     const arousalVal = document.getElementById('bt-arousal-val')
@@ -817,12 +811,11 @@ export function setup(ctx: SpindleFrontendContext) {
 
   if (climaxSlot) {
     climaxSlot.innerHTML = `
-      <div class="bt-row" style="margin-bottom: 5px;">
-        <span style="font-weight: bold; color: #ffaa00;">Climax:</span>
-        <span class="bt-value" id="bt-climax-val" style="color: #ffaa00;">0%</span>
+      <div class="bt-row bt-vital-row">
+        <span class="bt-vital-label climax">Climax:</span>
+        <span class="bt-value bt-vital-val climax" id="bt-climax-val">0%</span>
       </div>
-      <input type="range" id="bt-climax-slider" min="0" max="100" step="1" value="0" disabled
-        style="width: 100%; accent-color: #ffaa00; opacity: 0.7; touch-action: manipulation;">
+      <input type="range" id="bt-climax-slider" class="bt-vital-slider climax" min="0" max="100" step="1" value="0" disabled>
     `
   }
 
@@ -1947,7 +1940,7 @@ export function setup(ctx: SpindleFrontendContext) {
           // Mark as transit item and swap label Dig % → Transit %
           div.classList.add('is-transit')
           const digLabel = div.querySelector('.item-dig-input')?.parentElement
-          if (digLabel) digLabel.innerHTML = 'Transit %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0">'
+          if (digLabel) digLabel.innerHTML = 'Transit %: <input type="number" class="bt-input item-dig-input v-dig bt-transit-input" value="0">'
           // Re-set value after innerHTML swap
           ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(child, 'transit') || getAttr(child, 'digestion') || '').replace('%', '')
 

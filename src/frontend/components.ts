@@ -51,87 +51,128 @@ export function buildToggleRow(
   return row
 }
 
+/* ── Item slot factory ────────────────────────────────────────── */
+
 /**
- * Create a stomach item slot (food / liquid / prey) with type-aware
- * visibility toggling for prey-only fields.
+ * Configuration describing how a vital-slot (stomach / womb / balls)
+ * item creator differs from its siblings. The three zones share
+ * nearly identical markup; only a handful of labels, CSS classes,
+ * and the presence of a struggle row vary.
  */
-export function createStomachItem(): HTMLElement {
+interface ItemSlotConfig {
+  /** CSS modifier class on the `.vital-slot` container (is-food, is-womb, is-balls). */
+  containerClass: string
+  /** `data-action` value for the remove button. */
+  removeAction: string
+  /** CSS class appended to the volume input (stomach-vol, womb-vol, balls-vol). */
+  volClass: string
+  /** Label for the digestion / absorption / conversion percentage field. */
+  digLabel: string
+  /** Placeholder for the flavor textarea. */
+  flavorPlaceholder: string
+  /** Whether this zone tracks struggle (stomach only). */
+  hasStruggle: boolean
+}
+
+/**
+ * Internal parameterised factory that builds a stomach / womb / balls
+ * item slot. The three public wrappers below supply zone-specific
+ * config and preserve the original call signatures.
+ *
+ * All visual styling lives in the stylesheet — no inline styles are
+ * emitted. Type-aware visibility toggling mirrors the original
+ * behaviour: stomach cycles through `is-food` / `is-liquid` / `is-prey`
+ * while womb and balls only toggle `is-prey`.
+ */
+function createItemSlot(cfg: ItemSlotConfig): HTMLElement {
   const div = document.createElement('div')
-  div.className = 'vital-slot is-food'
+  div.className = `vital-slot ${cfg.containerClass}`
+
+  const struggleRowHtml = cfg.hasStruggle
+    ? `<div class="flex-row bt-struggle-row v-prey-struggle">
+         <span>Struggle:</span>
+         <span class="bt-struggle-val v-struggle-val" title="Indigestion % contributed by this prey per tick (extension-managed)">+0.00%</span>
+       </div>`
+    : ''
+
   div.innerHTML = `
-      <button class="vital-remove" data-action="remove-stomach">✖</button>
-      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Item Name...">
-        <select class="bt-select v-type" style="width: 80px; margin-left: 5px;">
+      <button class="vital-remove" data-action="${cfg.removeAction}">✖</button>
+      <div class="flex-row bt-item-header">
+        <input type="text" class="bt-input bt-item-name v-name" placeholder="Item Name...">
+        <select class="bt-select bt-item-type v-type">
           <option value="Liquid">Liquid</option>
           <option value="Food" selected>Food</option>
           <option value="Prey">Prey</option>
         </select>
       </div>
-      <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
-        <span>Status: <strong class="item-status" style="color:#4CAF50;">Fully Conscious</strong></span>
+      <div class="flex-row bt-status-row">
+        <span>Status: <strong class="bt-status-val item-status">Fully Conscious</strong></span>
       </div>
-      <div class="flex-row v-prey-willingness" style="margin-bottom: 5px; font-size: 12px; display: none;">
+      <div class="flex-row bt-willingness-row v-prey-willingness">
         <span>Willingness:</span>
-        <select class="bt-select v-willingness" style="width: 90px; margin-left: 5px;">
+        <select class="bt-select bt-willingness-select v-willingness">
           <option value="willing">Willing</option>
           <option value="reluctant" selected>Reluctant</option>
           <option value="fighting">Fighting</option>
         </select>
-        <span style="margin-left: 8px;">Stamina:</span>
-        <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden; margin-left:4px; max-width:80px;">
-          <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
+        <span class="bt-stamina-label">Stamina:</span>
+        <div class="bt-bar-track">
+          <div class="bt-bar-fill v-stamina-bar"></div>
         </div>
-        <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
+        <span class="bt-bar-val v-stamina-val">100%</span>
       </div>
-      <div class="flex-row v-prey-struggle" style="margin-bottom: 5px; font-size: 12px; display: none; justify-content: flex-start; gap: 4px;">
-        <span>Struggle:</span>
-        <span class="v-struggle-val" style="color:#FF9800;" title="Indigestion % contributed by this prey per tick (extension-managed)">+0.00%</span>
+      ${struggleRowHtml}
+      <div class="flex-row bt-vol-row">
+        <span>Vol (L): <input type="number" class="bt-input bt-vol-input ${cfg.volClass} v-vol" value="0"></span>
+        <span>${cfg.digLabel}: <input type="number" class="bt-input bt-dig-input item-dig-input v-dig" value="0"></span>
       </div>
-      <div class="flex-row" style="margin-bottom: 5px;">
-        <span>Vol (L): <input type="number" class="bt-input stomach-vol v-vol" style="width: 50px;" value="0"></span>
-        <span>Dig %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
-      </div>
-      <textarea class="bt-textarea v-appearance" rows="2" style="margin-bottom: 5px; display: none;" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
-      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Current action/state (e.g. thrashing, dissolving)..."></textarea>
-      <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0; display: none;" placeholder="Bound Gear / Items..."></textarea>
+      <textarea class="bt-textarea bt-item-appearance v-appearance" rows="2" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
+      <textarea class="bt-textarea bt-item-flavor v-flavor" rows="2" placeholder="${cfg.flavorPlaceholder}"></textarea>
+      <textarea class="bt-textarea bt-item-gear v-gear" rows="2" placeholder="Bound Gear / Items..."></textarea>
     `
+
   const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
   const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
   const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
   const statusSpan = div.querySelector('.item-status') as HTMLElement
   const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
-  const struggleRow = div.querySelector('.v-prey-struggle') as HTMLElement
+  const struggleRow = cfg.hasStruggle
+    ? (div.querySelector('.v-prey-struggle') as HTMLElement)
+    : null
 
   typeSelect.addEventListener('change', () => {
-    if (typeSelect.value === 'Prey') {
-      gearArea.style.display = 'block'
-      appearanceArea.style.display = 'block'
-      willingnessRow.style.display = 'flex'
-      if (struggleRow) struggleRow.style.display = 'flex'
-      div.classList.remove('is-food', 'is-liquid')
-      div.classList.add('is-prey')
-      statusSpan.style.display = 'inline'
-    } else if (typeSelect.value === 'Liquid') {
-      gearArea.style.display = 'none'
-      appearanceArea.style.display = 'none'
-      willingnessRow.style.display = 'none'
-      if (struggleRow) struggleRow.style.display = 'none'
-      div.classList.remove('is-prey', 'is-food')
-      div.classList.add('is-liquid')
-      statusSpan.style.display = 'none'
-    } else {
-      gearArea.style.display = 'none'
-      appearanceArea.style.display = 'none'
-      willingnessRow.style.display = 'none'
-      if (struggleRow) struggleRow.style.display = 'none'
-      div.classList.remove('is-prey', 'is-liquid')
-      div.classList.add('is-food')
-      statusSpan.style.display = 'none'
+    const isPrey = typeSelect.value === 'Prey'
+    const isLiquid = typeSelect.value === 'Liquid'
+    gearArea.style.display = isPrey ? 'block' : 'none'
+    appearanceArea.style.display = isPrey ? 'block' : 'none'
+    willingnessRow.style.display = isPrey ? 'flex' : 'none'
+    if (struggleRow) struggleRow.style.display = isPrey ? 'flex' : 'none'
+    // Stomach slots cycle through is-food / is-liquid / is-prey;
+    // womb & balls only toggle is-prey.
+    if (cfg.containerClass === 'is-food') {
+      div.classList.toggle('is-food', !isPrey && !isLiquid)
+      div.classList.toggle('is-liquid', isLiquid)
     }
+    div.classList.toggle('is-prey', isPrey)
+    statusSpan.style.display = isPrey ? 'inline' : 'none'
   })
 
   return div
+}
+
+/**
+ * Create a stomach item slot (food / liquid / prey) with type-aware
+ * visibility toggling for prey-only fields, including a struggle row.
+ */
+export function createStomachItem(): HTMLElement {
+  return createItemSlot({
+    containerClass: 'is-food',
+    removeAction: 'remove-stomach',
+    volClass: 'stomach-vol',
+    digLabel: 'Dig %',
+    flavorPlaceholder: 'Current action/state (e.g. thrashing, dissolving)...',
+    hasStruggle: true,
+  })
 }
 
 /**
@@ -140,71 +181,14 @@ export function createStomachItem(): HTMLElement {
  * No struggle display (womb has no struggle).
  */
 export function createWombItem(): HTMLElement {
-  const div = document.createElement('div')
-  div.className = 'vital-slot is-womb'
-  div.innerHTML = `
-      <button class="vital-remove" data-action="remove-womb">✖</button>
-      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Item Name...">
-        <select class="bt-select v-type" style="width: 80px; margin-left: 5px;">
-          <option value="Liquid">Liquid</option>
-          <option value="Food" selected>Food</option>
-          <option value="Prey">Prey</option>
-        </select>
-      </div>
-      <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
-        <span>Status: <strong class="item-status" style="color:#4CAF50;">Fully Conscious</strong></span>
-      </div>
-      <div class="flex-row v-prey-willingness" style="margin-bottom: 5px; font-size: 12px; display: none;">
-        <span>Willingness:</span>
-        <select class="bt-select v-willingness" style="width: 90px; margin-left: 5px;">
-          <option value="willing">Willing</option>
-          <option value="reluctant" selected>Reluctant</option>
-          <option value="fighting">Fighting</option>
-        </select>
-        <span style="margin-left: 8px;">Stamina:</span>
-        <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden; margin-left:4px; max-width:80px;">
-          <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
-        </div>
-        <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
-      </div>
-      <div class="flex-row" style="margin-bottom: 5px;">
-        <span>Vol (L): <input type="number" class="bt-input womb-vol v-vol" style="width: 50px;" value="0"></span>
-        <span>Abs %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
-      </div>
-      <textarea class="bt-textarea v-appearance" rows="2" style="margin-bottom: 5px; display: none;" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
-      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Current action/state (e.g. thrashing, absorbing)..."></textarea>
-      <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0; display: none;" placeholder="Bound Gear / Items..."></textarea>
-    `
-  const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
-  const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
-  const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
-  const statusSpan = div.querySelector('.item-status') as HTMLElement
-  const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
-
-  typeSelect.addEventListener('change', () => {
-    if (typeSelect.value === 'Prey') {
-      gearArea.style.display = 'block'
-      appearanceArea.style.display = 'block'
-      willingnessRow.style.display = 'flex'
-      div.classList.add('is-prey')
-      statusSpan.style.display = 'inline'
-    } else if (typeSelect.value === 'Liquid') {
-      gearArea.style.display = 'none'
-      appearanceArea.style.display = 'none'
-      willingnessRow.style.display = 'none'
-      div.classList.remove('is-prey')
-      statusSpan.style.display = 'none'
-    } else {
-      gearArea.style.display = 'none'
-      appearanceArea.style.display = 'none'
-      willingnessRow.style.display = 'none'
-      div.classList.remove('is-prey')
-      statusSpan.style.display = 'none'
-    }
+  return createItemSlot({
+    containerClass: 'is-womb',
+    removeAction: 'remove-womb',
+    volClass: 'womb-vol',
+    digLabel: 'Abs %',
+    flavorPlaceholder: 'Current action/state (e.g. thrashing, absorbing)...',
+    hasStruggle: false,
   })
-
-  return div
 }
 
 /**
@@ -213,71 +197,14 @@ export function createWombItem(): HTMLElement {
  * No struggle display (balls have no struggle).
  */
 export function createBallsItem(): HTMLElement {
-  const div = document.createElement('div')
-  div.className = 'vital-slot is-balls'
-  div.innerHTML = `
-      <button class="vital-remove" data-action="remove-balls">✖</button>
-      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Item Name...">
-        <select class="bt-select v-type" style="width: 80px; margin-left: 5px;">
-          <option value="Liquid">Liquid</option>
-          <option value="Food" selected>Food</option>
-          <option value="Prey">Prey</option>
-        </select>
-      </div>
-      <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
-        <span>Status: <strong class="item-status" style="color:#4CAF50;">Fully Conscious</strong></span>
-      </div>
-      <div class="flex-row v-prey-willingness" style="margin-bottom: 5px; font-size: 12px; display: none;">
-        <span>Willingness:</span>
-        <select class="bt-select v-willingness" style="width: 90px; margin-left: 5px;">
-          <option value="willing">Willing</option>
-          <option value="reluctant" selected>Reluctant</option>
-          <option value="fighting">Fighting</option>
-        </select>
-        <span style="margin-left: 8px;">Stamina:</span>
-        <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden; margin-left:4px; max-width:80px;">
-          <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
-        </div>
-        <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
-      </div>
-      <div class="flex-row" style="margin-bottom: 5px;">
-        <span>Vol (L): <input type="number" class="bt-input balls-vol v-vol" style="width: 50px;" value="0"></span>
-        <span>Conv %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
-      </div>
-      <textarea class="bt-textarea v-appearance" rows="2" style="margin-bottom: 5px; display: none;" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
-      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Current action/state (e.g. thrashing, converting)..."></textarea>
-      <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0; display: none;" placeholder="Bound Gear / Items..."></textarea>
-    `
-  const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
-  const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
-  const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
-  const statusSpan = div.querySelector('.item-status') as HTMLElement
-  const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
-
-  typeSelect.addEventListener('change', () => {
-    if (typeSelect.value === 'Prey') {
-      gearArea.style.display = 'block'
-      appearanceArea.style.display = 'block'
-      willingnessRow.style.display = 'flex'
-      div.classList.add('is-prey')
-      statusSpan.style.display = 'inline'
-    } else if (typeSelect.value === 'Liquid') {
-      gearArea.style.display = 'none'
-      appearanceArea.style.display = 'none'
-      willingnessRow.style.display = 'none'
-      div.classList.remove('is-prey')
-      statusSpan.style.display = 'none'
-    } else {
-      gearArea.style.display = 'none'
-      appearanceArea.style.display = 'none'
-      willingnessRow.style.display = 'none'
-      div.classList.remove('is-prey')
-      statusSpan.style.display = 'none'
-    }
+  return createItemSlot({
+    containerClass: 'is-balls',
+    removeAction: 'remove-balls',
+    volClass: 'balls-vol',
+    digLabel: 'Conv %',
+    flavorPlaceholder: 'Current action/state (e.g. thrashing, converting)...',
+    hasStruggle: false,
   })
-
-  return div
 }
 
 /**
@@ -286,14 +213,13 @@ export function createBallsItem(): HTMLElement {
 export function createRemainsItem(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'vital-slot is-remains'
-  div.style.borderColor = '#8b6b4a'
   div.innerHTML = `
       <button class="vital-remove" data-action="remove-remains">✖</button>
-      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
-        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Waste / Remains Name...">
+      <div class="flex-row bt-item-header">
+        <input type="text" class="bt-input bt-item-name v-name" placeholder="Waste / Remains Name...">
       </div>
       <div class="flex-row">
-        <span>Vol (L): <input type="number" class="bt-input bowel-vol v-vol" style="width: 50px;" value="0"></span>
+        <span>Vol (L): <input type="number" class="bt-input bt-vol-input bowel-vol v-vol" value="0"></span>
       </div>
     `
   return div
@@ -306,10 +232,8 @@ export function createRemainsItem(): HTMLElement {
 export function createBuffEntry(buffTargetDefs: BuffTargetDef[]): HTMLElement {
   const div = document.createElement('div')
   div.className = 'bt-buff-entry'
-  div.style.cssText = 'display: flex; gap: 5px; margin-top: 4px; align-items: center;'
   const select = document.createElement('select')
   select.className = 'bt-input bt-buff-stat'
-  select.style.cssText = 'flex: 1; padding: 4px;'
   buffTargetDefs.forEach(t => {
     const opt = document.createElement('option')
     opt.value = t.value
@@ -319,13 +243,11 @@ export function createBuffEntry(buffTargetDefs: BuffTargetDef[]): HTMLElement {
   const input = document.createElement('input')
   input.type = 'number'
   input.className = 'bt-input bt-buff-pct'
-  input.style.cssText = 'width: 70px; padding: 4px; text-align: center;'
   input.placeholder = '+25'
   const btn = document.createElement('button')
   btn.className = 'bt-remove-btn'
   btn.dataset.action = 'remove-buff'
   btn.textContent = '✖'
-  btn.style.cssText = 'background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 14px;'
   div.appendChild(select)
   div.appendChild(input)
   div.appendChild(btn)
@@ -339,7 +261,7 @@ export function createBuffEntry(buffTargetDefs: BuffTargetDef[]): HTMLElement {
 export function createSkillItem(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'bt-dynamic-item dyn-skill'
-  div.innerHTML = `<button class="bt-remove-btn" data-action="remove-skill">✖</button><input type="text" class="bt-input full d-name" style="width: 60%;" placeholder="Skill Name"><input type="number" class="bt-input d-lvl" style="width: 30%; position:absolute; top:10px; right: 40px;" placeholder="Lvl"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea><div class="bt-buffs-section" style="margin-top: 6px;"><div style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888;"><span>Buffs/Debuffs</span><button class="bt-add-btn bt-add-buff" data-action="add-buff" style="font-size: 11px; padding: 2px 6px;">+ Add</button></div><div class="bt-buffs-container"></div></div>`
+  div.innerHTML = `<button class="bt-remove-btn" data-action="remove-skill">✖</button><input type="text" class="bt-input bt-skill-name d-name" placeholder="Skill Name"><input type="number" class="bt-input bt-skill-lvl d-lvl" placeholder="Lvl"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea><div class="bt-buffs-section"><div class="bt-buffs-header"><span>Buffs/Debuffs</span><button class="bt-add-btn bt-add-buff" data-action="add-buff">+ Add</button></div><div class="bt-buffs-container"></div></div>`
   return div
 }
 
@@ -350,7 +272,7 @@ export function createSkillItem(): HTMLElement {
 export function createTraitItem(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'bt-dynamic-item dyn-trait'
-  div.innerHTML = `<button class="bt-remove-btn" data-action="remove-trait">✖</button><input type="text" class="bt-input full d-name" style="width: 80%;" placeholder="Trait Name"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea><div class="bt-buffs-section" style="margin-top: 6px;"><div style="display: flex; align-items: center; gap: 5px; font-size: 12px; color: #888;"><span>Buffs/Debuffs</span><button class="bt-add-btn bt-add-buff" data-action="add-buff" style="font-size: 11px; padding: 2px 6px;">+ Add</button></div><div class="bt-buffs-container"></div></div>`
+  div.innerHTML = `<button class="bt-remove-btn" data-action="remove-trait">✖</button><input type="text" class="bt-input bt-trait-name d-name" placeholder="Trait Name"><textarea class="bt-textarea d-desc" rows="2" placeholder="Description..."></textarea><div class="bt-buffs-section"><div class="bt-buffs-header"><span>Buffs/Debuffs</span><button class="bt-add-btn bt-add-buff" data-action="add-buff">+ Add</button></div><div class="bt-buffs-container"></div></div>`
   return div
 }
 
@@ -359,9 +281,8 @@ export function createTraitItem(): HTMLElement {
  */
 export function createInvItem(): HTMLElement {
   const div = document.createElement('div')
-  div.className = 'bt-row dyn-inv'
-  div.style.cssText = 'margin-bottom: 5px; background: #222; padding: 5px; border-radius: 4px; border: 1px dashed #444;'
-  div.innerHTML = `<input type="number" class="bt-input d-qty" style="width: 40px; text-align: center; padding: 4px;" placeholder="#" value="1"><input type="text" class="bt-input full d-name" style="margin-bottom: 0; flex: 1; margin-left: 5px;" placeholder="Item name..."><button data-action="remove-inv" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px; margin-left: 5px;">✖</button>`
+  div.className = 'bt-row bt-inv-row dyn-inv'
+  div.innerHTML = `<input type="number" class="bt-input bt-inv-qty d-qty" placeholder="#" value="1"><input type="text" class="bt-input bt-inv-name d-name" placeholder="Item name..."><button class="bt-inv-remove" data-action="remove-inv">✖</button>`
   return div
 }
 
@@ -373,11 +294,11 @@ export function createDiceEntry(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'bt-dice-entry'
   div.innerHTML = `
-    <span class="bt-dice-d-label" style="font-size: 12px; color: #aaa;">d</span>
-    <input type="number" class="bt-input bt-dice-sides" style="width: 50px; text-align: center; padding: 4px;" placeholder="6" value="6" min="2" max="1000">
-    <span class="bt-dice-x-label" style="font-size: 12px; color: #aaa; margin-left: 4px;">×</span>
-    <input type="number" class="bt-input bt-dice-count" style="width: 40px; text-align: center; padding: 4px; margin-left: 4px;" placeholder="1" value="1" min="1" max="100">
-    <button class="bt-remove-btn" data-action="remove-die" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 14px; margin-left: 6px;">✖</button>
+    <span class="bt-dice-d-label">d</span>
+    <input type="number" class="bt-input bt-dice-sides" placeholder="6" value="6" min="2" max="1000">
+    <span class="bt-dice-x-label">×</span>
+    <input type="number" class="bt-input bt-dice-count" placeholder="1" value="1" min="1" max="100">
+    <button class="bt-remove-btn" data-action="remove-die">✖</button>
   `
   return div
 }
@@ -391,12 +312,12 @@ export function createDiceSection(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'bt-dice-section'
   div.innerHTML = `
-    <div class="bt-dice-section-header" style="display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
-      <input type="text" class="bt-input bt-dice-section-name" style="flex: 1; text-align: left; font-weight: bold;" placeholder="Section name (e.g. Combat, Social, Magic)...">
-      <button class="bt-remove-btn" data-action="remove-dice-section" style="background: transparent; border: none; color: #ff4444; cursor: pointer; font-size: 16px;">✖</button>
+    <div class="bt-dice-section-header">
+      <input type="text" class="bt-input bt-dice-section-name" placeholder="Section name (e.g. Combat, Social, Magic)...">
+      <button class="bt-remove-btn" data-action="remove-dice-section">✖</button>
     </div>
-    <div class="bt-dice-container" style="margin-left: 12px; margin-bottom: 6px;"></div>
-    <button class="bt-add-btn bt-add-die" data-action="add-die" style="font-size: 11px; padding: 2px 8px; margin-left: 12px; margin-bottom: 4px;">+ Add Die</button>
+    <div class="bt-dice-container"></div>
+    <button class="bt-add-btn bt-add-die" data-action="add-die">+ Add Die</button>
   `
   return div
 }
