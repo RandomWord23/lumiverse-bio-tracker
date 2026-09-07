@@ -84,9 +84,9 @@ export function createStomachItem(): HTMLElement {
         </div>
         <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
       </div>
-      <div class="flex-row v-prey-struggle" style="margin-bottom: 5px; font-size: 12px; display: none;">
+      <div class="flex-row v-prey-struggle" style="margin-bottom: 5px; font-size: 12px; display: none; justify-content: flex-start; gap: 4px;">
         <span>Struggle:</span>
-        <span class="v-struggle-val" style="min-width:42px; text-align:right; color:#FF9800;" title="Indigestion % contributed by this prey per tick (extension-managed)">+0.00%</span>
+        <span class="v-struggle-val" style="color:#FF9800;" title="Indigestion % contributed by this prey per tick (extension-managed)">+0.00%</span>
       </div>
       <div class="flex-row" style="margin-bottom: 5px;">
         <span>Vol (L): <input type="number" class="bt-input stomach-vol v-vol" style="width: 50px;" value="0"></span>

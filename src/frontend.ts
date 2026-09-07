@@ -82,10 +82,12 @@ export function setup(ctx: SpindleFrontendContext) {
           <input type="text" class="bt-input full bt-scrape" data-id="Name" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Species" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Age" id="bt-age"></div>
-          <div class="bt-row" style="padding-right: 24px;">
+          <div class="bt-row">
             <span>Gender:</span>
             <div style="display:flex; align-items:center; width: 65%;">
-              <input type="text" class="bt-input bt-scrape" data-id="Gender" style="flex:1; text-align:left;" id="bt-gender">
+              <div style="flex:1; position: relative;">
+                <input type="text" class="bt-input bt-scrape" data-id="Gender" style="width:100%; padding-right: 22px;" id="bt-gender">
+              </div>
               <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
             </div>
           </div>
@@ -1120,10 +1122,15 @@ export function setup(ctx: SpindleFrontendContext) {
       const row = input.closest('.bt-row')
       let container: HTMLElement
 
-      if (row) {
+      // Prefer the input's direct parent when it is already positioned
+      // (e.g. an inline position:relative wrapper) so the pin button
+      // lands at the right edge of the input itself, not the whole row.
+      const parent = input.parentElement
+      if (parent && parent.style.position === 'relative') {
+        container = parent
+      } else if (row) {
         container = row as HTMLElement
       } else {
-        const parent = input.parentElement
         if (!parent) return
         const wrapper = document.createElement('div')
         wrapper.className = 'bt-flag-wrap'
@@ -1135,11 +1142,14 @@ export function setup(ctx: SpindleFrontendContext) {
       if (container.querySelector('.bt-flag-btn')) return
       container.style.position = 'relative'
 
-      // For right-aligned number inputs, reserve space on the right so the
-      // flag button (positioned at right:4px) doesn't cover the value.
+      // Reserve space on the right so the flag button (positioned at
+      // right:4px) doesn't cover the value. Applies to number inputs
+      // (right-aligned) and any text input whose container is the
+      // input's own positioned wrapper.
       if (
         input.tagName === 'INPUT' &&
-        (input as HTMLInputElement).type === 'number'
+        ((input as HTMLInputElement).type === 'number' ||
+          container !== row)
       ) {
         ;(input as HTMLInputElement).style.paddingRight = '22px'
       }
