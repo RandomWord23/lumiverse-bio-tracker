@@ -117,7 +117,7 @@ function createItemSlot(cfg: ItemSlotConfig): HTMLElement {
         </select>
         <span class="bt-stamina-label">Stamina:</span>
         <div class="bt-bar-track">
-          <div class="bt-bar-fill v-stamina-bar"></div>
+          <div class="bt-bar-fill v-stamina-bar tier-safe"></div>
         </div>
         <span class="bt-bar-val v-stamina-val">100%</span>
       </div>

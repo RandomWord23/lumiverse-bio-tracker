@@ -221,17 +221,8 @@ export function setup(ctx: SpindleFrontendContext) {
       </div>
       <div id="tab-state" class="bt-tab-content">
         <div class="bt-section-title first">CORE STATS</div>
-        <div class="bt-row"><span>Health:</span> <input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100"></div>
-        <div class="bt-row" style="align-items:center;">
-          <span>Energy:</span>
-          <input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100" style="width:60px;">
-          <div class="bt-bar-wrap">
-            <div class="bt-bar-track-lg">
-              <div id="bt-energy-bar" class="bt-bar-fill-lg"></div>
-            </div>
-            <span class="bt-value bt-bar-status" id="bt-energy-status">Energetic</span>
-          </div>
-        </div>
+        <div class="bt-fillbar"><span class="bt-fillbar-label">Health</span><div class="bt-fillbar-track"><div id="bt-health-bar" class="bt-fillbar-fill tier-safe" style="width:100%"></div></div><span class="bt-fillbar-text"><input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100" style="width:60px;"> / 100</span><span class="bt-fillbar-status" id="bt-health-status">Healthy</span></div>
+        <div class="bt-fillbar"><span class="bt-fillbar-label">Energy</span><div class="bt-fillbar-track"><div id="bt-energy-bar" class="bt-fillbar-fill tier-safe" style="width:100%"></div></div><span class="bt-fillbar-text"><input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100" style="width:60px;"> / 100</span><span class="bt-fillbar-status" id="bt-energy-status">Energetic</span></div>
         <div class="bt-section-title">VITALS</div>
         <div id="bt-arousal-slot" class="bt-slot-spacer"></div>
         <div id="bt-climax-slot" class="bt-slot-spacer"></div>
@@ -251,24 +242,15 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Acid Rise (%/h):</span> <input type="number" class="bt-input bt-scrape" data-id="AcidRiseRate" id="bt-acid-rise" value="10"></div>
         <div class="bt-row"><span>Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="CapacityMultiplier" id="bt-cap-mult" step="0.1" value="1.0"></div>
         <hr class="bt-divider">
-        <div class="bt-row"><span>Belly Status:</span> <span class="bt-value bt-current-size" id="bt-belly-status">Flat</span></div>
-        <div class="bt-row"><span>Mobility:</span> <span class="bt-value bt-success-text" id="bt-mobility">Agile / Normal</span></div>
+        <div class="bt-fillbar thin"><span class="bt-fillbar-label">Belly</span><div class="bt-fillbar-track"><div id="bt-belly-bar" class="bt-fillbar-fill tier-neutral" style="width:0%"></div></div><span class="bt-fillbar-status" id="bt-belly-status">Flat</span></div>
+        <div class="bt-fillbar thin"><span class="bt-fillbar-label">Move</span><div class="bt-fillbar-track"><div id="bt-mobility-bar" class="bt-fillbar-fill tier-safe" style="width:0%"></div></div><span class="bt-fillbar-status" id="bt-mobility">Agile / Normal</span></div>
         <hr class="bt-divider">
         <div class="bt-section-title flex">
           <span>STOMACH PIPELINE</span>
           <button class="bt-add-btn" id="add-stomach-btn">+ Add Item</button>
         </div>
-        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-stom-max-disp">115.20 L</span></div>
-        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-stom-fill">0.00 L</span></div>
-        <div class="bt-row" style="align-items:center;">
-          <span>Indigestion:</span>
-          <div class="bt-bar-wrap">
-            <div class="bt-indigestion-track">
-              <div id="bt-indigestion-bar" class="bt-indigestion-fill"></div>
-            </div>
-            <span class="bt-value bt-indigestion-val" id="bt-indigestion-val">0%</span>
-          </div>
-        </div>
+        <div class="bt-fillbar"><span class="bt-fillbar-label">Stomach</span><div class="bt-fillbar-track"><div id="bt-stom-bar" class="bt-fillbar-fill tier-safe" style="width:0%"></div></div><span class="bt-fillbar-text"><span id="bt-stom-fill">0.00 L</span> / <span id="bt-stom-max-disp">115.20 L</span></span></div>
+        <div class="bt-fillbar"><span class="bt-fillbar-label">Indigestion</span><div class="bt-fillbar-track"><div id="bt-indigestion-bar" class="bt-fillbar-fill tier-safe" style="width:0%"></div></div><span class="bt-fillbar-text" id="bt-indigestion-val">0%</span></div>
         <div class="bt-row" style="align-items:center;">
           <span>Suppressing:</span>
           <label class="bt-suppress-label">
@@ -277,19 +259,15 @@ export function setup(ctx: SpindleFrontendContext) {
           </label>
           <span class="bt-fatigue-info" id="bt-fatigue-info"></span>
         </div>
-        <div class="bt-row" style="align-items:center;">
-          <span>Struggle Risk:</span>
-          <span class="bt-value bt-struggle-risk" id="bt-struggle-risk">None</span>
-          <span class="bt-struggle-detail" id="bt-struggle-detail"></span>
-        </div>
+        <div class="bt-fillbar thin"><span class="bt-fillbar-label">Struggle</span><div class="bt-fillbar-track"><div id="bt-struggle-bar" class="bt-fillbar-fill tier-safe" style="width:0%"></div></div><span class="bt-fillbar-status" id="bt-struggle-risk">None</span></div>
+        <div class="bt-struggle-detail" id="bt-struggle-detail"></div>
         <div id="stomach-container" class="bt-container-spacer"></div>
         <hr class="bt-divider">
         <div class="bt-section-title flex">
           <span>BOWEL PIPELINE</span>
           <button class="bt-add-btn bt-zone-remains" id="add-remains-btn">+ Remains</button>
         </div>
-        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-bowel-max-disp">40.32 L</span></div>
-        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-bowel-fill">0.00 L</span></div>
+        <div class="bt-fillbar zone-remains"><span class="bt-fillbar-label">Bowels</span><div class="bt-fillbar-track"><div id="bt-bowel-bar" class="bt-fillbar-fill tier-zone-remains" style="width:0%"></div></div><span class="bt-fillbar-text"><span id="bt-bowel-fill">0.00 L</span> / <span id="bt-bowel-max-disp">40.32 L</span></span></div>
         <div id="bowel-container" class="bt-container-spacer"></div>
         <hr class="bt-divider">
         <div class="bt-section-title flex">
@@ -297,8 +275,7 @@ export function setup(ctx: SpindleFrontendContext) {
           <button class="bt-add-btn bt-zone-womb" id="add-womb-btn">+ Add Prey</button>
         </div>
         <div class="bt-row"><span>Womb Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="WombCapacityMultiplier" id="bt-womb-cap-mult" step="0.1" value="1.0"></div>
-        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-womb-max-disp">0.00 L</span></div>
-        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-womb-fill">0.00 L</span></div>
+        <div class="bt-fillbar zone-womb"><span class="bt-fillbar-label">Womb</span><div class="bt-fillbar-track"><div id="bt-womb-bar" class="bt-fillbar-fill tier-zone-womb" style="width:0%"></div></div><span class="bt-fillbar-text"><span id="bt-womb-fill">0.00 L</span> / <span id="bt-womb-max-disp">0.00 L</span></span></div>
         <div id="womb-container" class="bt-container-spacer"></div>
         <hr class="bt-divider">
         <div class="bt-section-title flex">
@@ -306,17 +283,16 @@ export function setup(ctx: SpindleFrontendContext) {
           <button class="bt-add-btn bt-zone-balls" id="add-balls-btn">+ Add Prey</button>
         </div>
         <div class="bt-row"><span>Balls Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="BallsCapacityMultiplier" id="bt-balls-cap-mult" step="0.1" value="1.0"></div>
-        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-balls-max-disp">0.00 L</span></div>
-        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-balls-fill">0.00 L</span></div>
-        <div class="bt-row"><span>Cum Volume:</span> <span class="bt-value" id="bt-cum-vol">0 ml</span></div>
+        <div class="bt-fillbar zone-balls"><span class="bt-fillbar-label">Balls</span><div class="bt-fillbar-track"><div id="bt-balls-bar" class="bt-fillbar-fill tier-zone-balls" style="width:0%"></div></div><span class="bt-fillbar-text"><span id="bt-balls-fill">0.00 L</span> / <span id="bt-balls-max-disp">0.00 L</span></span></div>
+        <div class="bt-fillbar"><span class="bt-fillbar-label">Cum</span><div class="bt-fillbar-track"><div id="bt-cum-bar" class="bt-fillbar-fill tier-climax" style="width:0%"></div></div><span class="bt-fillbar-text" id="bt-cum-vol">0 ml</span></div>
         <div id="balls-container" class="bt-container-spacer"></div>
         <hr class="bt-divider">
         <div class="bt-section-title flex">
           <span>LACTATION</span>
         </div>
         <div class="bt-row"><span>Lactation Rate Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="LactationRateMultiplier" id="bt-lact-rate-mult" step="0.1" value="1.0"> <span id="bt-lact-rate-display" class="bt-lact-display">20 ml/h</span></div>
-        <div class="bt-row"><span>Milk Capacity:</span> <span class="bt-value" id="bt-milk-cap">0 ml</span></div>
-        <div class="bt-row"><span>Current Milk:</span> <input type="number" class="bt-input bt-scrape bt-milk-input" data-id="MilkVolume_ml" id="bt-milk-ml" value="0"> <span id="bt-milk-status" class="bt-milk-status">Empty</span></div>
+        <div class="bt-fillbar thin"><span class="bt-fillbar-label">Milk</span><div class="bt-fillbar-track"><div id="bt-milk-bar" class="bt-fillbar-fill tier-neutral" style="width:0%"></div></div><span class="bt-fillbar-text"><span id="bt-milk-ml-text">0</span> / <span id="bt-milk-cap">0 ml</span></span><span class="bt-fillbar-status" id="bt-milk-status">Empty</span></div>
+        <div class="bt-row"><span>Current Milk:</span> <input type="number" class="bt-input bt-scrape bt-milk-input" data-id="MilkVolume_ml" id="bt-milk-ml" value="0"></div>
         <div class="bt-row"><span>Production Rate:</span> <span class="bt-value" id="bt-milk-rate">0 ml/h</span></div>
         <div class="bt-row"><span>Womb Boost:</span> <span class="bt-value" id="bt-milk-boost">1.0×</span></div>
         <hr class="bt-divider">
@@ -649,6 +625,13 @@ export function setup(ctx: SpindleFrontendContext) {
     })
     const stomFillEl = document.getElementById('bt-stom-fill')
     if (stomFillEl) stomFillEl.innerText = stomTotal.toFixed(2) + ' L'
+    const stomBar = document.getElementById('bt-stom-bar')
+    if (stomBar) {
+      const spct = baseStomMax > 0 ? Math.min((stomTotal / baseStomMax) * 100, 100) : 0
+      stomBar.style.width = spct + '%'
+      stomBar.classList.remove('overflow')
+      if (stomTotal > baseStomMax) stomBar.classList.add('overflow')
+    }
 
     let bowelTotal = 0
     document.querySelectorAll('.bowel-vol').forEach((el) => {
@@ -656,6 +639,13 @@ export function setup(ctx: SpindleFrontendContext) {
     })
     const bowelFillEl = document.getElementById('bt-bowel-fill')
     if (bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L'
+    const bowelBar = document.getElementById('bt-bowel-bar')
+    if (bowelBar) {
+      const bpct = baseBowelMax > 0 ? Math.min((bowelTotal / baseBowelMax) * 100, 100) : 0
+      bowelBar.style.width = bpct + '%'
+      bowelBar.classList.remove('overflow')
+      if (bowelTotal > baseBowelMax) bowelBar.classList.add('overflow')
+    }
 
     // ─── Womb capacity ──────────────────────────────────────────
     const wombMultEl = document.getElementById('bt-womb-cap-mult') as HTMLInputElement
@@ -670,6 +660,13 @@ export function setup(ctx: SpindleFrontendContext) {
     })
     const wombFillEl = document.getElementById('bt-womb-fill')
     if (wombFillEl) wombFillEl.innerText = wombTotal.toFixed(2) + ' L'
+    const wombBar = document.getElementById('bt-womb-bar')
+    if (wombBar) {
+      const wpct = wombMax > 0 ? Math.min((wombTotal / wombMax) * 100, 100) : 0
+      wombBar.style.width = wpct + '%'
+      wombBar.classList.remove('overflow')
+      if (wombTotal > wombMax) wombBar.classList.add('overflow')
+    }
 
     // ─── Balls capacity ─────────────────────────────────────────
     const ballsMultEl = document.getElementById('bt-balls-cap-mult') as HTMLInputElement
@@ -686,6 +683,21 @@ export function setup(ctx: SpindleFrontendContext) {
     })
     const ballsFillEl = document.getElementById('bt-balls-fill')
     if (ballsFillEl) ballsFillEl.innerText = ballsTotal.toFixed(2) + ' L'
+    const ballsBar = document.getElementById('bt-balls-bar')
+    if (ballsBar) {
+      const bpct = ballsMax > 0 ? Math.min((ballsTotal / ballsMax) * 100, 100) : 0
+      ballsBar.style.width = bpct + '%'
+      ballsBar.classList.remove('overflow')
+      if (ballsTotal > ballsMax) ballsBar.classList.add('overflow')
+    }
+    const cumVolTxt = document.getElementById('bt-cum-vol')?.textContent || '0 ml'
+    const cumVolVal = parseFloat(cumVolTxt.replace(/[^\d.]/g, '')) || 0
+    const cumBar = document.getElementById('bt-cum-bar')
+    if (cumBar) {
+      const cumMaxMl = ballsMax * 1000
+      const cpct = cumMaxMl > 0 ? Math.min((cumVolVal / cumMaxMl) * 100, 100) : 0
+      cumBar.style.width = cpct + '%'
+    }
 
     // ─── Milk capacity ──────────────────────────────────────────
     const lactRateMultEl = document.getElementById('bt-lact-rate-mult') as HTMLInputElement
@@ -697,13 +709,29 @@ export function setup(ctx: SpindleFrontendContext) {
 
     const milkInput = document.getElementById('bt-milk-ml') as HTMLInputElement
     const milkVol = parseFloat(milkInput?.value || '0') || 0
+    const milkMlText = document.getElementById('bt-milk-ml-text')
+    if (milkMlText) milkMlText.textContent = milkVol.toFixed(0)
+    const milkBar = document.getElementById('bt-milk-bar')
+    if (milkBar) {
+      milkBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral', 'overflow')
+      if (breastMl <= 0) { milkBar.classList.add('tier-neutral') }
+      else {
+        const mpct = milkCapacity > 0 ? Math.min((milkVol / milkCapacity) * 100, 100) : 0
+        milkBar.style.width = mpct + '%'
+        if (milkVol > milkCapacity) milkBar.classList.add('overflow')
+        else if (milkVol >= milkCapacity * 0.95) milkBar.classList.add('tier-mild')
+        else if (milkVol > 0) milkBar.classList.add('tier-safe')
+        else milkBar.classList.add('tier-neutral')
+      }
+    }
     const milkStatusEl = document.getElementById('bt-milk-status')
     if (milkStatusEl) {
-      if (breastMl <= 0) { milkStatusEl.innerText = 'N/A'; milkStatusEl.style.color = '#666' }
-      else if (milkVol <= 0) { milkStatusEl.innerText = 'Empty'; milkStatusEl.style.color = '#888' }
-      else if (milkVol >= milkCapacity * 0.95 && milkVol <= milkCapacity) { milkStatusEl.innerText = 'Full'; milkStatusEl.style.color = '#ffeb3b' }
-      else if (milkVol > milkCapacity) { milkStatusEl.innerText = 'Leaking'; milkStatusEl.style.color = '#ff4444' }
-      else { milkStatusEl.innerText = 'Filling'; milkStatusEl.style.color = '#4CAF50' }
+      milkStatusEl.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      if (breastMl <= 0) { milkStatusEl.innerText = 'N/A'; milkStatusEl.classList.add('tier-neutral') }
+      else if (milkVol <= 0) { milkStatusEl.innerText = 'Empty'; milkStatusEl.classList.add('tier-neutral') }
+      else if (milkVol >= milkCapacity * 0.95 && milkVol <= milkCapacity) { milkStatusEl.innerText = 'Full'; milkStatusEl.classList.add('tier-mild') }
+      else if (milkVol > milkCapacity) { milkStatusEl.innerText = 'Leaking'; milkStatusEl.classList.add('tier-crit') }
+      else { milkStatusEl.innerText = 'Filling'; milkStatusEl.classList.add('tier-safe') }
     }
 
     // Production rate (without womb boost — actual boost computed in backend)
@@ -731,27 +759,41 @@ export function setup(ctx: SpindleFrontendContext) {
 
     const stomPct = (stomTotal / baseStomMax) * 100
     const bellyEl = document.getElementById('bt-belly-status')
+    const bellyBar = document.getElementById('bt-belly-bar')
+    if (bellyBar) {
+      bellyBar.style.width = Math.min(stomPct, 100) + '%'
+      bellyBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral', 'overflow')
+      if (stomPct > 100) bellyBar.classList.add('overflow')
+    }
     if (bellyEl) {
-      if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.style.color = '#aaa' }
-      else if (stomPct <= 12) { bellyEl.innerText = 'Potbelly'; bellyEl.style.color = '#fff' }
-      else if (stomPct <= 20) { bellyEl.innerText = 'Bloated'; bellyEl.style.color = '#ffeb3b' }
-      else if (stomPct <= 35) { bellyEl.innerText = 'Full-Term'; bellyEl.style.color = '#ff9800' }
-      else if (stomPct <= 48) { bellyEl.innerText = 'Twins'; bellyEl.style.color = '#ff9800' }
-      else if (stomPct <= 60) { bellyEl.innerText = 'Triplets'; bellyEl.style.color = '#ff5722' }
-      else if (stomPct <= 95) { bellyEl.innerText = 'Same-Size'; bellyEl.style.color = '#ff5722' }
-      else if (stomPct <= 125) { bellyEl.innerText = 'Double-Size'; bellyEl.style.color = '#ff4444' }
-      else if (stomPct <= 160) { bellyEl.innerText = 'Room-Filling'; bellyEl.style.color = '#ff4444' }
-      else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.style.color = '#ff0000' }
+      bellyEl.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      if (stomPct <= 5) { bellyEl.innerText = 'Flat'; bellyEl.classList.add('tier-neutral') }
+      else if (stomPct <= 12) { bellyEl.innerText = 'Potbelly'; bellyEl.classList.add('tier-safe') }
+      else if (stomPct <= 20) { bellyEl.innerText = 'Bloated'; bellyEl.classList.add('tier-mild') }
+      else if (stomPct <= 35) { bellyEl.innerText = 'Full-Term'; bellyEl.classList.add('tier-mild') }
+      else if (stomPct <= 48) { bellyEl.innerText = 'Twins'; bellyEl.classList.add('tier-warn') }
+      else if (stomPct <= 60) { bellyEl.innerText = 'Triplets'; bellyEl.classList.add('tier-warn') }
+      else if (stomPct <= 95) { bellyEl.innerText = 'Same-Size'; bellyEl.classList.add('tier-high') }
+      else if (stomPct <= 125) { bellyEl.innerText = 'Double-Size'; bellyEl.classList.add('tier-crit') }
+      else if (stomPct <= 160) { bellyEl.innerText = 'Room-Filling'; bellyEl.classList.add('tier-crit') }
+      else { bellyEl.innerText = 'Critical / Bursting'; bellyEl.classList.add('tier-crit') }
     }
 
     const overCapPct = ((stomTotal + bowelTotal) / baseStomMax) * 100
     const mobEl = document.getElementById('bt-mobility')
+    const mobBar = document.getElementById('bt-mobility-bar')
+    if (mobBar) {
+      mobBar.style.width = Math.min(overCapPct, 100) + '%'
+      mobBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral', 'overflow')
+      if (overCapPct > 100) mobBar.classList.add('overflow')
+    }
     if (mobEl) {
-      if (overCapPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.style.color = '#4CAF50' }
-      else if (overCapPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.style.color = '#ffeb3b' }
-      else if (overCapPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.style.color = '#ff9800' }
-      else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.style.color = '#ff5722' }
-      else { mobEl.innerText = 'Immobile'; mobEl.style.color = '#ff4444' }
+      mobEl.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      if (overCapPct <= 100) { mobEl.innerText = 'Agile / Normal'; mobEl.classList.add('tier-safe') }
+      else if (overCapPct <= 110) { mobEl.innerText = 'Slowed, clumsy'; mobEl.classList.add('tier-mild') }
+      else if (overCapPct <= 125) { mobEl.innerText = 'Half speed, stumbles'; mobEl.classList.add('tier-warn') }
+      else if (overCapPct <= 150) { mobEl.innerText = 'Slow waddle only'; mobEl.classList.add('tier-high') }
+      else { mobEl.innerText = 'Immobile'; mobEl.classList.add('tier-crit') }
     }
 
     // ─── Struggle risk assessment ───────────────────────────────
@@ -774,27 +816,44 @@ export function setup(ctx: SpindleFrontendContext) {
 
     const indigestionText = document.getElementById('bt-indigestion-val')?.textContent || '0%'
     const indigestion = parseFloat(indigestionText.replace('%', '')) || 0
+    const indBar = document.getElementById('bt-indigestion-bar')
+    if (indBar) {
+      indBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      if (indigestion >= 90) indBar.classList.add('tier-crit')
+      else if (indigestion >= 75) indBar.classList.add('tier-high')
+      else if (indigestion >= 50) indBar.classList.add('tier-warn')
+      else if (indigestion >= 25) indBar.classList.add('tier-mild')
+      else indBar.classList.add('tier-safe')
+    }
 
     const riskEl = document.getElementById('bt-struggle-risk')
     const detailEl = document.getElementById('bt-struggle-detail')
+    const struggleBar = document.getElementById('bt-struggle-bar')
     if (riskEl && detailEl) {
+      riskEl.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      if (struggleBar) struggleBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
       if (preyCount === 0) {
         riskEl.textContent = 'None'
-        riskEl.style.color = '#666'
+        riskEl.classList.add('tier-neutral')
+        if (struggleBar) struggleBar.style.width = '0%'
         detailEl.textContent = ''
       } else {
         // Risk score: weighted by fighting prey, indigestion level, and fill ratio
         const fillRatio = baseStomMax > 0 ? totalPreyVolume / baseStomMax : 0
         const riskScore = (fightingCount * 30) + (reluctantCount * 10) + (indigestion * 0.5) + (fillRatio * 15)
         let riskLabel: string
-        let riskColor: string
-        if (riskScore >= 80 || indigestion >= 90) { riskLabel = 'CRITICAL — Vomit imminent'; riskColor = '#ff0000' }
-        else if (riskScore >= 50 || indigestion >= 75) { riskLabel = 'High — Vomit likely soon'; riskColor = '#ff4444' }
-        else if (riskScore >= 25 || indigestion >= 50) { riskLabel = 'Moderate — Building pressure'; riskColor = '#ff9800' }
-        else if (riskScore >= 10 || indigestion >= 25) { riskLabel = 'Low — Some unrest'; riskColor = '#ffeb3b' }
-        else { riskLabel = 'Minimal — Calm'; riskColor = '#4CAF50' }
+        let riskTier: string
+        if (riskScore >= 80 || indigestion >= 90) { riskLabel = 'CRITICAL — Vomit imminent'; riskTier = 'tier-crit' }
+        else if (riskScore >= 50 || indigestion >= 75) { riskLabel = 'High — Vomit likely soon'; riskTier = 'tier-high' }
+        else if (riskScore >= 25 || indigestion >= 50) { riskLabel = 'Moderate — Building pressure'; riskTier = 'tier-warn' }
+        else if (riskScore >= 10 || indigestion >= 25) { riskLabel = 'Low — Some unrest'; riskTier = 'tier-mild' }
+        else { riskLabel = 'Minimal — Calm'; riskTier = 'tier-safe' }
         riskEl.textContent = riskLabel
-        riskEl.style.color = riskColor
+        riskEl.classList.add(riskTier)
+        if (struggleBar) {
+          struggleBar.style.width = Math.min(riskScore, 100) + '%'
+          struggleBar.classList.add(riskTier)
+        }
         const parts: string[] = []
         if (fightingCount > 0) parts.push(`${fightingCount} fighting`)
         if (reluctantCount > 0) parts.push(`${reluctantCount} reluctant`)
@@ -822,45 +881,73 @@ export function setup(ctx: SpindleFrontendContext) {
 
   if (arousalSlot) {
     arousalSlot.innerHTML = `
-      <div class="bt-row bt-vital-row">
-        <span class="bt-vital-label arousal">Arousal:</span>
-        <span class="bt-value bt-vital-val arousal" id="bt-arousal-val">0%</span>
+      <div class="bt-meter">
+        <div class="bt-meter-header">
+          <span class="bt-meter-label arousal">Arousal</span>
+          <span class="bt-meter-val arousal" id="bt-arousal-val">0%</span>
+        </div>
+        <div class="bt-meter-track">
+          <div id="bt-arousal-fill" class="bt-meter-fill arousal" style="width:0%"></div>
+        </div>
+        <input type="range" id="bt-arousal-slider" class="bt-meter-slider arousal" min="0" max="100" step="1" value="0">
       </div>
-      <input type="range" id="bt-arousal-slider" class="bt-vital-slider arousal" min="0" max="100" step="1" value="0">
     `
     const arousalInput = document.getElementById('bt-arousal-slider') as HTMLInputElement
     const arousalVal = document.getElementById('bt-arousal-val')
+    const arousalFill = document.getElementById('bt-arousal-fill')
     
     arousalInput?.addEventListener('input', () => {
       const v = parseInt(arousalInput.value) || 0
       if (arousalVal) arousalVal.textContent = v + '%'
+      if (arousalFill) {
+        arousalFill.style.width = v + '%'
+        if (v >= 80) arousalFill.classList.add('pulse')
+        else arousalFill.classList.remove('pulse')
+      }
       updateCurrentPenisSize(v)
     })
   }
 
   if (climaxSlot) {
     climaxSlot.innerHTML = `
-      <div class="bt-row bt-vital-row">
-        <span class="bt-vital-label climax">Climax:</span>
-        <span class="bt-value bt-vital-val climax" id="bt-climax-val">0%</span>
+      <div class="bt-meter">
+        <div class="bt-meter-header">
+          <span class="bt-meter-label climax">Climax</span>
+          <span class="bt-meter-val climax" id="bt-climax-val">0%</span>
+        </div>
+        <div class="bt-meter-track">
+          <div id="bt-climax-fill" class="bt-meter-fill climax" style="width:0%"></div>
+        </div>
+        <input type="range" id="bt-climax-slider" class="bt-meter-slider climax" min="0" max="100" step="1" value="0" disabled>
       </div>
-      <input type="range" id="bt-climax-slider" class="bt-vital-slider climax" min="0" max="100" step="1" value="0" disabled>
     `
   }
 
   function setArousalSlider(v: number) {
     const input = document.getElementById('bt-arousal-slider') as HTMLInputElement
     const val = document.getElementById('bt-arousal-val')
+    const fill = document.getElementById('bt-arousal-fill')
     if (input) input.value = String(v)
     if (val) val.textContent = v + '%'
+    if (fill) {
+      fill.style.width = v + '%'
+      if (v >= 80) fill.classList.add('pulse')
+      else fill.classList.remove('pulse')
+    }
     updateCurrentPenisSize(v)
   }
 
   function setClimaxSlider(v: number) {
     const input = document.getElementById('bt-climax-slider') as HTMLInputElement
     const val = document.getElementById('bt-climax-val')
+    const fill = document.getElementById('bt-climax-fill')
     if (input) input.value = String(v)
     if (val) val.textContent = v + '%'
+    if (fill) {
+      fill.style.width = v + '%'
+      if (v >= 90) fill.classList.add('pulse')
+      else fill.classList.remove('pulse')
+    }
   }
 
   function updateEnergyDisplay() {
@@ -869,28 +956,42 @@ export function setup(ctx: SpindleFrontendContext) {
     const v = Math.max(0, Math.min(100, parseInt(energyInput.value) || 0))
     const bar = document.getElementById('bt-energy-bar')
     const status = document.getElementById('bt-energy-status')
+    const tier = v >= 75 ? 'tier-safe' : v >= 50 ? 'tier-mild' : v >= 25 ? 'tier-warn' : v >= 10 ? 'tier-high' : 'tier-crit'
     if (bar) {
       bar.style.width = v + '%'
-      if (v >= 75) bar.style.background = '#4CAF50'
-      else if (v >= 50) bar.style.background = '#8BC34A'
-      else if (v >= 25) bar.style.background = '#FF9800'
-      else if (v >= 10) bar.style.background = '#ff5722'
-      else bar.style.background = '#f44336'
+      bar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      bar.classList.add(tier)
     }
     if (status) {
-      let label: string
-      let color: string
-      if (v >= 75) { label = 'Energetic'; color = '#4CAF50' }
-      else if (v >= 50) { label = 'Steady'; color = '#8BC34A' }
-      else if (v >= 25) { label = 'Tired'; color = '#FF9800' }
-      else if (v >= 10) { label = 'Exhausted'; color = '#ff5722' }
-      else { label = 'Collapsing'; color = '#f44336' }
+      const label = v >= 75 ? 'Energetic' : v >= 50 ? 'Steady' : v >= 25 ? 'Tired' : v >= 10 ? 'Exhausted' : 'Collapsing'
       status.textContent = label
-      status.style.color = color
+      status.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      status.classList.add(tier)
+    }
+  }
+
+  function updateHealthDisplay() {
+    const healthInput = document.getElementById('bt-health') as HTMLInputElement
+    if (!healthInput) return
+    const v = Math.max(0, Math.min(100, parseInt(healthInput.value) || 0))
+    const bar = document.getElementById('bt-health-bar')
+    const status = document.getElementById('bt-health-status')
+    const tier = v >= 75 ? 'tier-safe' : v >= 50 ? 'tier-mild' : v >= 25 ? 'tier-warn' : v >= 10 ? 'tier-high' : 'tier-crit'
+    if (bar) {
+      bar.style.width = v + '%'
+      bar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      bar.classList.add(tier)
+    }
+    if (status) {
+      const label = v >= 75 ? 'Healthy' : v >= 50 ? 'Bruised' : v >= 25 ? 'Wounded' : v >= 10 ? 'Critical' : 'Dying'
+      status.textContent = label
+      status.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
+      status.classList.add(tier)
     }
   }
 
   document.getElementById('bt-energy')?.addEventListener('input', updateEnergyDisplay)
+  document.getElementById('bt-health')?.addEventListener('input', updateHealthDisplay)
 
   function updateCurrentPenisSize(arousalVal: number) {
     const maxL = parseFloat(
@@ -1781,6 +1882,7 @@ export function setup(ctx: SpindleFrontendContext) {
     document.getElementById('bt-eyes')?.dispatchEvent(new Event('input'))
     document.getElementById('bt-skin')?.dispatchEvent(new Event('input'))
     updateEnergyDisplay()
+    updateHealthDisplay()
 
     // Update Arousal & Climax sliders
     const arousalVal = parseFloat(getText('Arousal')) || 0
@@ -1944,7 +2046,8 @@ export function setup(ctx: SpindleFrontendContext) {
         const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
         if (staminaBar) {
           staminaBar.style.width = `${Math.min(100, Math.max(0, stamina))}%`
-          staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+          staminaBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit')
+          staminaBar.classList.add(stamina < 25 ? 'tier-crit' : stamina < 50 ? 'tier-warn' : 'tier-safe')
         }
         if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
 
@@ -2006,7 +2109,8 @@ export function setup(ctx: SpindleFrontendContext) {
             const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
             if (staminaBar) {
               staminaBar.style.width = `${stamina}%`
-              staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+              staminaBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit')
+              staminaBar.classList.add(stamina < 25 ? 'tier-crit' : stamina < 50 ? 'tier-warn' : 'tier-safe')
             }
             if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
 
@@ -2062,7 +2166,8 @@ export function setup(ctx: SpindleFrontendContext) {
           const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
           if (staminaBar) {
             staminaBar.style.width = `${Math.min(100, Math.max(0, stamina))}%`
-            staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+            staminaBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit')
+            staminaBar.classList.add(stamina < 25 ? 'tier-crit' : stamina < 50 ? 'tier-warn' : 'tier-safe')
           }
           if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
         }
@@ -2112,7 +2217,8 @@ export function setup(ctx: SpindleFrontendContext) {
           const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
           if (staminaBar) {
             staminaBar.style.width = `${Math.min(100, Math.max(0, stamina))}%`
-            staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+            staminaBar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit')
+            staminaBar.classList.add(stamina < 25 ? 'tier-crit' : stamina < 50 ? 'tier-warn' : 'tier-safe')
           }
           if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
         }

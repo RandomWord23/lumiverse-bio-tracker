@@ -259,7 +259,12 @@ export const bioTrackerStylesheet = `
     .bt-willingness-select { width: 90px; margin-left: var(--bt-space-xs); }
     .bt-stamina-label { margin-left: var(--bt-space-sm); }
     .bt-bar-track { flex: 1; height: 10px; background: var(--bt-bg); border: 1px solid var(--bt-border); border-radius: 5px; overflow: hidden; margin-left: var(--bt-space-xs); max-width: 80px; }
-    .bt-bar-fill { height: 100%; width: 100%; background: var(--bt-success); transition: width 0.3s; }
+    .bt-bar-fill { height: 100%; width: 100%; background: var(--bt-success); transition: width 0.3s, background 0.3s; }
+    .bt-bar-fill.tier-safe { background: var(--bt-success); }
+    .bt-bar-fill.tier-mild { background: #ffeb3b; }
+    .bt-bar-fill.tier-warn { background: var(--bt-warning); }
+    .bt-bar-fill.tier-high { background: #ff5722; }
+    .bt-bar-fill.tier-crit { background: var(--bt-danger); }
     .bt-bar-val { min-width: 28px; text-align: right; color: var(--bt-text-dim); }
     .bt-struggle-row { display: none; margin-bottom: var(--bt-space-xs); font-size: var(--bt-font-sm); justify-content: flex-start; gap: var(--bt-space-xs); }
     .bt-struggle-val { color: var(--bt-warning); }
@@ -350,6 +355,71 @@ export const bioTrackerStylesheet = `
     .bt-indigestion-track { flex: 1; height: 14px; background: var(--bt-input-bg); border: 1px solid var(--bt-border); border-radius: 7px; overflow: hidden; }
     .bt-indigestion-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--bt-success), var(--bt-warning), var(--bt-danger)); transition: width 0.3s; }
     .bt-indigestion-val { min-width: 35px; text-align: right; }
+
+    /* ── Labeled fill bars (reusable bar component) ──────────────── */
+    .bt-fillbar { display: flex; align-items: center; gap: 8px; margin-bottom: var(--bt-space-sm); }
+    .bt-fillbar-label { font-size: var(--bt-font-sm); color: var(--bt-text-dim); min-width: 70px; flex-shrink: 0; font-weight: bold; }
+    .bt-fillbar-track {
+      flex: 1; height: 16px; background: var(--bt-input-bg);
+      border: 1px solid var(--bt-border); border-radius: 8px;
+      overflow: hidden; position: relative;
+    }
+    .bt-fillbar-fill {
+      height: 100%; width: 0%; border-radius: 7px;
+      transition: width 0.3s ease, background 0.3s ease;
+    }
+    .bt-fillbar-fill.tier-safe { background: var(--bt-success); }
+    .bt-fillbar-fill.tier-mild { background: #ffeb3b; }
+    .bt-fillbar-fill.tier-warn { background: var(--bt-warning); }
+    .bt-fillbar-fill.tier-high { background: #ff5722; }
+    .bt-fillbar-fill.tier-crit { background: var(--bt-danger); }
+    .bt-fillbar-fill.tier-zone-womb { background: var(--bt-womb); }
+    .bt-fillbar-fill.tier-zone-balls { background: var(--bt-balls); }
+    .bt-fillbar-fill.tier-zone-remains { background: var(--bt-remains); }
+    .bt-fillbar-fill.tier-neutral { background: var(--bt-text-dim3); }
+    .bt-fillbar-fill.tier-arousal { background: var(--bt-arousal); }
+    .bt-fillbar-fill.tier-climax { background: var(--bt-climax); }
+    .bt-fillbar-text { font-size: var(--bt-font-xs); color: var(--bt-text-dim2); min-width: 95px; text-align: right; flex-shrink: 0; }
+    .bt-fillbar-status { font-size: var(--bt-font-xs); font-weight: bold; min-width: 70px; text-align: right; flex-shrink: 0; }
+    /* Thin status variant (belly, mobility, struggle, milk) */
+    .bt-fillbar.thin .bt-fillbar-track { height: 8px; border-radius: 4px; }
+    .bt-fillbar.thin .bt-fillbar-fill { border-radius: 3px; }
+    /* Zone-tinted track borders */
+    .bt-fillbar.zone-womb .bt-fillbar-track { border-color: var(--bt-womb); }
+    .bt-fillbar.zone-balls .bt-fillbar-track { border-color: var(--bt-balls); }
+    .bt-fillbar.zone-remains .bt-fillbar-track { border-color: var(--bt-remains); }
+    /* Overflow fill (belly > 100% capacity) */
+    .bt-fillbar-fill.overflow { background: var(--bt-danger) !important; }
+
+    /* ── Arousal / Climax visual meters ──────────────────────────── */
+    .bt-meter { margin-bottom: var(--bt-space-sm); }
+    .bt-meter-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .bt-meter-label { font-weight: bold; font-size: var(--bt-font-sm); }
+    .bt-meter-label.arousal { color: var(--bt-arousal); }
+    .bt-meter-label.climax { color: var(--bt-climax); }
+    .bt-meter-val { font-size: var(--bt-font-sm); font-weight: bold; }
+    .bt-meter-val.arousal { color: var(--bt-arousal); }
+    .bt-meter-val.climax { color: var(--bt-climax); }
+    .bt-meter-track {
+      height: 12px; border-radius: 6px; overflow: hidden;
+      border: 1px solid var(--bt-border); background: var(--bt-input-bg);
+      position: relative;
+    }
+    .bt-meter-fill {
+      height: 100%; width: 0%; border-radius: 5px;
+      transition: width 0.3s ease;
+    }
+    .bt-meter-fill.arousal { background: linear-gradient(90deg, rgba(255,68,102,0.3), var(--bt-arousal)); }
+    .bt-meter-fill.climax { background: linear-gradient(90deg, rgba(255,170,0,0.3), var(--bt-climax)); }
+    .bt-meter-fill.pulse { animation: bt-meter-pulse 1s ease-in-out infinite; }
+    @keyframes bt-meter-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .bt-meter-slider { width: 100%; margin-top: 6px; touch-action: manipulation; }
+    .bt-meter-slider.arousal { accent-color: var(--bt-arousal); }
+    .bt-meter-slider.climax { accent-color: var(--bt-climax); }
+    .bt-meter-slider:disabled { opacity: 0.7; }
 
     /* ── Suppress / struggle ─────────────────────────────────────── */
     .bt-suppress-label { display: flex; align-items: center; gap: 5px; margin-left: 8px; cursor: pointer; font-size: var(--bt-font-sm); }
