@@ -26,6 +26,7 @@ export let toastSettings: Record<string, boolean> = {
   nutrientAbsorption: false, digestionSkips: false, sheetSync: true,
   rollbackEvents: true, rollbackWarnings: true, errors: true, chatWarnings: false,
   struggleEvents: true, vomitEvents: true,
+  lactationEvents: true,
 }
 export let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
@@ -34,6 +35,7 @@ export let engineToggles: Record<string, boolean> = {
   diceSystem: false,
   unbirthEngine: false,
   cockVoreEngine: false,
+  lactationEngine: false,
 }
 
 // ─── Setters (writes must go through these to reassign the live bindings) ──

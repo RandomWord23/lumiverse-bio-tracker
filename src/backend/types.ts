@@ -124,6 +124,20 @@ export interface ConversionResult {
 }
 
 // ---------------------------------------------------------------------------
+// Lactation System types
+// ---------------------------------------------------------------------------
+
+/** Return value from the lactation engine — processes milk production and overflow. */
+export interface LactationResult {
+  milkVolume: number
+  milkCapacity: number
+  breastGrowth: number
+  isLeaking: boolean
+  wombPreyCount: number
+  productionRate: number
+}
+
+// ---------------------------------------------------------------------------
 // Message Content Processor types
 // ---------------------------------------------------------------------------
 

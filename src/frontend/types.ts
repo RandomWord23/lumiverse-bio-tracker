@@ -17,6 +17,7 @@ export interface ToastSettings {
   rollbackWarnings: boolean
   struggleEvents: boolean
   vomitEvents: boolean
+  lactationEvents: boolean
   errors: boolean
   chatWarnings: boolean
 }
@@ -34,6 +35,7 @@ export interface EngineToggles {
   diceSystem: boolean
   unbirthEngine: boolean
   cockVoreEngine: boolean
+  lactationEngine: boolean
 }
 
 /**

@@ -1134,6 +1134,7 @@ VALID BUFF TARGETS:
 - EnergyDrain: Energy drain from struggle/suppression (+ = more drain, - = less drain)
 - WombAbsorptionRate: Womb absorption speed (+ = faster, - = slower)
 - BallsConversionRate: Balls conversion speed (+ = faster, - = slower)
+- LactationRate: Milk production speed (+ = faster, - = slower)
 
 RULES:
 1. The 'buffs' attribute is OPTIONAL. Omit it if the skill/trait has no buffs.
@@ -1178,6 +1179,20 @@ Rules for balls prey:
 - The struggle/indigestion system does NOT affect prey in the Balls.
 - When conversion reaches 100%, the prey vanishes from <Balls> in the next sheet and their volume is added to CumVolume_ml. Narrate the prey being fully converted.
 - When the predator climaxes (orgasm), CumVolume_ml is expelled and reset to 0. Narrate the expulsion.
+
+─── LACTATION SYSTEM ───
+The character's breasts produce milk passively over time. The extension AUTOMATICALLY computes milk production each tick — copy the MilkVolume_ml value exactly.
+
+Rules for lactation:
+- MilkVolume_ml tracks the current milk in the breasts. It accumulates automatically.
+- Milk capacity = BreastVolume_ml × 0.8. At 0 ml breast volume (AA cup), there is NO capacity and NO lactation.
+- LactationRateMultiplier (default 1.0) is a user-adjustable stat that scales production speed. At 1.0 → 20 ml/h base rate; the frontend shows a live ml/h display next to the multiplier.
+- Milk production is faster with larger breasts (sub-linear scaling) and boosted 50% per prey in the Womb.
+- When MilkVolume_ml exceeds milk capacity, the character is LEAKING. Narrate visible milk stains, wetness, and drops leaking from the nipples. This is a narrative cue — the extension handles the mechanical values.
+- Overfull breasts slowly swell from the pressure (the extension handles this growth automatically).
+- The character can EXPRESS milk (manually pump, feed someone, let it flow) to reduce MilkVolume_ml. When the character does this, set MilkVolume_ml to the reduced amount in the sheet_update.
+- Milk does NOT enlarge breasts when below capacity. Only overcapacity overflow causes breast growth (handled by the extension).
+- Skills and traits with buffs="LactationRate:+X" or "LactationRate:-X" modify production speed.
 
 <sheet_update>
 <CharacterSheet>

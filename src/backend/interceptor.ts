@@ -706,6 +706,79 @@ export async function runDigestionTick(
       )
     } // end nutrientAbsorption
 
+    // ─── LACTATION SYSTEM ──────────────────────────────────────
+    if (engineToggles.lactationEngine) {
+      const breastVol = getStat(updatedXml, 'BreastVolume_ml') || 0
+      const lactRateMult = getStat(updatedXml, 'LactationRateMultiplier') || 1.0
+      const milkCapacity = breastVol * 0.8
+
+      if (breastVol > 0 && milkCapacity > 0) {
+        // Count womb prey for production boost
+        let wombPreyCount = 0
+        const wombMatch = updatedXml.match(/<Womb[^>]*>([\s\S]*?)<\/Womb>/i)
+        if (wombMatch && wombMatch[1]) {
+          wombPreyCount = (wombMatch[1].match(/<Item[\s>]/gi) || []).length
+        }
+        const wombBoost = 1 + (wombPreyCount * 0.5)
+
+        // Production rate: base 20 ml/h × sqrt(breast/150) × LactationRateMultiplier × lactationMult × wombBoost
+        const lactationMult = 1 + (modifiers.LactationRate || 0)
+        const baseRate = 20.0
+        const milkRate = baseRate * Math.sqrt(breastVol / 150) * lactRateMult * lactationMult * wombBoost
+        const milkProduction = milkRate * elapsed
+
+        // Read current milk (allow LLM to have reduced it via expressing)
+        const oldMilkVol = getStat(oldXml, 'MilkVolume_ml') || 0
+        let milkVol = getStat(updatedXml, 'MilkVolume_ml')
+        if (milkVol === null || milkVol === undefined) {
+          milkVol = oldMilkVol
+        }
+        milkVol = Math.max(0, milkVol) // clamp negative to 0
+        milkVol += milkProduction
+
+        // Check for overcapacity
+        const isLeaking = milkVol > milkCapacity
+        let breastGrowthFromMilk = 0
+
+        if (isLeaking) {
+          const overflow = milkVol - milkCapacity
+          breastGrowthFromMilk = overflow * 0.05 * elapsed
+
+          // Apply breast growth from overflow
+          const currentBreastVol = getStat(updatedXml, 'BreastVolume_ml') || breastVol
+          const newBreastVol = currentBreastVol + breastGrowthFromMilk
+          updatedXml = setStat(updatedXml, 'BreastVolume_ml', newBreastVol)
+
+          // Cap milk at 2× capacity (recompute capacity with new breast vol)
+          const newCapacity = newBreastVol * 0.8
+          milkVol = Math.min(milkVol, newCapacity * 2)
+
+          maybeToast('lactationEvents', 'warning',
+            `💧 Breasts overcapacity — leaking! +${breastGrowthFromMilk.toFixed(1)}ml breast growth from overfullness.`)
+          spindle.log.info(
+            `Lactation: leaking! milk ${milkVol.toFixed(1)}/${milkCapacity.toFixed(1)}ml, ` +
+            `+${breastGrowthFromMilk.toFixed(2)}ml breast growth, womb boost ${wombBoost}×`,
+          )
+        } else {
+          // Check if milk just reached capacity
+          const oldMilkCap = (getStat(oldXml, 'BreastVolume_ml') || 0) * 0.8
+          if (oldMilkVol < oldMilkCap && milkVol >= milkCapacity * 0.95) {
+            maybeToast('lactationEvents', 'info', `🥛 Breasts full — milk at capacity.`)
+          }
+          spindle.log.info(
+            `Lactation: milk ${milkVol.toFixed(1)}/${milkCapacity.toFixed(1)}ml, ` +
+            `rate ${milkRate.toFixed(1)}ml/h, womb boost ${wombBoost}×`,
+          )
+        }
+
+        // Update MilkVolume_ml in XML
+        updatedXml = setStat(updatedXml, 'MilkVolume_ml', Math.round(milkVol))
+      } else {
+        // AA cup / 0ml — no lactation possible
+        updatedXml = setStat(updatedXml, 'MilkVolume_ml', 0)
+      }
+    } // end lactationEngine
+
     if (engineToggles.clothingStress) {
       const clothingResult = processClothingStress(updatedXml, oldXml, modifiers.ClothingStress || 0)
       updatedXml = clothingResult.xml

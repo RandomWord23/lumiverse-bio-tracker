@@ -23,6 +23,7 @@ export const defaultToastSettings: ToastSettings = {
   rollbackWarnings: true,
   struggleEvents: true,
   vomitEvents: true,
+  lactationEvents: true,
   errors: true,
   chatWarnings: false,
 }
@@ -36,6 +37,7 @@ export const defaultEngineToggles: EngineToggles = {
   diceSystem: false,
   unbirthEngine: false,
   cockVoreEngine: false,
+  lactationEngine: false,
 }
 
 export const defaultUiSettings: UiSettings = {

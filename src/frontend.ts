@@ -307,6 +307,15 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Cum Volume:</span> <span class="bt-value" id="bt-cum-vol">0 ml</span></div>
         <div id="balls-container" style="margin-top: 10px;"></div>
         <hr style="border-color: #333; margin: 15px 0;">
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>LACTATION</span>
+        </div>
+        <div class="bt-row"><span>Lactation Rate Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="LactationRateMultiplier" id="bt-lact-rate-mult" step="0.1" value="1.0"> <span id="bt-lact-rate-display" style="margin-left:8px; font-weight:bold; color:#4CAF50;">20 ml/h</span></div>
+        <div class="bt-row"><span>Milk Capacity:</span> <span class="bt-value" id="bt-milk-cap">0 ml</span></div>
+        <div class="bt-row"><span>Current Milk:</span> <input type="number" class="bt-input bt-scrape" data-id="MilkVolume_ml" id="bt-milk-ml" style="flex:1;" value="0"> <span id="bt-milk-status" style="width: 60px; text-align:right; font-weight:bold; color:#888;">Empty</span></div>
+        <div class="bt-row"><span>Production Rate:</span> <span class="bt-value" id="bt-milk-rate">0 ml/h</span></div>
+        <div class="bt-row"><span>Womb Boost:</span> <span class="bt-value" id="bt-milk-boost">1.0×</span></div>
+        <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
         <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
         <button class="bt-action-btn" id="bt-populate-btn" style="background: #2a2a2a; border-color: #555;">✨ Populate Flagged Fields</button>
@@ -373,6 +382,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'rollbackWarnings', label: 'Rollback Warnings', desc: 'No snapshot found warnings' },
     { key: 'struggleEvents', label: 'Struggle Events', desc: 'Indigestion thresholds and prey struggling' },
     { key: 'vomitEvents', label: 'Vomit Events', desc: 'Prey escape during vomit events' },
+    { key: 'lactationEvents', label: 'Lactation Events', desc: 'Milk production, fullness, and leaking notifications' },
     { key: 'errors', label: 'Errors', desc: 'Populate failed and other errors' },
     { key: 'chatWarnings', label: 'Chat Warnings', desc: 'Open a chat first warnings' },
   ]
@@ -387,6 +397,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'diceSystem', label: 'Dice System', desc: 'Pre-roll dice pools for action resolution' },
     { key: 'unbirthEngine', label: 'Unbirth Engine', desc: 'Womb absorption of prey (same nutrient absorption as stomach)' },
     { key: 'cockVoreEngine', label: 'Cock Vore Engine', desc: 'Balls conversion of prey into cum, expelled on climax' },
+    { key: 'lactationEngine', label: 'Lactation Engine', desc: 'Milk production, accumulation, and overcapacity leaking' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -399,6 +410,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { value: 'EnergyDrain', label: 'Energy Drain' },
     { value: 'WombAbsorptionRate', label: 'Womb Absorption Rate' },
     { value: 'BallsConversionRate', label: 'Balls Conversion Rate' },
+    { value: 'LactationRate', label: 'Lactation Rate' },
   ]
   function applyUiSettings(ui: UiSettings) {
     const pe = document.getElementById('bio-tracker-panel') as HTMLElement
@@ -649,6 +661,48 @@ export function setup(ctx: SpindleFrontendContext) {
     const ballsFillEl = document.getElementById('bt-balls-fill')
     if (ballsFillEl) ballsFillEl.innerText = ballsTotal.toFixed(2) + ' L'
 
+    // ─── Milk capacity ──────────────────────────────────────────
+    const lactRateMultEl = document.getElementById('bt-lact-rate-mult') as HTMLInputElement
+    const lactRateMult = parseFloat(lactRateMultEl?.value || '1.0') || 1.0
+    const breastMl = parseFloat((document.getElementById('bt-breast-ml') as HTMLInputElement)?.value || '0') || 0
+    const milkCapacity = breastMl * 0.8
+    const milkCapDisp = document.getElementById('bt-milk-cap')
+    if (milkCapDisp) milkCapDisp.innerText = milkCapacity.toFixed(0) + ' ml'
+
+    const milkInput = document.getElementById('bt-milk-ml') as HTMLInputElement
+    const milkVol = parseFloat(milkInput?.value || '0') || 0
+    const milkStatusEl = document.getElementById('bt-milk-status')
+    if (milkStatusEl) {
+      if (breastMl <= 0) { milkStatusEl.innerText = 'N/A'; milkStatusEl.style.color = '#666' }
+      else if (milkVol <= 0) { milkStatusEl.innerText = 'Empty'; milkStatusEl.style.color = '#888' }
+      else if (milkVol >= milkCapacity * 0.95 && milkVol <= milkCapacity) { milkStatusEl.innerText = 'Full'; milkStatusEl.style.color = '#ffeb3b' }
+      else if (milkVol > milkCapacity) { milkStatusEl.innerText = 'Leaking'; milkStatusEl.style.color = '#ff4444' }
+      else { milkStatusEl.innerText = 'Filling'; milkStatusEl.style.color = '#4CAF50' }
+    }
+
+    // Production rate (without womb boost — actual boost computed in backend)
+    const baseRate = 20.0
+    const milkRate = breastMl > 0 ? baseRate * Math.sqrt(breastMl / 150) * lactRateMult : 0
+    const milkRateDisp = document.getElementById('bt-milk-rate')
+    if (milkRateDisp) milkRateDisp.innerText = milkRate.toFixed(1) + ' ml/h'
+
+    // Live ml/h display next to the multiplier input — updates immediately on multiplier change
+    const lactRateDisplay = document.getElementById('bt-lact-rate-display')
+    if (lactRateDisplay) {
+      const displayRate = breastMl > 0 ? baseRate * Math.sqrt(breastMl / 150) * lactRateMult : 0
+      lactRateDisplay.innerText = displayRate.toFixed(1) + ' ml/h'
+    }
+
+    // Womb boost display
+    let wombPreyForMilk = 0
+    document.querySelectorAll('#womb-container .vital-slot').forEach((el) => {
+      const type = (el.querySelector('.v-type') as HTMLSelectElement)?.value
+      if (type === 'Prey') wombPreyForMilk++
+    })
+    const wombBoost = 1 + (wombPreyForMilk * 0.5)
+    const milkBoostDisp = document.getElementById('bt-milk-boost')
+    if (milkBoostDisp) milkBoostDisp.innerText = wombBoost.toFixed(1) + '×'
+
     const stomPct = (stomTotal / baseStomMax) * 100
     const bellyEl = document.getElementById('bt-belly-status')
     if (bellyEl) {
@@ -732,6 +786,9 @@ export function setup(ctx: SpindleFrontendContext) {
   document.getElementById('bt-balls-cap-mult')?.addEventListener('input', updateCapacities)
   document.getElementById('bt-penis-len')?.addEventListener('input', updateCapacities)
   document.getElementById('bt-penis-girth')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-milk-ml')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-lact-rate-mult')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-breast-ml')?.addEventListener('input', updateCapacities)
 
   // ─── Arousal & Climax Sliders (Native HTML) ────────────────
   const arousalSlot = document.getElementById('bt-arousal-slot')
