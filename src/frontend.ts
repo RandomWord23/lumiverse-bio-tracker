@@ -188,35 +188,41 @@ export function setup(ctx: SpindleFrontendContext) {
         <span class="slot-label">Head (Face)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Face" placeholder="Glasses, Goggles, Visors">
         <span class="slot-label">Head (Lower)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Head Lower" placeholder="Masks, Bandanas">
         <span class="slot-label">Neck</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Neck" placeholder="Scarves, Gorgets, Chokers">
-        <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Underwear (Top)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Underwear Top" placeholder="Bra, Binder, Undershirt">
-        <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Underwear (Bottom)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard">Standard</option><option value="stretchy" selected>Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Underwear Bottom" placeholder="Panties, Boxers, Loincloth">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Torso (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Base" placeholder="T-shirt, Blouse, Gambeson">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Torso (Layer 2 - Mid)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Mid" placeholder="Sweater, Vest, Chainmail">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 3 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Torso (Layer 3 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Outer" placeholder="Jacket, Coat, Cuirass">
-        <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Torso (Layer 4 - Shell)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Torso Shell" placeholder="Overcoat, Poncho, Power Armor">
         <span class="slot-label">Hands (Layer 1)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Hands Base" placeholder="Inner Gloves, Wraps">
         <span class="slot-label">Hands (Layer 2)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Hands Outer" placeholder="Gauntlets, Thick Gloves">
-        <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Legs (Layer 1 - Base)</span><select class="bt-select bt-cloth-flex"><option value="rigid">Rigid</option><option value="standard" selected>Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs Base" placeholder="Jeans, Leggings, Trousers">
-        <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Legs (Layer 2 - Outer)</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Legs Outer" placeholder="Greaves, Chaps, Snow Pants">
         <span class="slot-label">Feet (Layer 1)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet Base" placeholder="Socks, Stockings">
         <span class="slot-label">Feet (Layer 2)</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Feet Outer" placeholder="Shoes, Boots, Sabatons">
         <span class="slot-label">Jewelry</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Jewelry" placeholder="Rings, Amulets, Bracelets">
-        <span class="slot-label">Back</span><input type="text" class="bt-input full bt-cloth-slot" data-slot="Back" placeholder="Backpack, Cape, Quiver">
-        <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select></div>
+        <div class="flex-row"><span class="slot-label">Back</span><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
+        <input type="text" class="bt-input full bt-cloth-slot" data-slot="Back" placeholder="Backpack, Cape, Quiver">
+        <div class="flex-row"><span class="slot-label">Waist</span><select class="bt-select bt-cloth-flex"><option value="rigid" selected>Rigid</option><option value="standard">Standard</option><option value="stretchy">Stretchy</option><option value="magic">Magic</option></select><input type="number" class="bt-input bt-cloth-slots" placeholder="0" min="0" max="20" value="0" title="Inventory slots granted"><span class="slot-slots-label">slots</span></div>
         <input type="text" class="bt-input full bt-cloth-slot" data-slot="Waist" placeholder="Belt, Holster, Scabbard">
         <hr class="bt-divider">
         <div class="bt-section-title flex">
           <span>BACKPACK / POCKETS</span>
           <button class="bt-add-btn" id="add-inv-btn">+ Add Item</button>
         </div>
+        <div class="bt-inv-capacity" id="bt-inv-capacity">
+          <div class="bt-inv-cap-label">Inventory: <span id="bt-inv-used">0</span> / <span id="bt-inv-total">3</span> slots</div>
+          <div class="bt-fillbar-track"><div id="bt-inv-cap-bar" class="bt-fillbar-fill bt-inv-cap-bar" style="width:0%"></div></div>
+        </div>
+        <div class="bt-inv-overcap-warn" id="bt-inv-overcap-warn">⚠ Over capacity — drop items or equip storage gear</div>
         <div id="inv-container" class="bt-container-spacer"></div>
       </div>
       <div id="tab-state" class="bt-tab-content">
@@ -1023,6 +1029,9 @@ export function setup(ctx: SpindleFrontendContext) {
     if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol') || target.classList.contains('womb-vol') || target.classList.contains('balls-vol')) {
       updateCapacities()
     }
+    if (target.classList.contains('bt-cloth-slots') || target.classList.contains('d-qty') || target.classList.contains('d-name')) {
+      updateInventoryCapacityUI()
+    }
     if (target.classList.contains('item-dig-input')) {
       const val = parseInt((target as HTMLInputElement).value) || 0
       const slot = target.closest('.vital-slot')
@@ -1064,6 +1073,10 @@ export function setup(ctx: SpindleFrontendContext) {
       target.closest('.bt-dynamic-item')?.remove()
     } else if (action === 'remove-inv') {
       target.closest('.dyn-inv')?.remove()
+      updateInventoryCapacityUI()
+    } else if (action === 'toggle-inv-desc') {
+      const descInput = target.closest('.dyn-inv')?.querySelector('.d-desc') as HTMLElement
+      if (descInput) descInput.style.display = descInput.style.display === 'none' ? 'block' : 'none'
     } else if (action === 'add-buff') {
       const container = target.closest('.bt-buffs-section')?.querySelector('.bt-buffs-container')
       container?.appendChild(createBuffEntry(buffTargetDefs))
@@ -1119,7 +1132,43 @@ export function setup(ctx: SpindleFrontendContext) {
   })
   document.getElementById('add-inv-btn')?.addEventListener('click', () => {
     document.getElementById('inv-container')?.appendChild(createInvItem())
+    updateInventoryCapacityUI()
   })
+
+  // ─── Inventory capacity UI ────────────────────────────────
+  function updateInventoryCapacityUI(cap?: number, overcap?: number) {
+    const used = document.querySelectorAll('.dyn-inv .d-name').length
+    let total = 3
+    if (cap !== undefined) {
+      total = cap
+    } else {
+      // Sum slots from clothing
+      document.querySelectorAll('.bt-cloth-slots').forEach((el) => {
+        const v = parseInt((el as HTMLInputElement).value) || 0
+        if (v > 0) total += v
+      })
+    }
+    const over = overcap !== undefined ? overcap : Math.max(0, used - total)
+    const pct = total > 0 ? Math.min(100, (used / total) * 100) : 100
+
+    const usedEl = document.getElementById('bt-inv-used')
+    const totalEl = document.getElementById('bt-inv-total')
+    const barEl = document.getElementById('bt-inv-cap-bar')
+    const warnEl = document.getElementById('bt-inv-overcap-warn')
+    if (usedEl) usedEl.textContent = String(used)
+    if (totalEl) totalEl.textContent = String(total)
+    if (barEl) {
+      barEl.style.width = pct + '%'
+      if (over > 0) {
+        barEl.style.background = 'var(--bt-danger, #e74c3c)'
+      } else if (pct >= 80) {
+        barEl.style.background = '#ff9800'
+      } else {
+        barEl.style.background = 'var(--bt-accent, #4CAF50)'
+      }
+    }
+    if (warnEl) warnEl.style.display = over > 0 ? 'block' : 'none'
+  }
 
   // ─── Dice section & preset management ──────────────────────
   function updateDiceEmptyHint() {
@@ -1368,14 +1417,19 @@ export function setup(ctx: SpindleFrontendContext) {
       if (val !== '') {
         const flexEl = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement
         const flexStr = flexEl ? ` elasticity="${flexEl.value}"` : ''
-        xml += `    <Equip slot="${slot}"${flexStr}>${val}</Equip>\n`
+        const slotsEl = input.previousElementSibling?.querySelector('.bt-cloth-slots') as HTMLInputElement
+        const slotsVal = slotsEl ? parseInt(slotsEl.value) || 0 : 0
+        const slotsStr = slotsVal > 0 ? ` slots="${slotsVal}"` : ''
+        xml += `    <Equip slot="${slot}"${flexStr}${slotsStr}>${val}</Equip>\n`
       }
     })
     xml += `  </Clothing>\n\n  <Backpack>\n`
     document.querySelectorAll('.dyn-inv').forEach((el) => {
       const qty = (el.querySelector('.d-qty') as HTMLInputElement)?.value.trim() || '1'
       const name = (el.querySelector('.d-name') as HTMLInputElement)?.value.trim()
-      if (name) xml += `    <Item qty="${qty}">${name}</Item>\n`
+      const desc = (el.querySelector('.d-desc') as HTMLInputElement)?.value.trim()
+      const descStr = desc ? ` desc="${desc}"` : ''
+      if (name) xml += `    <Item qty="${qty}"${descStr}>${name}</Item>\n`
     })
     xml += `  </Backpack>\n\n  <SkillsAndTraits>\n`
     document.querySelectorAll('.dyn-skill').forEach((el) => {
@@ -1904,12 +1958,15 @@ export function setup(ctx: SpindleFrontendContext) {
       const elasticity = equipNode.getAttribute('elasticity') || 'standard'
       const value = equipNode.textContent || ''
       const condition = equipNode.getAttribute('condition') || 'intact'
+      const slots = equipNode.getAttribute('slots') || '0'
       if (!slot) return
       const input = document.querySelector(`.bt-cloth-slot[data-slot="${slot}"]`) as HTMLInputElement
       if (input) {
         input.value = value
         const flexSelect = input.previousElementSibling?.querySelector('.bt-cloth-flex') as HTMLSelectElement
         if (flexSelect) flexSelect.value = elasticity
+        const slotsInput = input.previousElementSibling?.querySelector('.bt-cloth-slots') as HTMLInputElement
+        if (slotsInput) slotsInput.value = slots
 
         let labelEl: HTMLElement | null = input.previousElementSibling as HTMLElement
         if (labelEl && labelEl.classList.contains('flex-row')) {
@@ -1935,11 +1992,22 @@ export function setup(ctx: SpindleFrontendContext) {
     doc.querySelectorAll('Backpack > Item').forEach((itemNode) => {
       const qty = itemNode.getAttribute('qty') || '1'
       const name = itemNode.textContent || ''
+      const desc = itemNode.getAttribute('desc') || ''
       const div = createInvItem()
       document.getElementById('inv-container')?.appendChild(div)
       ;(div.querySelector('.d-qty') as HTMLInputElement).value = qty
       ;(div.querySelector('.d-name') as HTMLInputElement).value = name
+      ;(div.querySelector('.d-desc') as HTMLInputElement).value = desc
     })
+
+    // ─── Inventory capacity from sheet ──
+    const invCapNode = doc.querySelector('InventoryCapacity')
+    const invOvercapNode = doc.querySelector('InventoryOvercapacity')
+    if (invCapNode) {
+      const cap = parseInt(invCapNode.textContent || '3') || 3
+      const overcap = parseInt(invOvercapNode?.textContent || '0') || 0
+      updateInventoryCapacityUI(cap, overcap)
+    }
 
     doc.querySelectorAll('Skill').forEach((skillNode) => {
       const div = createSkillItem()
@@ -2250,6 +2318,7 @@ export function setup(ctx: SpindleFrontendContext) {
     updateDiceEmptyHint()
 
     updateCapacities()
+    updateInventoryCapacityUI()
   }
 
   // ─── Cleanup ───────────────────────────────────────────────

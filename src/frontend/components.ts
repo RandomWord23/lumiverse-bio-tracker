@@ -277,12 +277,14 @@ export function createTraitItem(): HTMLElement {
 }
 
 /**
- * Create an inventory item row with quantity, name, and remove button.
+ * Create an inventory item row with quantity, name, optional description,
+ * and remove button. The description is collapsed by default and toggled
+ * via the info button to save vertical space.
  */
 export function createInvItem(): HTMLElement {
   const div = document.createElement('div')
   div.className = 'bt-row bt-inv-row dyn-inv'
-  div.innerHTML = `<input type="number" class="bt-input bt-inv-qty d-qty" placeholder="#" value="1"><input type="text" class="bt-input bt-inv-name d-name" placeholder="Item name..."><button class="bt-inv-remove" data-action="remove-inv">✖</button>`
+  div.innerHTML = `<input type="number" class="bt-input bt-inv-qty d-qty" placeholder="#" value="1"><input type="text" class="bt-input bt-inv-name d-name" placeholder="Item name..."><button class="bt-inv-toggle" data-action="toggle-inv-desc">ⓘ</button><button class="bt-inv-remove" data-action="remove-inv">✖</button><input type="text" class="bt-input bt-inv-desc d-desc" placeholder="Short description (optional)..." style="display:none;">`
   return div
 }
 

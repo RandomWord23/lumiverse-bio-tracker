@@ -963,6 +963,8 @@ The following values are computed by the extension's engines during the digestio
 - <CurrentAcidPct> (current acid level percentage, 0-100)
 - <Climax> (computed from Arousal)
 - <CurrentPenisLength_cm>, <CurrentPenisGirth_cm> (computed from Arousal)
+- <InventoryCapacity> (computed from base 3 + sum of Equip slots)
+- <InventoryOvercapacity> (computed from unique item count vs capacity)
 - Clothing stress="..." and condition="..." attributes (computed from body growth)
 - Height, Weight, BreastVolume, Hips, Penis dimensions (updated by nutrient absorption)
 
@@ -1007,15 +1009,16 @@ CRITICAL XML RULES:
 16. <Arousal> is a 0-100 meter. The extension AUTOMATICALLY decays it by 50% per hour. You MUST actively add points to it to keep it up during intimate scenes (e.g., add +30 if stimulated, +50 if highly stimulated). If no intimacy occurs, it will naturally drop.
 17. <Climax> is a 0-100 meter computed by the extension from <Arousal>. Copy the value from the sheet exactly — do NOT change it yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
 18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension computes <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> from Arousal (0% arousal = 30% size, 100% arousal = 100% size). Copy the Current tags from the sheet exactly as-is — do NOT modify or remove them.
-19. Backpack (inventory) items use a SIMPLE format that is DIFFERENT from Stomach/Bowel prey items. Backpack items MUST use: <Item qty="...">item name</Item>. Do NOT add type, name, volume_L, or digestion attributes to Backpack items. Backpack items are NOT prey — they do not get digested and must NEVER have a digestion meter. Example:
-    BAD (do NOT do this):
-    <Backpack>
-      <Item type="Food" name="Waterskin" volume_L="" digestion="14.06%">Full</Item>
-    </Backpack>
-    GOOD (do this):
-    <Backpack>
-      <Item qty="1">Waterskin</Item>
-    </Backpack>
+19. Backpack (inventory) items use a SIMPLE format that is DIFFERENT from Stomach/Bowel prey items. Backpack items MUST use: <Item qty="..." desc="...">item name</Item>. Do NOT add type, name, volume_L, or digestion attributes to Backpack items. Backpack items are NOT prey — they do not get digested and must NEVER have a digestion meter. The desc attribute is OPTIONAL — include it only for items that benefit from a short note (8 words or fewer). Example:
+ BAD (do NOT do this):
+ <Backpack>
+   <Item type="Food" name="Waterskin" volume_L="" digestion="14.06%">Full</Item>
+ </Backpack>
+ GOOD (do this):
+ <Backpack>
+   <Item qty="1" desc="Holds 2L of water">Waterskin</Item>
+   <Item qty="50">Arrows</Item>
+ </Backpack>
     MONEY/WEALTH IS NOT AN ITEM. Never put money, coins, or cash in <Backpack>. Wealth is tracked in dedicated BaseStats fields:
     - Modern settings: <CashBalance> — a plain number (no $ symbol, no commas). Example: <CashBalance>1500</CashBalance>.
     - Fantasy settings: <Gold>, <Silver>, <Copper> — each a plain whole number of that coin. Example: <Gold>12</Gold><Silver>50</Silver><Copper>3</Copper>.
@@ -1193,6 +1196,30 @@ Rules for lactation:
 - The character can EXPRESS milk (manually pump, feed someone, let it flow) to reduce MilkVolume_ml. When the character does this, set MilkVolume_ml to the reduced amount in the sheet_update.
 - Milk does NOT enlarge breasts when below capacity. Only overcapacity overflow causes breast growth (handled by the extension).
 - Skills and traits with buffs="LactationRate:+X" or "LactationRate:-X" modify production speed.
+
+─── INVENTORY SLOT SYSTEM ───
+The character has a limited number of inventory slots. The base capacity is 3 slots when naked. Each equipped clothing item can grant additional slots — set a slots="N" attribute on <Equip> tags to indicate how many inventory slots that item provides. Examples:
+  <Equip slot="Back" elasticity="rigid" slots="5">Backpack</Equip>
+  <Equip slot="Waist" elasticity="standard" slots="2">Belt with pouches</Equip>
+  <Equip slot="Head Top" elasticity="rigid" slots="0">Hat</Equip>
+
+GUIDELINES for setting slots on equipment:
+- A backpack or large bag: 4-6 slots
+- A belt with pouches, scabbard, or bandolier: 1-3 slots
+- A hat, glasses, jewelry, or most clothing: 0 slots
+- Use 0 (or omit slots) for items that do not function as containers
+- The LLM has creative freedom — set slots based on what the item logically is
+
+The extension computes total capacity (3 + sum of all Equip slots) and injects <InventoryCapacity> into the sheet. Copy it verbatim — do NOT calculate it yourself.
+
+BACKPACK ITEM FORMAT:
+  <Item qty="1" desc="Holds 2L of water">Waterskin</Item>
+- desc is OPTIONAL. If included, keep it to 8 words or fewer.
+- Items with the same name automatically stack (their quantities are merged by the backend). Do not create duplicate entries for the same item — use one entry with the appropriate qty.
+- Each unique item name uses 1 slot, regardless of quantity. 50 arrows = 1 slot.
+- The extension computes <InventoryOvercapacity>. If it is >0, the character is carrying more unique items than they have slots for. Narrate them being overburdened and have them drop, store, or discard items until within capacity.
+- When the character equips or removes clothing, update the slots attribute on the relevant <Equip> tag. The capacity will recalculate automatically.
+- Copy <InventoryCapacity> and <InventoryOvercapacity> from the sheet exactly as-is — do NOT modify or recalculate them.
 
 <sheet_update>
 <CharacterSheet>

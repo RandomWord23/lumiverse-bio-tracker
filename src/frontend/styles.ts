@@ -289,11 +289,22 @@ export const bioTrackerStylesheet = `
     .bt-buffs-header { display: flex; align-items: center; gap: 5px; font-size: var(--bt-font-sm); color: var(--bt-text-dim2); }
     .bt-add-buff { float: none; font-size: var(--bt-font-xs); padding: 2px 6px; }
 
+    /* ── Inventory capacity bar ─────────────────────────────── */
+    .bt-inv-capacity { font-size: var(--bt-font-sm); color: var(--bt-text-dim); }
+    .bt-inv-cap-bar { transition: width 0.3s ease, background 0.3s ease; }
+    .bt-inv-overcap-warn { display: none; color: var(--bt-danger, #e74c3c); font-size: var(--bt-font-sm); margin-bottom: 5px; font-weight: bold; }
+
     /* ── Inventory rows ────────────────────────────────────────── */
-    .bt-inv-row { margin-bottom: 5px; background: var(--bt-surface); padding: 5px; border-radius: 4px; border: 1px dashed var(--bt-border-dashed); }
+    .bt-inv-row { margin-bottom: 5px; background: var(--bt-surface); padding: 5px; border-radius: 4px; border: 1px dashed var(--bt-border-dashed); flex-wrap: wrap; }
     .bt-inv-qty { width: 40px; text-align: center; padding: 4px; }
     .bt-inv-name { margin-bottom: 0; flex: 1; margin-left: 5px; text-align: left; }
+    .bt-inv-toggle { background: transparent; border: none; color: var(--bt-text-dim); cursor: pointer; font-size: var(--bt-font-md); padding: 0 4px; touch-action: manipulation; }
+    .bt-inv-desc { width: 100%; margin-top: 4px; margin-left: 45px; font-size: var(--bt-font-sm); }
     .bt-inv-remove { background: transparent; border: none; color: var(--bt-accent); cursor: pointer; font-size: var(--bt-font-lg); margin-left: 5px; touch-action: manipulation; }
+
+    /* ── Clothing slots input ────────────────────────────────── */
+    .bt-cloth-slots { width: 30px; text-align: center; padding: 2px; font-size: var(--bt-font-sm); }
+    .slot-slots-label { font-size: var(--bt-font-xs); color: var(--bt-text-dim2); }
 
     /* ── Dice ──────────────────────────────────────────────────── */
     .bt-dice-section { background: var(--bt-surface); border: 1px solid var(--bt-border-dashed); border-radius: 6px; padding: 10px; margin-bottom: 10px; }

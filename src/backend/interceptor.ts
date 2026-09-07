@@ -530,26 +530,70 @@ export async function runDigestionTick(
 
     // Normalize Backpack items: strip digestion/type/volume_L attributes that
     // the LLM may have erroneously added. Backpack items use the simple
-    // <Item qty="...">name</Item> format — they are NOT prey and should never
-    // have a digestion meter. This prevents the UI from breaking (frontend
-    // parser reads textContent as the item name, so <Item name="Waterskin"
-    // digestion="14.06%">Full</Item> would display as "Full" instead of
-    // "Waterskin"). This runs regardless of the digestionEngine toggle since
-    // it is a format-correction step, not a digestion calculation.
+    // <Item qty="..." desc="...">name</Item> format — they are NOT prey and
+    // should never have a digestion meter. This prevents the UI from breaking
+    // (frontend parser reads textContent as the item name, so <Item
+    // name="Waterskin" digestion="14.06%">Full</Item> would display as "Full"
+    // instead of "Waterskin"). This runs regardless of the digestionEngine
+    // toggle since it is a format-correction step, not a digestion
+    // calculation.
+    //
+    // Additionally: auto-stack items with the same name (sum qty, keep longest
+    // desc), and compute inventory capacity + overcapacity for the slot
+    // system.
+    let inventoryUniqueCount = 0
     updatedXml = updatedXml.replace(
       /<Backpack([^>]*)>([\s\S]*?)<\/Backpack>/gi,
       (match, attrs, inner) => {
-        const normalizedInner = inner.replace(
+        // Collect items into a map for auto-stacking
+        const items: Map<string, { qty: number; desc: string }> = new Map()
+        inner.replace(
           /<Item\s+([^>]*?)(?:\s*\/\s*>|>([\s\S]*?)<\/Item>)/gi,
           (itemMatch: string, itemAttrs: string, textContent: string | undefined) => {
-            const qty = getAttrFromString(itemAttrs, 'qty') || '1'
+            const qty = parseInt(getAttrFromString(itemAttrs, 'qty') || '1') || 1
+            const desc = getAttrFromString(itemAttrs, 'desc') || ''
             const name = getAttrFromString(itemAttrs, 'name') || (textContent || '').trim()
-            return `<Item qty="${qty}">${name}</Item>`
+            if (!name) return ''
+            const existing = items.get(name)
+            if (existing) {
+              existing.qty += qty
+              if (desc.length > existing.desc.length) existing.desc = desc
+            } else {
+              items.set(name, { qty, desc })
+            }
+            return ''
           },
         )
-        return `<Backpack${attrs}>${normalizedInner}</Backpack>`
+        // Rebuild XML from the stacked map
+        let result = ''
+        for (const [name, { qty, desc }] of items) {
+          const descAttr = desc ? ` desc="${desc}"` : ''
+          result += `\n    <Item qty="${qty}"${descAttr}>${name}</Item>`
+        }
+        inventoryUniqueCount = items.size
+        return `<Backpack${attrs}>${result}\n  </Backpack>`
       },
     )
+
+    // Compute inventory capacity: base 3 + sum of all Equip@slots attributes.
+    // Inject <InventoryCapacity> and <InventoryOvercapacity> into the sheet
+    // (inside <State>, same pattern as CurrentAcidPct, Climax, etc.). This runs
+    // regardless of the digestionEngine toggle since it is a capacity
+    // computation, not a digestion calculation.
+    let clothingSlots = 0
+    updatedXml.replace(
+      /<Equip\s+([^>]*?)>/gi,
+      (match: string, attrs: string) => {
+        const slotsStr = getAttrFromString(attrs, 'slots')
+        const slotsNum = parseInt(slotsStr) || 0
+        if (slotsNum > 0) clothingSlots += slotsNum
+        return match
+      },
+    )
+    const capacity = Math.max(3, 3 + clothingSlots)
+    const overcap = Math.max(0, inventoryUniqueCount - capacity)
+    updatedXml = setStat(updatedXml, 'InventoryCapacity', capacity)
+    updatedXml = setStat(updatedXml, 'InventoryOvercapacity', overcap)
 
     if (engineToggles.struggleEngine) {
       const struggleResult = processStruggle(updatedXml, oldXml, elapsed, modifiers.StomachResistance || 0, modifiers.EnergyDrain || 0)
