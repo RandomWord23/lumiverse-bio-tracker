@@ -105,3 +105,7 @@ export function sendPopulateFields(
 ): void {
   ctx.sendToBackend({ type: 'POPULATE_FIELDS', fields, xml })
 }
+
+export function sendGetTheme(ctx: SpindleFrontendContext): void {
+  ctx.sendToBackend({ type: 'GET_THEME' })
+}

@@ -11,6 +11,7 @@ import type {
   DicePreset,
   DiceSection,
   DiceConfig,
+  ThemeInfo,
 } from './frontend/types'
 import {
   defaultToastSettings,
@@ -22,6 +23,7 @@ import {
   sendSyncBioData,
   sendGetLatestSheet,
   sendPopulateFields,
+  sendGetTheme,
 } from './frontend/api'
 import {
   buildToggleRow,
@@ -494,6 +496,33 @@ export function setup(ctx: SpindleFrontendContext) {
     } catch (e) {}
   }
   document.body.appendChild(floatingBtn)
+
+  // ─── Host theme integration ────────────────────────────────
+  // Request the user's Lumiverse theme from the backend.  The
+  // response arrives asynchronously via `ctx.onBackendMessage`.
+  sendGetTheme(ctx)
+
+  /**
+   * Apply the host theme to the panel, floating button, and preview
+   * modal.  Toggles the `.bt-light` class for light mode and derives
+   * the accent colour from the theme's HSL accent value.
+   */
+  function applyTheme(theme: ThemeInfo) {
+    const targets = [panel, floatingBtn, previewModal]
+    const isLight = theme.mode === 'light'
+    for (const el of targets) {
+      el.classList.toggle('bt-light', isLight)
+    }
+    // Derive accent from HSL and override the --bt-accent token
+    const accentColor = `hsl(${theme.accent.h}, ${theme.accent.s}%, ${theme.accent.l}%)`
+    for (const el of targets) {
+      el.style.setProperty('--bt-accent', accentColor)
+    }
+    // Apply font scale if the host theme specifies a non-default scale
+    if (theme.fontScale && theme.fontScale !== 1) {
+      panel.style.fontSize = `calc(13px * ${theme.fontScale})`
+    }
+  }
 
   let fadeTimeout: any
   const resetFade = () => {
@@ -1428,7 +1457,7 @@ export function setup(ctx: SpindleFrontendContext) {
       btn.style.background = '#4CAF50'
       setTimeout(() => {
         btn.innerText = '💾 Sync Changes to AI'
-        btn.style.background = '#333'
+        btn.style.background = 'var(--bt-surface-3)'
       }, 2000)
     }
     sendSyncBioData(ctx, xml)
@@ -1442,7 +1471,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
   document.getElementById('bt-sync-chat-btn')?.addEventListener('click', () => {
     const btn = document.getElementById('bt-sync-chat-btn') as HTMLButtonElement
-    if (btn) { btn.innerText = '⏳ Syncing...'; btn.style.background = '#555' }
+    if (btn) { btn.innerText = '⏳ Syncing...'; btn.style.background = 'var(--bt-border-strong)' }
     sendGetLatestSheet(ctx)
   })
 
@@ -1466,14 +1495,14 @@ export function setup(ctx: SpindleFrontendContext) {
         btn.style.background = '#ff4444'
         setTimeout(() => {
           btn.innerText = '✨ Populate Flagged Fields'
-          btn.style.background = '#2a2a2a'
+          btn.style.background = 'var(--bt-surface-2)'
         }, 2000)
       }
       return
     }
 
     populateInProgress = true
-    if (btn) { btn.innerText = '⏳ Populating...'; btn.style.background = '#555' }
+    if (btn) { btn.innerText = '⏳ Populating...'; btn.style.background = 'var(--bt-border-strong)' }
     const xml = buildCurrentXml()
     sendPopulateFields(ctx, flagged, xml)
   })
@@ -1548,6 +1577,14 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // ─── Backend message handler ───────────────────────────────
   ctx.onBackendMessage((msg: any) => {
+    if (msg.type === 'THEME_INFO' && msg.mode) {
+      applyTheme({
+        mode: msg.mode,
+        accent: msg.accent || { h: 0, s: 70, l: 60 },
+        fontScale: msg.fontScale || 1,
+        radiusScale: msg.radiusScale || 1,
+      })
+    }
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       try {
         const indMatch = msg.xml.match(/<Stomach(?![a-zA-Z])[^>]*\sindigestion="([^"]*)"/i)
@@ -1574,7 +1611,7 @@ export function setup(ctx: SpindleFrontendContext) {
             btn.style.background = '#4CAF50'
             setTimeout(() => {
               btn.innerText = '🔄 Sync from Latest Message'
-              btn.style.background = '#2a2a2a'
+              btn.style.background = 'var(--bt-surface-2)'
             }, 2000)
           }
         } catch (e) {
@@ -1583,7 +1620,7 @@ export function setup(ctx: SpindleFrontendContext) {
             btn.style.background = '#ff4444'
             setTimeout(() => {
               btn.innerText = '🔄 Sync from Latest Message'
-              btn.style.background = '#2a2a2a'
+              btn.style.background = 'var(--bt-surface-2)'
             }, 2000)
           }
         }
@@ -1593,7 +1630,7 @@ export function setup(ctx: SpindleFrontendContext) {
           btn.style.background = '#ff4444'
           setTimeout(() => {
             btn.innerText = '🔄 Sync from Latest Message'
-            btn.style.background = '#2a2a2a'
+            btn.style.background = 'var(--bt-surface-2)'
           }, 2000)
         }
       }
@@ -1617,7 +1654,7 @@ export function setup(ctx: SpindleFrontendContext) {
           btn.style.background = '#4CAF50'
           setTimeout(() => {
             btn.innerText = '✨ Populate Flagged Fields'
-            btn.style.background = '#2a2a2a'
+            btn.style.background = 'var(--bt-surface-2)'
           }, 2000)
         }
       } else {
@@ -1626,7 +1663,7 @@ export function setup(ctx: SpindleFrontendContext) {
           btn.style.background = '#ff4444'
           setTimeout(() => {
             btn.innerText = '✨ Populate Flagged Fields'
-            btn.style.background = '#2a2a2a'
+            btn.style.background = 'var(--bt-surface-2)'
           }, 2000)
         }
       }

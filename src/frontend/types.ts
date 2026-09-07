@@ -107,3 +107,14 @@ export interface BuffTargetDef {
   value: string
   label: string
 }
+
+/**
+ * Theme information received from the backend via `spindle.theme.getCurrent()`.
+ * Used to adapt the panel's colour tokens to the user's Lumiverse theme.
+ */
+export interface ThemeInfo {
+  mode: 'light' | 'dark'
+  accent: { h: number; s: number; l: number }
+  fontScale: number
+  radiusScale: number
+}

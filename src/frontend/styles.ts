@@ -62,6 +62,26 @@ export const bioTrackerStylesheet = `
       --bt-coin-copper: #cd7f32;
     }
 
+    /* ── Light-mode token overrides ───────────────────────────── */
+    /* Applied when the host theme mode is "light".  Only surface,
+       border, and text tokens are flipped; semantic, zone, vital,
+       and coin colours remain identical in both modes. */
+    #bio-tracker-panel.bt-light, #bt-floating-btn.bt-light, #bt-preview-modal.bt-light {
+      --bt-bg: #f0f0f0;
+      --bt-surface: #ffffff;
+      --bt-surface-2: #e8e8e8;
+      --bt-surface-3: #d0d0d0;
+      --bt-input-bg: #ffffff;
+      --bt-border: #ccc;
+      --bt-border-dashed: #bbb;
+      --bt-border-strong: #999;
+      --bt-text: #1a1a1a;
+      --bt-text-bright: #000000;
+      --bt-text-dim: #555;
+      --bt-text-dim2: #777;
+      --bt-text-dim3: #999;
+    }
+
     /* ── Panel container ──────────────────────────────────────── */
     #bio-tracker-panel {
       position: fixed; top: 0; right: -400px; width: 350px; max-width: 100vw;

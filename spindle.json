@@ -10,7 +10,8 @@
     "interceptor",
     "chat_mutation",
     "ui_panels",
-    "generation"
+    "generation",
+    "app_manipulation"
   ],
   "entry_backend": "dist/backend.js",
   "entry_frontend": "dist/frontend.js",

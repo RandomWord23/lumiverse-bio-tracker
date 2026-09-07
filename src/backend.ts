@@ -89,6 +89,22 @@ spindle.onFrontendMessage(async (msg: any) => {
     spindle.sendToFrontend({ type: 'LATEST_SHEET', xml: sheet })
   }
 
+  if (msg.type === 'GET_THEME') {
+    try {
+      const theme = await spindle.theme.getCurrent()
+      spindle.sendToFrontend({
+        type: 'THEME_INFO',
+        mode: theme.mode,
+        accent: theme.accent,
+        fontScale: theme.fontScale,
+        radiusScale: theme.radiusScale,
+      })
+    } catch (e) {
+      spindle.log.error(`GET_THEME: failed to read theme: ${e}`)
+      spindle.sendToFrontend({ type: 'THEME_INFO', mode: 'dark', accent: { h: 0, s: 70, l: 60 }, fontScale: 1, radiusScale: 1 })
+    }
+  }
+
   if (msg.type === 'POPULATE_FIELDS' && msg.fields) {
     if (!activeChatId) {
       maybeToast('chatWarnings', 'warning', 'Open a chat first.')
