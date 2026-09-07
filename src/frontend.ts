@@ -82,10 +82,10 @@ export function setup(ctx: SpindleFrontendContext) {
           <input type="text" class="bt-input full bt-scrape" data-id="Name" placeholder="Character Name" id="bt-name">
           <div class="bt-row"><span>Species:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Species" id="bt-species"></div>
           <div class="bt-row"><span>Age:</span> <input type="text" class="bt-input bt-input-wide bt-scrape" data-id="Age" id="bt-age"></div>
-          <div class="bt-row">
+          <div class="bt-row" style="padding-right: 24px;">
             <span>Gender:</span>
             <div style="display:flex; align-items:center; width: 65%;">
-              <input type="text" class="bt-input bt-scrape" data-id="Gender" style="flex:1;" id="bt-gender">
+              <input type="text" class="bt-input bt-scrape" data-id="Gender" style="flex:1; text-align:left;" id="bt-gender">
               <span id="bt-gender-icon" style="width: 25px; text-align: right; font-size: 16px;"></span>
             </div>
           </div>
@@ -1096,7 +1096,13 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── Flag buttons on fields ────────────────────────────────
   function addFlagButtons() {
     // Fields that are auto-managed and should never get a pin button.
-    const skipFieldIds = new Set(['Health', 'Energy'])
+    const skipFieldIds = new Set([
+      'Health', 'Energy',
+      'StomachResistance',
+      'CapacityMultiplier', 'WombCapacityMultiplier', 'BallsCapacityMultiplier', 'LactationRateMultiplier',
+      'MilkVolume_ml',
+      'CurrentAcidPct', 'BaseDigestionRate', 'AcidRiseRate',
+    ])
     const fields = panel.querySelectorAll('.bt-scrape, .bt-cloth-slot')
     fields.forEach((field) => {
       const input = field as HTMLElement

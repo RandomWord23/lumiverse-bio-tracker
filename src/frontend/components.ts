@@ -83,7 +83,9 @@ export function createStomachItem(): HTMLElement {
           <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
         </div>
         <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
-        <span style="margin-left: 8px;">Struggle:</span>
+      </div>
+      <div class="flex-row v-prey-struggle" style="margin-bottom: 5px; font-size: 12px; display: none;">
+        <span>Struggle:</span>
         <span class="v-struggle-val" style="min-width:42px; text-align:right; color:#FF9800;" title="Indigestion % contributed by this prey per tick (extension-managed)">+0.00%</span>
       </div>
       <div class="flex-row" style="margin-bottom: 5px;">
@@ -99,12 +101,14 @@ export function createStomachItem(): HTMLElement {
   const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
   const statusSpan = div.querySelector('.item-status') as HTMLElement
   const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
+  const struggleRow = div.querySelector('.v-prey-struggle') as HTMLElement
 
   typeSelect.addEventListener('change', () => {
     if (typeSelect.value === 'Prey') {
       gearArea.style.display = 'block'
       appearanceArea.style.display = 'block'
       willingnessRow.style.display = 'flex'
+      if (struggleRow) struggleRow.style.display = 'flex'
       div.classList.remove('is-food', 'is-liquid')
       div.classList.add('is-prey')
       statusSpan.style.display = 'inline'
@@ -112,6 +116,7 @@ export function createStomachItem(): HTMLElement {
       gearArea.style.display = 'none'
       appearanceArea.style.display = 'none'
       willingnessRow.style.display = 'none'
+      if (struggleRow) struggleRow.style.display = 'none'
       div.classList.remove('is-prey', 'is-food')
       div.classList.add('is-liquid')
       statusSpan.style.display = 'none'
@@ -119,6 +124,7 @@ export function createStomachItem(): HTMLElement {
       gearArea.style.display = 'none'
       appearanceArea.style.display = 'none'
       willingnessRow.style.display = 'none'
+      if (struggleRow) struggleRow.style.display = 'none'
       div.classList.remove('is-prey', 'is-liquid')
       div.classList.add('is-food')
       statusSpan.style.display = 'none'
