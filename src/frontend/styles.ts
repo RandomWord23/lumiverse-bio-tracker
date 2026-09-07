@@ -90,7 +90,7 @@ export const bioTrackerStylesheet = `
     /* ── Tabs ─────────────────────────────────────────────────── */
     .bt-tabs { display: flex; background: var(--bt-input-bg); border-bottom: 1px solid var(--bt-border); }
     .bt-tab-btn {
-      flex: 0 1 auto; min-width: 0; padding: 12px 8px; background: transparent;
+      flex: 1 1 0; min-width: 0; padding: 12px 8px; background: transparent;
       color: var(--bt-text-dim2); border: none; font-weight: bold; cursor: pointer;
       text-align: center; font-size: var(--bt-font-sm); white-space: nowrap;
       overflow: hidden; text-overflow: ellipsis;
@@ -457,7 +457,8 @@ export const bioTrackerStylesheet = `
     @media (max-width: 480px) {
       #bio-tracker-panel { width: 100vw; }
       .bt-header { padding: 12px 15px; font-size: 16px; }
-      .bt-tab-btn { padding: 10px 6px; font-size: 11px; }
+      .bt-tab-btn { padding: 10px 6px; font-size: var(--bt-font-xs); }
+      .bt-tab-btn[data-tab="tab-dice"], .bt-tab-btn[data-tab="tab-settings"] { padding: 10px 8px; }
       .bt-content { padding: 10px; }
       .bt-action-btn { padding: 14px; }
       .bt-switch { width: 44px; height: 24px; }
