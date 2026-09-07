@@ -32,6 +32,8 @@ import {
   processClothingStress,
   digestItemsInContent,
   transitItemsInContent,
+  absorbItemsInContent,
+  convertItemsInContent,
   clockDelta,
   buildSheetPrompt,
   parseDiceConfig,
@@ -162,6 +164,7 @@ export async function runDigestionTick(
     // sums them additively per stat key, and clamps to ±50%.
     const modifiers = collectModifiers(oldXml)
     let totalDigestedVol = 0
+    let wombAbsorbedVol = 0
     let wasteCount = 0
     let totalItemCount = 0
     let acidLevel = 0
@@ -386,6 +389,143 @@ export async function runDigestionTick(
       },
     )
 
+    // ── WOMB ABSORPTION ──
+    if (engineToggles.unbirthEngine) {
+      const wombMatch = updatedXml.match(/<Womb[^>]*>([\s\S]*?)<\/Womb>/i)
+      let wombContent = wombMatch ? wombMatch[1].trim() : ''
+
+      if (wombContent) {
+        const baseAbsorptionRate = baseDigRate * 0.5 // half digestion speed
+
+        // Build oldAbsorptionMap from old womb prey
+        const oldAbsorptionMap = new Map<string, number>()
+        const oldWombMatch = oldXml.match(/<Womb[^>]*>([\s\S]*?)<\/Womb>/i)
+        if (oldWombMatch) {
+          const oldWombRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+          let m: RegExpExecArray | null
+          while ((m = oldWombRegex.exec(oldWombMatch[1])) !== null) {
+            const a = m[1]
+            if ((getAttrFromString(a, 'type') || 'Food') === 'Prey') {
+              const n = getAttrFromString(a, 'name')
+              if (n) {
+                const absStr = getAttrFromString(a, 'absorption')
+                oldAbsorptionMap.set(n, absStr ? parseFloat(absStr.replace('%', '')) || 0 : 0)
+              }
+            }
+          }
+        }
+
+        // Build oldStaminaMap from old womb prey
+        const oldWombStaminaMap = new Map<string, number>()
+        if (oldWombMatch) {
+          const oldStamRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+          let m2: RegExpExecArray | null
+          while ((m2 = oldStamRegex.exec(oldWombMatch[1])) !== null) {
+            if ((getAttrFromString(m2[1], 'type') || 'Food') === 'Prey') {
+              const n = getAttrFromString(m2[1], 'name')
+              if (n) oldWombStaminaMap.set(n, parseFloat(getAttrFromString(m2[1], 'stamina') || '100') || 100)
+            }
+          }
+        }
+
+        const wombResult = absorbItemsInContent(wombContent, {
+          baseAbsorptionRate,
+          currentClock: newClock,
+          oldClock,
+          oldAbsorptionMap,
+          oldTimeAddedMap,
+          oldStaminaMap: oldWombStaminaMap,
+        })
+        wombContent = wombResult.content
+
+        // Queue absorbed prey for nutrient absorption (same as stomach)
+        if (wombResult.absorbedPrey.length > 0) {
+          for (const prey of wombResult.absorbedPrey) {
+            wombAbsorbedVol += prey.volume
+          }
+          maybeToast('digestionTicks', 'success', `🌸 ${wombResult.absorbedPrey.length} prey fully absorbed in the womb.`)
+          spindle.log.info(`[runDigestionTick] WOMB: ${wombResult.absorbedPrey.length} prey absorbed, +${wombAbsorbedVol}L to nutrient pool`)
+        }
+
+        wombContent = wombContent.replace(/^\s*\n/gm, '').trim()
+        updatedXml = updatedXml.replace(
+          /<Womb([^>]*)>[\s\S]*?<\/Womb>/i,
+          (match, attrs) => `<Womb${attrs}>\n${wombContent}\n    </Womb>`,
+        )
+      }
+    } // end unbirthEngine
+
+    // ── BALLS CONVERSION ──
+    if (engineToggles.cockVoreEngine) {
+      const ballsMatch = updatedXml.match(/<Balls[^>]*>([\s\S]*?)<\/Balls>/i)
+      let ballsContent = ballsMatch ? ballsMatch[1].trim() : ''
+
+      if (ballsContent) {
+        const baseConversionRate = baseDigRate // same base as digestion, arousal modifies
+        const currentArousal = getStat(updatedXml, 'Arousal') || 0
+
+        // Build oldConversionMap from old balls prey
+        const oldConversionMap = new Map<string, number>()
+        const oldBallsMatch = oldXml.match(/<Balls[^>]*>([\s\S]*?)<\/Balls>/i)
+        if (oldBallsMatch) {
+          const oldBallsRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+          let m: RegExpExecArray | null
+          while ((m = oldBallsRegex.exec(oldBallsMatch[1])) !== null) {
+            const a = m[1]
+            if ((getAttrFromString(a, 'type') || 'Food') === 'Prey') {
+              const n = getAttrFromString(a, 'name')
+              if (n) {
+                const convStr = getAttrFromString(a, 'conversion')
+                oldConversionMap.set(n, convStr ? parseFloat(convStr.replace('%', '')) || 0 : 0)
+              }
+            }
+          }
+        }
+
+        // Build oldStaminaMap from old balls prey
+        const oldBallsStaminaMap = new Map<string, number>()
+        if (oldBallsMatch) {
+          const oldStamRegex = /<Item\s+([^>]+?)[\s/]*>/gi
+          let m2: RegExpExecArray | null
+          while ((m2 = oldStamRegex.exec(oldBallsMatch[1])) !== null) {
+            if ((getAttrFromString(m2[1], 'type') || 'Food') === 'Prey') {
+              const n = getAttrFromString(m2[1], 'name')
+              if (n) oldBallsStaminaMap.set(n, parseFloat(getAttrFromString(m2[1], 'stamina') || '100') || 100)
+            }
+          }
+        }
+
+        const ballsResult = convertItemsInContent(ballsContent, {
+          baseConversionRate,
+          arousal: currentArousal,
+          currentClock: newClock,
+          oldClock,
+          oldConversionMap,
+          oldTimeAddedMap,
+          oldStaminaMap: oldBallsStaminaMap,
+        })
+        ballsContent = ballsResult.content
+
+        // Add converted prey volume to CumVolume_ml
+        if (ballsResult.convertedPrey.length > 0) {
+          let convertedVol = 0
+          for (const prey of ballsResult.convertedPrey) {
+            convertedVol += prey.volume * 1000 // L → ml
+          }
+          const oldCumVol = getStat(updatedXml, 'CumVolume_ml') || 0
+          updatedXml = setStat(updatedXml, 'CumVolume_ml', oldCumVol + convertedVol)
+          maybeToast('digestionTicks', 'info', `💧 ${ballsResult.convertedPrey.length} prey converted in the balls.`)
+          spindle.log.info(`[runDigestionTick] BALLS: ${ballsResult.convertedPrey.length} prey converted, +${convertedVol}ml cum`)
+        }
+
+        ballsContent = ballsContent.replace(/^\s*\n/gm, '').trim()
+        updatedXml = updatedXml.replace(
+          /<Balls([^>]*)>[\s\S]*?<\/Balls>/i,
+          (match, attrs) => `<Balls${attrs}>\n${ballsContent}\n    </Balls>`,
+        )
+      }
+    } // end cockVoreEngine
+
     } // end digestionEngine
 
     // Normalize Backpack items: strip digestion/type/volume_L attributes that
@@ -431,6 +571,19 @@ export async function runDigestionTick(
       const oldArousal = getStat(oldXml, 'Arousal') || 0
       let newArousal = getStat(updatedXml, 'Arousal') || 0
 
+      // Arousal feedback: prey in balls raise arousal
+      if (engineToggles.cockVoreEngine) {
+        const ballsMatch = updatedXml.match(/<Balls[^>]*>([\s\S]*?)<\/Balls>/i)
+        if (ballsMatch) {
+          const ballsPreyCount = (ballsMatch[1].match(/<Item\s+[^>]*type="Prey"[^>]*>/gi) || []).length
+          if (ballsPreyCount > 0) {
+            const arousalBoost = 3 * ballsPreyCount // +3 per prey per turn
+            newArousal = Math.min(100, newArousal + arousalBoost)
+            spindle.log.info(`[runDigestionTick] Arousal feedback: +${arousalBoost} from ${ballsPreyCount} balls prey`)
+          }
+        }
+      }
+
       // Apply hourly decay to the old value (modifiers can modify decay rate)
       const arousalDecayRate = 50 * (1 + (modifiers.ArousalDecay || 0))
       const decayedArousal = Math.max(0, oldArousal - arousalDecayRate * elapsed)
@@ -461,6 +614,17 @@ export async function runDigestionTick(
         if (finalClimax >= 100) {
           finalClimax = 100
           await spindle.variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
+
+          // Expel cum on climax
+          if (engineToggles.cockVoreEngine) {
+            const cumVol = getStat(updatedXml, 'CumVolume_ml') || 0
+            if (cumVol > 0) {
+              maybeToast('climaxEvents', 'success', `💦 Climax expelled ${cumVol.toFixed(0)} ml of cum!`)
+              spindle.log.info(`[runDigestionTick] Climax expelled ${cumVol}ml cum`)
+              updatedXml = setStat(updatedXml, 'CumVolume_ml', 0)
+            }
+          }
+
           maybeToast('climaxEvents', 'success', '🔥 Climax reached! Resetting next turn.')
           spindle.log.info('Climax event triggered.')
         }
@@ -481,6 +645,12 @@ export async function runDigestionTick(
         updatedXml = setStat(updatedXml, 'CurrentPenisGirth_cm', curG)
       }
     } // end arousalClimax
+
+    // Womb absorption — same nutrient absorption as stomach
+    if (engineToggles.unbirthEngine && wombAbsorbedVol > 0) {
+      totalDigestedVol += wombAbsorbedVol
+      maybeToast('digestionTicks', 'success', `🌸 Womb absorbed ${wombAbsorbedVol.toFixed(1)}L — added to nutrient absorption.`)
+    }
 
     if (engineToggles.nutrientAbsorption && totalDigestedVol > 0) {
       const nutrientMult = 1 + (modifiers.NutrientAbsorption || 0)

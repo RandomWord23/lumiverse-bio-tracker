@@ -129,6 +129,152 @@ export function createStomachItem(): HTMLElement {
 }
 
 /**
+ * Create a womb prey/food slot — same structure as createStomachItem
+ * but with "Absorption %" label, is-womb CSS class, and womb-vol volume class.
+ * No struggle display (womb has no struggle).
+ */
+export function createWombItem(): HTMLElement {
+  const div = document.createElement('div')
+  div.className = 'vital-slot is-womb'
+  div.innerHTML = `
+      <button class="vital-remove" data-action="remove-womb">✖</button>
+      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
+        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Item Name...">
+        <select class="bt-select v-type" style="width: 80px; margin-left: 5px;">
+          <option value="Liquid">Liquid</option>
+          <option value="Food" selected>Food</option>
+          <option value="Prey">Prey</option>
+        </select>
+      </div>
+      <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
+        <span>Status: <strong class="item-status" style="color:#4CAF50;">Fully Conscious</strong></span>
+      </div>
+      <div class="flex-row v-prey-willingness" style="margin-bottom: 5px; font-size: 12px; display: none;">
+        <span>Willingness:</span>
+        <select class="bt-select v-willingness" style="width: 90px; margin-left: 5px;">
+          <option value="willing">Willing</option>
+          <option value="reluctant" selected>Reluctant</option>
+          <option value="fighting">Fighting</option>
+        </select>
+        <span style="margin-left: 8px;">Stamina:</span>
+        <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden; margin-left:4px; max-width:80px;">
+          <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
+        </div>
+        <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
+      </div>
+      <div class="flex-row" style="margin-bottom: 5px;">
+        <span>Vol (L): <input type="number" class="bt-input womb-vol v-vol" style="width: 50px;" value="0"></span>
+        <span>Abs %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
+      </div>
+      <textarea class="bt-textarea v-appearance" rows="2" style="margin-bottom: 5px; display: none;" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
+      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Current action/state (e.g. thrashing, absorbing)..."></textarea>
+      <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0; display: none;" placeholder="Bound Gear / Items..."></textarea>
+    `
+  const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
+  const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
+  const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
+  const statusSpan = div.querySelector('.item-status') as HTMLElement
+  const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
+
+  typeSelect.addEventListener('change', () => {
+    if (typeSelect.value === 'Prey') {
+      gearArea.style.display = 'block'
+      appearanceArea.style.display = 'block'
+      willingnessRow.style.display = 'flex'
+      div.classList.add('is-prey')
+      statusSpan.style.display = 'inline'
+    } else if (typeSelect.value === 'Liquid') {
+      gearArea.style.display = 'none'
+      appearanceArea.style.display = 'none'
+      willingnessRow.style.display = 'none'
+      div.classList.remove('is-prey')
+      statusSpan.style.display = 'none'
+    } else {
+      gearArea.style.display = 'none'
+      appearanceArea.style.display = 'none'
+      willingnessRow.style.display = 'none'
+      div.classList.remove('is-prey')
+      statusSpan.style.display = 'none'
+    }
+  })
+
+  return div
+}
+
+/**
+ * Create a balls prey/food slot — same structure as createStomachItem
+ * but with "Conversion %" label, is-balls CSS class, and balls-vol volume class.
+ * No struggle display (balls have no struggle).
+ */
+export function createBallsItem(): HTMLElement {
+  const div = document.createElement('div')
+  div.className = 'vital-slot is-balls'
+  div.innerHTML = `
+      <button class="vital-remove" data-action="remove-balls">✖</button>
+      <div class="flex-row" style="margin-bottom: 5px; margin-right: 15px;">
+        <input type="text" class="bt-input v-name" style="flex:1; text-align:left;" placeholder="Item Name...">
+        <select class="bt-select v-type" style="width: 80px; margin-left: 5px;">
+          <option value="Liquid">Liquid</option>
+          <option value="Food" selected>Food</option>
+          <option value="Prey">Prey</option>
+        </select>
+      </div>
+      <div class="flex-row" style="margin-bottom: 5px; font-size: 12px;">
+        <span>Status: <strong class="item-status" style="color:#4CAF50;">Fully Conscious</strong></span>
+      </div>
+      <div class="flex-row v-prey-willingness" style="margin-bottom: 5px; font-size: 12px; display: none;">
+        <span>Willingness:</span>
+        <select class="bt-select v-willingness" style="width: 90px; margin-left: 5px;">
+          <option value="willing">Willing</option>
+          <option value="reluctant" selected>Reluctant</option>
+          <option value="fighting">Fighting</option>
+        </select>
+        <span style="margin-left: 8px;">Stamina:</span>
+        <div style="flex:1; height:10px; background:#1a1a1a; border:1px solid #333; border-radius:5px; overflow:hidden; margin-left:4px; max-width:80px;">
+          <div class="v-stamina-bar" style="height:100%; width:100%; background:#4CAF50; transition:width 0.3s;"></div>
+        </div>
+        <span class="v-stamina-val" style="min-width:28px; text-align:right; color:#aaa;">100%</span>
+      </div>
+      <div class="flex-row" style="margin-bottom: 5px;">
+        <span>Vol (L): <input type="number" class="bt-input balls-vol v-vol" style="width: 50px;" value="0"></span>
+        <span>Conv %: <input type="number" class="bt-input item-dig-input v-dig" style="width: 40px;" value="0"></span>
+      </div>
+      <textarea class="bt-textarea v-appearance" rows="2" style="margin-bottom: 5px; display: none;" placeholder="Appearance (age, species, build, hair, eyes)..."></textarea>
+      <textarea class="bt-textarea v-flavor" rows="2" style="margin-bottom: 5px;" placeholder="Current action/state (e.g. thrashing, converting)..."></textarea>
+      <textarea class="bt-textarea v-gear" rows="2" style="margin-bottom: 0; display: none;" placeholder="Bound Gear / Items..."></textarea>
+    `
+  const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
+  const gearArea = div.querySelector('.v-gear') as HTMLTextAreaElement
+  const appearanceArea = div.querySelector('.v-appearance') as HTMLTextAreaElement
+  const statusSpan = div.querySelector('.item-status') as HTMLElement
+  const willingnessRow = div.querySelector('.v-prey-willingness') as HTMLElement
+
+  typeSelect.addEventListener('change', () => {
+    if (typeSelect.value === 'Prey') {
+      gearArea.style.display = 'block'
+      appearanceArea.style.display = 'block'
+      willingnessRow.style.display = 'flex'
+      div.classList.add('is-prey')
+      statusSpan.style.display = 'inline'
+    } else if (typeSelect.value === 'Liquid') {
+      gearArea.style.display = 'none'
+      appearanceArea.style.display = 'none'
+      willingnessRow.style.display = 'none'
+      div.classList.remove('is-prey')
+      statusSpan.style.display = 'none'
+    } else {
+      gearArea.style.display = 'none'
+      appearanceArea.style.display = 'none'
+      willingnessRow.style.display = 'none'
+      div.classList.remove('is-prey')
+      statusSpan.style.display = 'none'
+    }
+  })
+
+  return div
+}
+
+/**
  * Create a bowel remains slot (waste / digested output).
  */
 export function createRemainsItem(): HTMLElement {

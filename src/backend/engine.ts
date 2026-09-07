@@ -17,6 +17,8 @@ import type {
   RolledDie,
   RolledSection,
   ActionRoll,
+  AbsorptionResult,
+  ConversionResult,
 } from './types'
 
 /** Compute elapsed hours between two story-clock timestamps (0-24 range),
@@ -730,6 +732,186 @@ export function transitItemsInContent(
   return { content, transferredToStomach, transitCount }
 }
 
+// ---------------------------------------------------------------------------
+// Womb Absorption System — mirrors digestItemsInContent but uses absorption%
+// and a gentler base rate (half stomach speed). Absorbed prey are removed and
+// their volume is added to the nutrient pool (same as stomach digestion).
+// ---------------------------------------------------------------------------
+
+export function absorbItemsInContent(
+  content: string,
+  ctx: {
+    baseAbsorptionRate: number
+    currentClock: number
+    oldClock: number
+    oldAbsorptionMap: Map<string, number>
+    oldTimeAddedMap: Map<string, number>
+    oldStaminaMap: Map<string, number>
+  },
+): AbsorptionResult {
+  const absorbedPrey: { name: string; volume: number }[] = []
+  let absorptionCount = 0
+
+  const absorbItem = (attrs: string, inner: string | null, isSelfClosing: boolean): string => {
+    const type = getAttrFromString(attrs, 'type') || 'Food'
+    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs} />` : `<Item ${attrs}>${inner}</Item>`
+
+    const name = getAttrFromString(attrs, 'name')
+    const vol = parseFloat(getAttrFromString(attrs, 'volume_L') || '0') || 0
+    absorptionCount++
+
+    let speedMult = 1
+    const willingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+    if (willingness === 'willing') speedMult *= 1.25
+    else if (willingness === 'fighting') speedMult *= 0.5
+
+    // Absolute absorption — same timestamp model as digestion
+    let timeAdded = ctx.oldTimeAddedMap.get(name) ?? NaN
+    let oldAbsorptionNum = ctx.oldAbsorptionMap.get(name) ?? 0
+
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      timeAdded = clockToDecimal(getAttrFromString(attrs, 'timeAdded'))
+    }
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      if (oldAbsorptionNum > 0) {
+        timeAdded = ctx.currentClock - oldAbsorptionNum / (ctx.baseAbsorptionRate * speedMult)
+        if (timeAdded < 0) timeAdded += 24
+      } else if (ctx.oldAbsorptionMap.has(name)) {
+        timeAdded = ctx.oldClock
+      } else {
+        timeAdded = ctx.currentClock
+      }
+    }
+
+    const elapsed = clockDelta(ctx.currentClock, timeAdded)
+    let absorptionNum = Math.min(100, ctx.baseAbsorptionRate * speedMult * elapsed)
+    absorptionNum = Math.max(absorptionNum, oldAbsorptionNum)
+
+    if (absorptionNum >= 100) {
+      // Fully absorbed — removed from womb, volume added to nutrient pool
+      absorbedPrey.push({ name, volume: vol })
+      return ''
+    }
+
+    // Stamina regression: -5%/hour (gentler than stomach's -8%)
+    const oldStamina = ctx.oldStaminaMap.get(name) ?? (parseFloat(getAttrFromString(attrs, 'stamina') || '100') || 100)
+    const newStamina = Math.max(0, Math.min(100, oldStamina - 5 * elapsed))
+
+    const preyAttrs = ` willingness="${willingness === 'willing' || willingness === 'fighting' ? willingness : 'reluctant'}" stamina="${Math.round(newStamina)}"`
+    const tsAttr = ` timeAdded="${decimalToClock(timeAdded)}"`
+    const absorptionAttr = ` absorption="${absorptionNum.toFixed(2)}%"`
+    if (isSelfClosing) {
+      return `<Item type="Prey" name="${name}" volume_L="${vol}"${absorptionAttr}${tsAttr}${preyAttrs} />`
+    }
+    return `<Item type="Prey" name="${name}" volume_L="${vol}"${absorptionAttr}${tsAttr}${preyAttrs}>${inner}</Item>`
+  }
+
+  content = content.replace(
+    /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi,
+    (match, attrs, inner) => absorbItem(attrs, inner, false),
+  )
+  content = content.replace(
+    /<Item\s+([^>]+?)\s*\/>/gi,
+    (match, attrs) => absorbItem(attrs, null, true),
+  )
+
+  return { content, absorbedPrey, absorptionCount }
+}
+
+// ---------------------------------------------------------------------------
+// Balls Conversion System — prey in the balls are converted into cum.
+// Conversion rate is arousal-dependent (0.3× to 1.0×) and size-dependent
+// (larger prey convert slower). At 100% the prey is removed and their
+// volume is added to CumVolume_ml.
+// ---------------------------------------------------------------------------
+
+export function convertItemsInContent(
+  content: string,
+  ctx: {
+    baseConversionRate: number
+    arousal: number
+    currentClock: number
+    oldClock: number
+    oldConversionMap: Map<string, number>
+    oldTimeAddedMap: Map<string, number>
+    oldStaminaMap: Map<string, number>
+  },
+): ConversionResult {
+  const convertedPrey: { name: string; volume: number }[] = []
+  let conversionCount = 0
+
+  // Arousal factor: 0.3 at 0% arousal → 1.0 at 100% arousal
+  const arousalFactor = 0.3 + 0.7 * (ctx.arousal / 100)
+
+  const convertItem = (attrs: string, inner: string | null, isSelfClosing: boolean): string => {
+    const type = getAttrFromString(attrs, 'type') || 'Food'
+    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs} />` : `<Item ${attrs}>${inner}</Item>`
+
+    const name = getAttrFromString(attrs, 'name')
+    const vol = parseFloat(getAttrFromString(attrs, 'volume_L') || '0') || 0
+    conversionCount++
+
+    let speedMult = arousalFactor
+    const willingness = (getAttrFromString(attrs, 'willingness') || 'reluctant').toLowerCase()
+    if (willingness === 'willing') speedMult *= 1.25
+    else if (willingness === 'fighting') speedMult *= 0.5
+
+    // Size-dependent speed: larger prey convert slower
+    speedMult *= Math.min(1, 50 / Math.max(1, vol))
+
+    // Absolute conversion — same timestamp model
+    let timeAdded = ctx.oldTimeAddedMap.get(name) ?? NaN
+    let oldConversionNum = ctx.oldConversionMap.get(name) ?? 0
+
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      timeAdded = clockToDecimal(getAttrFromString(attrs, 'timeAdded'))
+    }
+    if (isNaN(timeAdded) || timeAdded <= 0) {
+      if (oldConversionNum > 0) {
+        timeAdded = ctx.currentClock - oldConversionNum / (ctx.baseConversionRate * speedMult)
+        if (timeAdded < 0) timeAdded += 24
+      } else if (ctx.oldConversionMap.has(name)) {
+        timeAdded = ctx.oldClock
+      } else {
+        timeAdded = ctx.currentClock
+      }
+    }
+
+    const elapsed = clockDelta(ctx.currentClock, timeAdded)
+    let conversionNum = Math.min(100, ctx.baseConversionRate * speedMult * elapsed)
+    conversionNum = Math.max(conversionNum, oldConversionNum)
+
+    if (conversionNum >= 100) {
+      // Fully converted — removed from balls, volume added to cum
+      convertedPrey.push({ name, volume: vol })
+      return ''
+    }
+
+    // Stamina drain: -10%/hour (churning is aggressive)
+    const oldStamina = ctx.oldStaminaMap.get(name) ?? (parseFloat(getAttrFromString(attrs, 'stamina') || '100') || 100)
+    const newStamina = Math.max(0, Math.min(100, oldStamina - 10 * elapsed))
+
+    const preyAttrs = ` willingness="${willingness === 'willing' || willingness === 'fighting' ? willingness : 'reluctant'}" stamina="${Math.round(newStamina)}"`
+    const tsAttr = ` timeAdded="${decimalToClock(timeAdded)}"`
+    const conversionAttr = ` conversion="${conversionNum.toFixed(2)}%"`
+    if (isSelfClosing) {
+      return `<Item type="Prey" name="${name}" volume_L="${vol}"${conversionAttr}${tsAttr}${preyAttrs} />`
+    }
+    return `<Item type="Prey" name="${name}" volume_L="${vol}"${conversionAttr}${tsAttr}${preyAttrs}>${inner}</Item>`
+  }
+
+  content = content.replace(
+    /<Item\s+([^>]*[^>\/])\s*>([\s\S]*?)<\/Item>/gi,
+    (match, attrs, inner) => convertItem(attrs, inner, false),
+  )
+  content = content.replace(
+    /<Item\s+([^>]+?)\s*\/>/gi,
+    (match, attrs) => convertItem(attrs, null, true),
+  )
+
+  return { content, convertedPrey, conversionCount }
+}
+
 export function buildSheetPrompt(sheetXml: string): string {
   return `[CHARACTER SHEET SYSTEM
 
@@ -761,7 +943,7 @@ CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is in
    FORMAT RULE: <Time> must contain ONLY a 24-hour clock value in "HH:MM" form (e.g. "10:23", "14:30"). Do NOT prefix it with a day, date, or any other text — "Day 1, 10:23" is INVALID and breaks the simulation. Correct: <Time>10:23</Time>. Incorrect: <Time>Day 1, 10:23</Time>.
    MANDATORY RULE: You MUST ALWAYS include a <Time> tag in every <sheet_update>. NEVER omit it, even if you think time didn't change — copy the previous value verbatim. If <Time> is missing from the sheet, the extension cannot calculate digestion and the simulation stalls completely.
 2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
-3. Add <Item> entries to <Stomach> or <Bowels> when the character eats or is eaten. Remove them only if the item was regurgitated or otherwise exits the body.
+3. Add <Item> entries to <Stomach>, <Bowels>, <Womb> (unbirth), or <Balls> (cock vore) when the character eats or is eaten. Remove them only if the item was regurgitated, birthed out, or otherwise exits the body.
 4. Update <Arousal> based on what happens in the scene (intimacy raises it, time passes lowers it — the extension halves it each hour).
 5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
 6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
@@ -950,6 +1132,8 @@ VALID BUFF TARGETS:
 - NutrientAbsorption: Body growth from digestion (+ = more growth, - = less growth)
 - ClothingStress: Clothing stress accumulation (+ = more stress, - = less stress)
 - EnergyDrain: Energy drain from struggle/suppression (+ = more drain, - = less drain)
+- WombAbsorptionRate: Womb absorption speed (+ = faster, - = slower)
+- BallsConversionRate: Balls conversion speed (+ = faster, - = slower)
 
 RULES:
 1. The 'buffs' attribute is OPTIONAL. Omit it if the skill/trait has no buffs.
@@ -969,6 +1153,31 @@ Rules for bowels prey:
 - The struggle/indigestion system does NOT affect prey while they are in the Bowels — only once they reach the Stomach. Prey in the Bowels are traveling, not struggling.
 - Transit is FASTER than digestion (double speed). Willing prey transit even faster; fighting prey transit slower — same willingness modifiers as digestion.
 - Each prey transits INDEPENDENTLY based on its own timeAdded. Do NOT move a prey to <Stomach> yourself — the extension handles the transfer when transit reaches 100%.
+
+─── WOMB ABSORPTION SYSTEM ───
+Prey placed into the Womb (unbirth) do NOT digest. Instead they are slowly ABSORBED — a gentle assimilation process represented by the absorption="X%" attribute. When absorption reaches 100%, the extension AUTOMATICALLY removes the prey and converts their mass into body growth — the exact same nutrient absorption as stomach digestion (same stats, same rates). The extension handles the removal and growth — you just narrate it.
+
+Rules for womb prey:
+- Womb prey use absorption="X%" NOT digestion="X%". The extension computes absorption automatically from timeAdded — copy it exactly, just like digestion.
+- Only type="Prey" items absorb. Food/Liquid in the Womb are inert.
+- Absorption is SLOW (half the speed of stomach digestion). Willing prey absorb faster; fighting prey absorb slower.
+- Prey stamina slowly drains while in the womb (the unmaking process). The extension handles this automatically.
+- The struggle/indigestion system does NOT affect prey in the Womb.
+- When absorption reaches 100%, the prey vanishes from <Womb> in the next sheet. Narrate the prey being fully absorbed into the predator's body.
+- The LLM may choose to "birth" a prey out before 100% absorption — simply remove the item from <Womb> and narrate the rebirth. The prey exits with reduced stamina.
+
+─── BALLS CONVERSION SYSTEM ───
+Prey placed into the Balls (cock vore) do NOT digest. Instead they are CONVERTED into cum — a churning process represented by the conversion="X%" attribute. When conversion reaches 100%, the extension AUTOMATICALLY removes the prey and adds their volume to CumVolume_ml. When the predator climaxes, the accumulated cum is expelled.
+
+Rules for balls prey:
+- Balls prey use conversion="X%" NOT digestion="X%". The extension computes conversion automatically from timeAdded — copy it exactly.
+- Only type="Prey" items convert. Food/Liquid in the Balls are inert.
+- Conversion speed depends on AROUSAL — higher arousal means faster conversion. Having prey in the balls also raises arousal over time, creating a feedback loop.
+- Larger prey convert slower (more mass to process).
+- Prey stamina drains faster in the balls (aggressive churning). The extension handles this automatically.
+- The struggle/indigestion system does NOT affect prey in the Balls.
+- When conversion reaches 100%, the prey vanishes from <Balls> in the next sheet and their volume is added to CumVolume_ml. Narrate the prey being fully converted.
+- When the predator climaxes (orgasm), CumVolume_ml is expelled and reset to 0. Narrate the expulsion.
 
 <sheet_update>
 <CharacterSheet>

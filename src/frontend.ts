@@ -26,6 +26,8 @@ import {
 import {
   buildToggleRow,
   createStomachItem,
+  createWombItem,
+  createBallsItem,
   createRemainsItem,
   createBuffEntry,
   createSkillItem,
@@ -286,6 +288,25 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-bowel-fill">0.00 L</span></div>
         <div id="bowel-container" style="margin-top: 10px;"></div>
         <hr style="border-color: #333; margin: 15px 0;">
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>WOMB</span>
+          <button class="bt-add-btn" style="background: #4a2a3a; color: #d2b4c8; border-color:#8b4a6a;" id="add-womb-btn">+ Add Prey</button>
+        </div>
+        <div class="bt-row"><span>Womb Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="WombCapacityMultiplier" id="bt-womb-cap-mult" step="0.1" value="1.0"></div>
+        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-womb-max-disp">0.00 L</span></div>
+        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-womb-fill">0.00 L</span></div>
+        <div id="womb-container" style="margin-top: 10px;"></div>
+        <hr style="border-color: #333; margin: 15px 0;">
+        <div class="bt-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>BALLS</span>
+          <button class="bt-add-btn" style="background: #2a3a4a; color: #b4c8d2; border-color:#4a6a8b;" id="add-balls-btn">+ Add Prey</button>
+        </div>
+        <div class="bt-row"><span>Balls Capacity Multiplier:</span> <input type="number" class="bt-input bt-scrape" data-id="BallsCapacityMultiplier" id="bt-balls-cap-mult" step="0.1" value="1.0"></div>
+        <div class="bt-row"><span>Max Capacity:</span> <span class="bt-value" id="bt-balls-max-disp">0.00 L</span></div>
+        <div class="bt-row"><span>Current Fill:</span> <span class="bt-value" id="bt-balls-fill">0.00 L</span></div>
+        <div class="bt-row"><span>Cum Volume:</span> <span class="bt-value" id="bt-cum-vol">0 ml</span></div>
+        <div id="balls-container" style="margin-top: 10px;"></div>
+        <hr style="border-color: #333; margin: 15px 0;">
         <button class="bt-action-btn" id="bt-sync-btn">💾 Sync Changes to AI</button>
         <button class="bt-action-btn" id="bt-sync-chat-btn" style="background: #2a2a2a; border-color: #555;">🔄 Sync from Latest Message</button>
         <button class="bt-action-btn" id="bt-populate-btn" style="background: #2a2a2a; border-color: #555;">✨ Populate Flagged Fields</button>
@@ -364,6 +385,8 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'buffSystem', label: 'Buff System', desc: 'Apply skill/trait percentage buffs to stats' },
     { key: 'attributeSystem', label: 'Attribute System', desc: 'Apply STR/DEX/CON/INT/WIS/CHA modifiers to engine stats' },
     { key: 'diceSystem', label: 'Dice System', desc: 'Pre-roll dice pools for action resolution' },
+    { key: 'unbirthEngine', label: 'Unbirth Engine', desc: 'Womb absorption of prey (same nutrient absorption as stomach)' },
+    { key: 'cockVoreEngine', label: 'Cock Vore Engine', desc: 'Balls conversion of prey into cum, expelled on climax' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -374,6 +397,8 @@ export function setup(ctx: SpindleFrontendContext) {
     { value: 'NutrientAbsorption', label: 'Nutrient Absorption' },
     { value: 'ClothingStress', label: 'Clothing Stress' },
     { value: 'EnergyDrain', label: 'Energy Drain' },
+    { value: 'WombAbsorptionRate', label: 'Womb Absorption Rate' },
+    { value: 'BallsConversionRate', label: 'Balls Conversion Rate' },
   ]
   function applyUiSettings(ui: UiSettings) {
     const pe = document.getElementById('bio-tracker-panel') as HTMLElement
@@ -594,6 +619,36 @@ export function setup(ctx: SpindleFrontendContext) {
     const bowelFillEl = document.getElementById('bt-bowel-fill')
     if (bowelFillEl) bowelFillEl.innerText = bowelTotal.toFixed(2) + ' L'
 
+    // ─── Womb capacity ──────────────────────────────────────────
+    const wombMultEl = document.getElementById('bt-womb-cap-mult') as HTMLInputElement
+    const wombMult = parseFloat(wombMultEl?.value || '1.0') || 1.0
+    const wombMax = height * weight * 0.012 * wombMult * 0.7
+    const wombMaxDisp = document.getElementById('bt-womb-max-disp')
+    if (wombMaxDisp) wombMaxDisp.innerText = wombMax.toFixed(2) + ' L'
+
+    let wombTotal = 0
+    document.querySelectorAll('.womb-vol').forEach((el) => {
+      wombTotal += parseFloat((el as HTMLInputElement).value) || 0
+    })
+    const wombFillEl = document.getElementById('bt-womb-fill')
+    if (wombFillEl) wombFillEl.innerText = wombTotal.toFixed(2) + ' L'
+
+    // ─── Balls capacity ─────────────────────────────────────────
+    const ballsMultEl = document.getElementById('bt-balls-cap-mult') as HTMLInputElement
+    const ballsMult = parseFloat(ballsMultEl?.value || '1.0') || 1.0
+    const penisL = parseFloat((document.getElementById('bt-penis-len') as HTMLInputElement)?.value || '0') || 0
+    const penisG = parseFloat((document.getElementById('bt-penis-girth') as HTMLInputElement)?.value || '0') || 0
+    const ballsMax = penisL * penisG * 0.05 * ballsMult
+    const ballsMaxDisp = document.getElementById('bt-balls-max-disp')
+    if (ballsMaxDisp) ballsMaxDisp.innerText = ballsMax.toFixed(2) + ' L'
+
+    let ballsTotal = 0
+    document.querySelectorAll('.balls-vol').forEach((el) => {
+      ballsTotal += parseFloat((el as HTMLInputElement).value) || 0
+    })
+    const ballsFillEl = document.getElementById('bt-balls-fill')
+    if (ballsFillEl) ballsFillEl.innerText = ballsTotal.toFixed(2) + ' L'
+
     const stomPct = (stomTotal / baseStomMax) * 100
     const bellyEl = document.getElementById('bt-belly-status')
     if (bellyEl) {
@@ -673,6 +728,10 @@ export function setup(ctx: SpindleFrontendContext) {
   document.getElementById('bt-height')?.addEventListener('input', updateCapacities)
   document.getElementById('bt-weight')?.addEventListener('input', updateCapacities)
   document.getElementById('bt-cap-mult')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-womb-cap-mult')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-balls-cap-mult')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-penis-len')?.addEventListener('input', updateCapacities)
+  document.getElementById('bt-penis-girth')?.addEventListener('input', updateCapacities)
 
   // ─── Arousal & Climax Sliders (Native HTML) ────────────────
   const arousalSlot = document.getElementById('bt-arousal-slot')
@@ -779,7 +838,7 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── Input delegation for dynamic items ────────────────────
   panel.addEventListener('input', (e) => {
     const target = e.target as HTMLElement
-    if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol')) {
+    if (target.classList.contains('stomach-vol') || target.classList.contains('bowel-vol') || target.classList.contains('womb-vol') || target.classList.contains('balls-vol')) {
       updateCapacities()
     }
     if (target.classList.contains('item-dig-input')) {
@@ -816,7 +875,7 @@ export function setup(ctx: SpindleFrontendContext) {
     const action = target.getAttribute('data-action')
     if (!action) return
 
-    if (action === 'remove-stomach' || action === 'remove-remains') {
+    if (action === 'remove-stomach' || action === 'remove-remains' || action === 'remove-womb' || action === 'remove-balls') {
       target.closest('.vital-slot')?.remove()
       updateCapacities()
     } else if (action === 'remove-skill' || action === 'remove-trait') {
@@ -863,6 +922,12 @@ export function setup(ctx: SpindleFrontendContext) {
   })
   document.getElementById('add-remains-btn')?.addEventListener('click', () => {
     document.getElementById('bowel-container')?.appendChild(createRemainsItem())
+  })
+  document.getElementById('add-womb-btn')?.addEventListener('click', () => {
+    document.getElementById('womb-container')?.appendChild(createWombItem())
+  })
+  document.getElementById('add-balls-btn')?.addEventListener('click', () => {
+    document.getElementById('balls-container')?.appendChild(createBallsItem())
   })
   document.getElementById('add-skill-btn')?.addEventListener('click', () => {
     document.getElementById('skills-container')?.appendChild(createSkillItem())
@@ -1212,7 +1277,61 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     })
 
-    xml += `    </Bowels>\n  </DigestiveTract>\n`
+    // Womb
+    const wombFill = document.getElementById('bt-womb-fill')?.innerText || '0 L'
+    xml += `    <Womb current="${wombFill}">\n`
+    document.querySelectorAll('#womb-container .vital-slot').forEach((el) => {
+      const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown'
+      const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0'
+      const abs = (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() || '0'
+      const type = (el.querySelector('.v-type') as HTMLSelectElement)?.value || 'Food'
+      const flavor = (el.querySelector('.v-flavor') as HTMLTextAreaElement)?.value.trim()
+      const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim()
+      const appearance = (el.querySelector('.v-appearance') as HTMLTextAreaElement)?.value.trim()
+
+      let itemAttrs = `type="${type}" name="${name}" volume_L="${vol}" absorption="${abs}%"`
+      if (type === 'Prey') {
+        const willingness = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'reluctant'
+        const staminaText = (el.querySelector('.v-stamina-val') as HTMLElement)?.textContent || '100%'
+        const stamina = parseFloat(staminaText.replace('%', '')) || 100
+        itemAttrs += ` willingness="${willingness}" stamina="${stamina}"`
+      }
+      xml += `      <Item ${itemAttrs}>\n`
+      if (appearance) xml += `        <Appearance>${appearance}</Appearance>\n`
+      if (flavor) xml += `        <Description>${flavor}</Description>\n`
+      if (type === 'Prey' && gear) xml += `        <BoundGear>${gear}</BoundGear>\n`
+      xml += `      </Item>\n`
+    })
+    xml += `    </Womb>\n`
+
+    // Balls
+    const ballsFill = document.getElementById('bt-balls-fill')?.innerText || '0 L'
+    const cumVolText = document.getElementById('bt-cum-vol')?.textContent || '0 ml'
+    const cumVol = parseFloat(cumVolText.replace(/[^\d.]/g, '')) || 0
+    xml += `    <Balls current="${ballsFill}" cumVolume="${cumVol}">\n`
+    document.querySelectorAll('#balls-container .vital-slot').forEach((el) => {
+      const name = (el.querySelector('.v-name') as HTMLInputElement)?.value.trim() || 'Unknown'
+      const vol = (el.querySelector('.v-vol') as HTMLInputElement)?.value.trim() || '0'
+      const conv = (el.querySelector('.v-dig') as HTMLInputElement)?.value.trim() || '0'
+      const type = (el.querySelector('.v-type') as HTMLSelectElement)?.value || 'Food'
+      const flavor = (el.querySelector('.v-flavor') as HTMLTextAreaElement)?.value.trim()
+      const gear = (el.querySelector('.v-gear') as HTMLTextAreaElement)?.value.trim()
+      const appearance = (el.querySelector('.v-appearance') as HTMLTextAreaElement)?.value.trim()
+
+      let itemAttrs = `type="${type}" name="${name}" volume_L="${vol}" conversion="${conv}%"`
+      if (type === 'Prey') {
+        const willingness = (el.querySelector('.v-willingness') as HTMLSelectElement)?.value || 'reluctant'
+        const staminaText = (el.querySelector('.v-stamina-val') as HTMLElement)?.textContent || '100%'
+        const stamina = parseFloat(staminaText.replace('%', '')) || 100
+        itemAttrs += ` willingness="${willingness}" stamina="${stamina}"`
+      }
+      xml += `      <Item ${itemAttrs}>\n`
+      if (appearance) xml += `        <Appearance>${appearance}</Appearance>\n`
+      if (flavor) xml += `        <Description>${flavor}</Description>\n`
+      if (type === 'Prey' && gear) xml += `        <BoundGear>${gear}</BoundGear>\n`
+      xml += `      </Item>\n`
+    })
+    xml += `    </Balls>\n  </DigestiveTract>\n`
     // DicePool
     const diceSections = document.querySelectorAll('.bt-dice-section')
     if (diceSections.length > 0) {
@@ -1489,7 +1608,7 @@ export function setup(ctx: SpindleFrontendContext) {
   // ─── XML to form parser ────────────────────────────────────
   function populateFormFromXml(xml: string) {
     document.querySelectorAll(
-      '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot, .bt-dice-section'
+      '.dyn-skill, .dyn-trait, .dyn-inv, #stomach-container .vital-slot, #bowel-container .vital-slot, #womb-container .vital-slot, #balls-container .vital-slot, .bt-dice-section'
     ).forEach((el) => el.remove())
 
     document.querySelectorAll('.cloth-badge').forEach((el) => el.remove())
@@ -1801,6 +1920,102 @@ export function setup(ctx: SpindleFrontendContext) {
           ;(div.querySelector('.v-name') as HTMLInputElement).value = child.textContent || ''
           ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(child, 'volume_L')
         }
+      })
+    }
+
+    // Parse Womb
+    const wombNode = doc.querySelector('Womb')
+    if (wombNode) {
+      wombNode.querySelectorAll('Item').forEach((itemNode) => {
+        const div = createWombItem()
+        document.getElementById('womb-container')?.appendChild(div)
+
+        ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name')
+        ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L')
+        ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'absorption') || '').replace('%', '')
+
+        const type = getAttr(itemNode, 'type') || 'Food'
+        const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
+        typeSelect.value = type
+        typeSelect.dispatchEvent(new Event('change'))
+
+        const appearanceNode = itemNode.querySelector('Appearance')
+        ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
+
+        const descNode = itemNode.querySelector('Description')
+        ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
+
+        if (type === 'Prey') {
+          const gearNode = itemNode.querySelector('BoundGear')
+          ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+
+          const rawWillingness = (getAttr(itemNode, 'willingness') || 'reluctant').toLowerCase()
+          const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
+          const willingnessSelect = div.querySelector('.v-willingness') as HTMLSelectElement
+          if (willingnessSelect) willingnessSelect.value = willingness
+
+          const stamina = parseFloat(getAttr(itemNode, 'stamina') || '100') || 100
+          const staminaBar = div.querySelector('.v-stamina-bar') as HTMLElement
+          const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
+          if (staminaBar) {
+            staminaBar.style.width = `${Math.min(100, Math.max(0, stamina))}%`
+            staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+          }
+          if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
+        }
+
+        const digInput = div.querySelector('.item-dig-input') as HTMLInputElement
+        if (digInput) digInput.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+
+    // Parse Balls
+    const ballsNode = doc.querySelector('Balls')
+    if (ballsNode) {
+      const cumVol = parseFloat(ballsNode.getAttribute('cumVolume') || '0') || 0
+      const cumVolEl = document.getElementById('bt-cum-vol')
+      if (cumVolEl) cumVolEl.textContent = `${cumVol.toFixed(0)} ml`
+
+      ballsNode.querySelectorAll('Item').forEach((itemNode) => {
+        const div = createBallsItem()
+        document.getElementById('balls-container')?.appendChild(div)
+
+        ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name')
+        ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L')
+        ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'conversion') || '').replace('%', '')
+
+        const type = getAttr(itemNode, 'type') || 'Food'
+        const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
+        typeSelect.value = type
+        typeSelect.dispatchEvent(new Event('change'))
+
+        const appearanceNode = itemNode.querySelector('Appearance')
+        ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
+
+        const descNode = itemNode.querySelector('Description')
+        ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
+
+        if (type === 'Prey') {
+          const gearNode = itemNode.querySelector('BoundGear')
+          ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+
+          const rawWillingness = (getAttr(itemNode, 'willingness') || 'reluctant').toLowerCase()
+          const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
+          const willingnessSelect = div.querySelector('.v-willingness') as HTMLSelectElement
+          if (willingnessSelect) willingnessSelect.value = willingness
+
+          const stamina = parseFloat(getAttr(itemNode, 'stamina') || '100') || 100
+          const staminaBar = div.querySelector('.v-stamina-bar') as HTMLElement
+          const staminaVal = div.querySelector('.v-stamina-val') as HTMLElement
+          if (staminaBar) {
+            staminaBar.style.width = `${Math.min(100, Math.max(0, stamina))}%`
+            staminaBar.style.background = stamina < 25 ? '#f44336' : stamina < 50 ? '#FF9800' : '#4CAF50'
+          }
+          if (staminaVal) staminaVal.textContent = `${Math.round(stamina)}%`
+        }
+
+        const digInput = div.querySelector('.item-dig-input') as HTMLInputElement
+        if (digInput) digInput.dispatchEvent(new Event('input', { bubbles: true }))
       })
     }
 

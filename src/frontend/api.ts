@@ -34,6 +34,8 @@ export const defaultEngineToggles: EngineToggles = {
   arousalClimax: true,
   struggleEngine: true,
   diceSystem: false,
+  unbirthEngine: false,
+  cockVoreEngine: false,
 }
 
 export const defaultUiSettings: UiSettings = {

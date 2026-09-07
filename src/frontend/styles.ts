@@ -76,6 +76,8 @@ export const bioTrackerStylesheet = `
     .bt-dice-preset-btn { background: #2a2a2a; color: #aaa; border: 1px solid #444; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
     .bt-dice-preset-btn:active { background: #444; }
     .bt-dice-empty-hint { color: #666; font-size: 12px; text-align: center; padding: 20px; border: 1px dashed #444; border-radius: 6px; margin-bottom: 10px; }
+    .vital-slot.is-womb { border-color: #8b4a6a; }
+    .vital-slot.is-balls { border-color: #4a6a8b; }
   `
 
 /**

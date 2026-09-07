@@ -102,6 +102,28 @@ export interface TransitResult {
 }
 
 // ---------------------------------------------------------------------------
+// Womb Absorption System types
+// ---------------------------------------------------------------------------
+
+/** Return value from `absorbItemsInContent` — processes womb prey absorption. */
+export interface AbsorptionResult {
+  content: string
+  absorbedPrey: { name: string; volume: number }[]
+  absorptionCount: number
+}
+
+// ---------------------------------------------------------------------------
+// Balls Conversion System types
+// ---------------------------------------------------------------------------
+
+/** Return value from `convertItemsInContent` — processes balls prey conversion. */
+export interface ConversionResult {
+  content: string
+  convertedPrey: { name: string; volume: number }[]
+  conversionCount: number
+}
+
+// ---------------------------------------------------------------------------
 // Message Content Processor types
 // ---------------------------------------------------------------------------
 

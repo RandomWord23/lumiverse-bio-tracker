@@ -32,6 +32,8 @@ export interface EngineToggles {
   arousalClimax: boolean
   struggleEngine: boolean
   diceSystem: boolean
+  unbirthEngine: boolean
+  cockVoreEngine: boolean
 }
 
 /**
