@@ -26,8 +26,8 @@ export const bioTrackerStylesheet = `
     .bt-close { cursor: pointer; color: #ff4444; font-size: 20px; padding: 5px; }
     .bt-content { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 80px; }
     .bt-tabs { display: flex; background: #111; border-bottom: 1px solid #333; }
-    .bt-tab-btn { flex: 0 0 auto; padding: 12px 14px; background: transparent; color: #888; border: none; font-weight: bold; cursor: pointer; text-align: center; font-size: 13px; white-space: nowrap; }
-    .bt-tab-btn[data-tab="tab-dice"], .bt-tab-btn[data-tab="tab-settings"] { padding: 12px 8px; font-size: 16px; }
+    .bt-tab-btn { flex: 1 1 0; min-width: 0; padding: 12px 0; background: transparent; color: #888; border: none; font-weight: bold; cursor: pointer; text-align: center; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bt-tab-btn[data-tab="tab-dice"], .bt-tab-btn[data-tab="tab-settings"] { flex: 0 0 auto; padding: 12px 10px; font-size: 16px; }
     .bt-tab-btn.active { color: #ff4444; border-bottom: 2px solid #ff4444; background: #222; }
     .bt-tab-content { display: none; }
     .bt-tab-content.active { display: block; }
