@@ -659,11 +659,59 @@ export async function runDigestionTick(
           finalClimax = 100
           await spindle.variables.chat.set(chatId, 'pendingOrgasmReset', 'true')
 
-          // Expel cum on climax
+          // Force-convert all remaining balls prey on climax, then expel cum
           if (engineToggles.cockVoreEngine) {
+            let forceConvertedCount = 0
+            let forceConvertedVol = 0
+
+            // Force-convert all remaining prey in the balls
+            const ballsMatch = updatedXml.match(/<Balls([^>]*)>([\s\S]*?)<\/Balls>/i)
+            if (ballsMatch) {
+              const ballsAttrs = ballsMatch[1]
+              const ballsInner = ballsMatch[2]
+              const preyRegex = /<Item\s+([^>]*type="Prey"[^>]*)\s*(?:\/\s*>|>([\s\S]*?)<\/Item>)/gi
+              let preyMatch: RegExpExecArray | null
+              while ((preyMatch = preyRegex.exec(ballsInner)) !== null) {
+                const preyAttrs = preyMatch[1]
+                const vol = parseFloat(getAttrFromString(preyAttrs, 'volume_L') || '0') || 0
+                forceConvertedCount++
+                forceConvertedVol += vol * 1000 // L → ml
+              }
+
+              if (forceConvertedCount > 0) {
+                // Remove all prey items from balls content
+                const emptiedBallsInner = ballsInner
+                  .replace(/<Item\s+[^>]*type="Prey"[^>]*\s*(?:\/\s*>|>([\s\S]*?)<\/Item>)/gi, '')
+                  .replace(/^\s*\n/gm, '')
+                  .trim()
+
+                updatedXml = updatedXml.replace(
+                  /<Balls([^>]*)>[\s\S]*?<\/Balls>/i,
+                  `<Balls${ballsAttrs}>\n${emptiedBallsInner}\n    </Balls>`,
+                )
+
+                // Add force-converted volume to CumVolume_ml
+                const oldCumVol = getStat(updatedXml, 'CumVolume_ml') || 0
+                updatedXml = setStat(updatedXml, 'CumVolume_ml', oldCumVol + forceConvertedVol)
+
+                spindle.log.info(
+                  `[runDigestionTick] Climax force-converted ${forceConvertedCount} prey, +${forceConvertedVol}ml cum`,
+                )
+              }
+            }
+
+            // Now expel all accumulated cum (including force-converted prey)
             const cumVol = getStat(updatedXml, 'CumVolume_ml') || 0
             if (cumVol > 0) {
-              maybeToast('climaxEvents', 'success', `💦 Climax expelled ${cumVol.toFixed(0)} ml of cum!`)
+              if (forceConvertedCount > 0) {
+                maybeToast(
+                  'climaxEvents',
+                  'success',
+                  `💦 Climax force-converted ${forceConvertedCount} prey and expelled ${cumVol.toFixed(0)} ml of cum!`,
+                )
+              } else {
+                maybeToast('climaxEvents', 'success', `💦 Climax expelled ${cumVol.toFixed(0)} ml of cum!`)
+              }
               spindle.log.info(`[runDigestionTick] Climax expelled ${cumVol}ml cum`)
               updatedXml = setStat(updatedXml, 'CumVolume_ml', 0)
             }
