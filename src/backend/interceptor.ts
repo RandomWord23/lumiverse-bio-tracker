@@ -13,6 +13,7 @@ import {
   engineToggles,
   setEngineToggles,
   promptSheets,
+  preGenerationSheets,
 } from './state'
 
 import { processStruggle } from './struggle'
@@ -1049,6 +1050,21 @@ export async function contentProcessor(
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml)
 
+  // ── Push a snapshot for rollback support ────────────────────────
+  // commitUpdate (Tier 2) pushes a snapshot so rollbackOnDelete can
+  // restore the previous sheet state when a message is deleted or
+  // regenerated.  contentProcessor (Tier 1) must do the same —
+  // otherwise rollbackOnDelete finds no snapshot and bails out with a
+  // warning, leaving the sheet at its post-deletion state instead of
+  // reverting to the pre-generation state.  Every committed message
+  // must have an entry so that delete/regenerate rollbacks work
+  // regardless of which tier processed the message.
+  const snapList = snapshots.get(chatId) || []
+  const snapIndex = ctx.swipeIndex ?? snapList.length
+  snapList.push({ messageId: ctx.messageId ?? '', sheetXml: finalXml, chatIndex: snapIndex })
+  snapshots.set(chatId, snapList)
+  await saveChatSnapshots(chatId)
+
   // ── Mark this message as committed ──────────────────────────────
   // Without this, if GENERATION_ENDED is skipped (e.g. chatId mismatch),
   // the promptInterceptor safety net re-commits the same message on the
@@ -1061,6 +1077,16 @@ export async function contentProcessor(
   }
 
   // ── Clean up the prompt-time snapshot ────────────────────────────
+  // promptSheets is used by contentProcessor/commitUpdate as the "old"
+  // sheet for runDigestionTick.  It is per-turn and must be deleted so
+  // the GENERATION_ENDED handler can detect that contentProcessor ran
+  // (it checks promptSheets.has(chatId)).
+  //
+  // preGenerationSheets is intentionally NOT deleted here — it must
+  // persist across swipes of the same turn so that every swipe
+  // variant can restore the same pre-turn baseline.  It is overwritten
+  // on the next normal/continue/regenerate generation, or cleared on
+  // chat switch.
   promptSheets.delete(chatId)
 
   // ── Notify the frontend panel so the UI updates immediately ──────
@@ -1150,6 +1176,50 @@ export async function promptInterceptor(messages: any[], context: any) {
         committedMessageIds.add(lastAssistant.sourceMessageId)
         sheet = sheets.get(chatId) || sheet
       }
+    }
+    // ── Capture the pre-generation sheet for this turn ──────────
+    // On "normal" (and "continue"/"regenerate") this is the sheet
+    // state BEFORE the upcoming digestion tick.  We store it so that
+    // if the user swipes, we can restore this exact baseline — giving
+    // every swipe variant the same correct elapsed time that
+    // "regenerate" gets via MESSAGE_DELETED → rollbackOnDelete.
+    preGenerationSheets.set(chatId, sheet)
+  } else if (genType === 'continue' || genType === 'regenerate') {
+    // ── Capture the pre-generation sheet for this turn ──────────
+    // Same as "normal" — store the current sheet as the pre-turn
+    // baseline so swipes can restore to it.  Regenerate already gets
+    // a rollback via MESSAGE_DELETED, but storing here is harmless
+    // and keeps the logic uniform.
+    preGenerationSheets.set(chatId, sheet)
+  } else if (genType === 'swipe') {
+    // ── Swipe: restore the pre-generation sheet ────────────────
+    // Regenerate works correctly because it DELETEs the old message
+    // (firing MESSAGE_DELETED → rollbackOnDelete → sheet restored to
+    // pre-generation state) before the new generation starts.  Swipe
+    // adds a variant without deleting, so the sheet stays at the
+    // post-digestion state — making elapsed ≈ 0 and skipping the
+    // digestion tick.  We replicate regenerate's behaviour here by
+    // restoring the sheet from preGenerationSheets, which was captured
+    // on the "normal"/"continue"/"regenerate" that started this turn.
+    // This works for any number of repeated swipes because
+    // preGenerationSheets persists across swipes of the same turn
+    // (never deleted by contentProcessor).  It is overwritten on the
+    // next normal/continue/regenerate, or cleared on chat switch
+    // (see storage.ts switchToChat).
+    const preGenSheet = preGenerationSheets.get(chatId)
+    if (preGenSheet) {
+      sheet = preGenSheet
+      sheets.set(chatId, sheet)
+      await saveChatSheet(chatId, sheet)
+      spindle.log.info(
+        `[promptInterceptor] Swipe: restored pre-generation sheet ` +
+          `from preGenerationSheets (len=${sheet.length})`,
+      )
+    } else {
+      spindle.log.info(
+        `[promptInterceptor] Swipe: no preGenerationSheet found ` +
+          `— using current sheet (first-ever generation or chat reload)`,
+      )
     }
   }
 

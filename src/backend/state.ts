@@ -20,6 +20,16 @@ export const committedMessageIds: Set<string> = new Set()
 // updated sheets.get(chatId).
 export const promptSheets: Map<string, string> = new Map()
 
+// ─── Pre-generation sheet snapshot (for swipe restoration) ────
+// Stores the sheet state BEFORE the current turn's digestion tick.
+// On "normal"/"continue"/"regenerate" we capture the sheet here.
+// On "swipe" we restore from here so every swipe variant computes
+// its digestion tick from the same pre-turn baseline — exactly what
+// "regenerate" achieves via MESSAGE_DELETED → rollbackOnDelete.
+// Persists across swipes of the same turn; overwritten on the next
+// normal/continue/regenerate, or cleared on chat switch.
+export const preGenerationSheets: Map<string, string> = new Map()
+
 // ─── Settings (received from frontend) ──────────────────────
 export let toastSettings: Record<string, boolean> = {
   digestionTicks: true, climaxEvents: true, clothingDamage: true,

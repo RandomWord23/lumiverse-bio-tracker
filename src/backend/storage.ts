@@ -1,6 +1,6 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
-import { sheets, snapshots, committedMessageIds, setActiveChatId, type Snapshot } from './state'
+import { sheets, snapshots, committedMessageIds, preGenerationSheets, setActiveChatId, type Snapshot } from './state'
 import { sheetPath, snapshotsPath } from './engine'
 
 export async function loadChatSheet(chatId: string) {
@@ -34,6 +34,9 @@ export async function saveChatSnapshots(chatId: string) {
 export async function switchToChat(chatId: string | null) {
   setActiveChatId(chatId)
   committedMessageIds.clear()
+  // Clear per-turn state so stale entries from a previous chat don't
+  // leak into the new chat's first generation.
+  preGenerationSheets.clear()
   if (!chatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
     return

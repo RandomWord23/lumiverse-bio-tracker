@@ -238,6 +238,11 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
     const chatIndex = list.length
     finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
     committedMessageIds.add(messageId)
+    // preGenerationSheets is intentionally NOT deleted here — it must
+    // persist across swipes of the same turn so every swipe variant
+    // restores the same pre-turn baseline.  It is overwritten on the
+    // next normal/continue/regenerate generation, or cleared on chat
+    // switch.
   } else {
     // contentProcessor already ran — use its result directly
     finalXml = sheets.get(chatId) || update
