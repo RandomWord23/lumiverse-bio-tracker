@@ -924,9 +924,22 @@ export function setup(ctx: SpindleFrontendContext) {
         <div class="bt-meter-track">
           <div id="bt-climax-fill" class="bt-meter-fill climax" style="width:0%"></div>
         </div>
-        <input type="range" id="bt-climax-slider" class="bt-meter-slider climax" min="0" max="100" step="1" value="0" disabled>
+        <input type="range" id="bt-climax-slider" class="bt-meter-slider climax" min="0" max="100" step="1" value="0">
       </div>
     `
+    const climaxInput = document.getElementById('bt-climax-slider') as HTMLInputElement
+    const climaxValEl = document.getElementById('bt-climax-val')
+    const climaxFill = document.getElementById('bt-climax-fill')
+
+    climaxInput?.addEventListener('input', () => {
+      const v = parseInt(climaxInput.value) || 0
+      if (climaxValEl) climaxValEl.textContent = v + '%'
+      if (climaxFill) {
+        climaxFill.style.width = v + '%'
+        if (v >= 90) climaxFill.classList.add('pulse')
+        else climaxFill.classList.remove('pulse')
+      }
+    })
   }
 
   function setArousalSlider(v: number) {
@@ -1374,6 +1387,9 @@ export function setup(ctx: SpindleFrontendContext) {
     const arousalInput = document.getElementById('bt-arousal-slider') as HTMLInputElement
     const arousalVal = parseInt(arousalInput?.value || '0')
     xml += `    <Arousal>${arousalVal}</Arousal>\n`
+    const climaxInput = document.getElementById('bt-climax-slider') as HTMLInputElement
+    const climaxVal = parseInt(climaxInput?.value || '0')
+    xml += `    <Climax>${climaxVal}</Climax>\n`
     xml += `  </State>\n\n  <BaseStats>\n`
     
     document.querySelectorAll('.bt-scrape').forEach((el) => {
