@@ -41,6 +41,7 @@ import {
   rollDicePool,
   buildDicePoolPrompt,
   processActionRolls,
+  repairDigestiveTract,
 } from './engine'
 
 import {
@@ -66,20 +67,12 @@ export async function runDigestionTick(
   // that processStruggle already computed and wrote.
   let updatedXml: string = newXml
 
-  // ── DIAGNOSTIC: toast raw LLM Bowels section BEFORE any processing ──
-  // This tells us whether the LLM output itself is malformed (missing
-  // </Bowels>) or whether runDigestionTick processing corrupts it.
-  {
-    const rawBowMatch = newXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
-    const rawDigestiveMatch = newXml.match(/<DigestiveTract[^>]*>([\s\S]*?)<\/DigestiveTract>/i)
-    const hasOpenBowels = /<Bowels[^>]*>/i.test(newXml)
-    const hasCloseBowels = /<\/Bowels>/i.test(newXml)
-    maybeToast(
-      'errors',
-      'info',
-      `[RAW LLM] Bowels open=${hasOpenBowels} close=${hasCloseBowels} match=${!!rawBowMatch} | DT close=${!!rawDigestiveMatch} | bowels=${rawBowMatch ? rawBowMatch[2].trim().slice(0, 200) : 'NO MATCH'}`,
-    )
-  }
+  // ── Repair: fix unclosed DigestiveTract sub-sections ──────────────
+  // The LLM sometimes forgets to close <Bowels> (or other sub-sections)
+  // before </DigestiveTract>, producing malformed XML that causes a
+  // parsererror in the frontend DOMParser. This inserts missing closing
+  // tags so the downstream regex extraction and replacement work correctly.
+  updatedXml = repairDigestiveTract(updatedXml)
 
   try {
     const getTimeHours = (xml: string) => {
@@ -931,16 +924,6 @@ export async function commitUpdate(
   const oldSheet = promptSheet ?? cachedSheet ?? ''
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
 
-  // ── DIAGNOSTIC: log bowels section of finalXml ──
-  const bowMatchFinal = finalXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
-  spindle.log.info(
-    `[commitUpdate] chatId=${chatId} activeChatId=${activeChatId} match=${chatId === activeChatId} | bowels=${bowMatchFinal ? bowMatchFinal[1].trim().slice(0, 300) : 'NONE'}`,
-  )
-
-  // ── MOBILE-VISIBLE DIAGNOSTIC: toast Backpack section after runDigestionTick ──
-  const bpMatchFinal = finalXml.match(/<Backpack[^>]*>([\s\S]*?)<\/Backpack>/i)
-  maybeToast('sheetSync', 'info', `[commitUpdate] Backpack=${bpMatchFinal ? bpMatchFinal[1].trim().slice(0, 300) : 'NONE'}`)
-
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml) // keep in-memory cache in sync
   const list = snapshots.get(chatId) || []
@@ -1037,16 +1020,6 @@ export async function contentProcessor(
   // indigestion, stamina, struggle, digestion %, acid, climax, nutrient
   // absorption, and clothing stress from the time-delta.
   const finalXml = await runDigestionTick(update, oldSheet, chatId)
-
-  // ── DIAGNOSTIC: log bowels section of finalXml in contentProcessor ──
-  const bowMatchCP = finalXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
-  spindle.log.info(
-    `[contentProcessor] chatId=${chatId} activeChatId=${activeChatId} match=${chatId === activeChatId} | bowels=${bowMatchCP ? bowMatchCP[1].trim().slice(0, 300) : 'NONE'}`,
-  )
-
-  // ── MOBILE-VISIBLE DIAGNOSTIC: toast Backpack section after runDigestionTick ──
-  const bpMatchCP = finalXml.match(/<Backpack[^>]*>([\s\S]*?)<\/Backpack>/i)
-  maybeToast('sheetSync', 'info', `[contentProcessor] Backpack=${bpMatchCP ? bpMatchCP[1].trim().slice(0, 300) : 'NONE'}`)
 
   // ── Replace the <sheet_update> block in the message content ──────
   // The LLM's original block contained stale copied values.  We swap it

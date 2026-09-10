@@ -109,6 +109,100 @@ export function findLastAssistantMessage(messages: any[]): any | null {
   return null
 }
 
+// ---------------------------------------------------------------------------
+// repairDigestiveTract — fix unclosed sub-section tags inside <DigestiveTract>
+//
+// The LLM sometimes forgets to close <Bowels> (or <Womb>, <Balls>) before
+// opening the next sibling or </DigestiveTract>, producing malformed XML like:
+//
+//   <Bowels current="0.00 L">
+//   <Womb current="0.00 L">
+//   </Womb>
+//   ...
+//   </DigestiveTract>          ← parsererror: DigestiveTract != Bowels
+//
+// The downstream regex extraction (/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
+// and replacement both require a closing tag to match.  Without repair the
+// malformed XML passes through unchanged and the frontend DOMParser hits a
+// parsererror, silently preventing ALL fields (including Backpack) from
+// populating.
+//
+// Strategy: tokenize all opening/closing tags of the known sub-sections
+// (Stomach, Bowels, Womb, Balls) within <DigestiveTract>.  Walk them with a
+// stack.  When a new sub-section opens while another is still unclosed on
+// the stack, insert the missing closing tag(s) just before the new opening
+// tag.  Any tags still open at the end get closed before </DigestiveTract>.
+// ---------------------------------------------------------------------------
+export function repairDigestiveTract(xml: string): string {
+  const dtMatch = xml.match(/<DigestiveTract([^>]*)>([\s\S]*?)<\/DigestiveTract>/i)
+  if (!dtMatch) return xml
+
+  const dtAttrs = dtMatch[1]
+  const dtInner = dtMatch[2]
+  const knownTags = ['Stomach', 'Bowels', 'Womb', 'Balls']
+
+  // Tokenize: find all opening and closing tags of known sub-sections
+  const tokenRegex = new RegExp(
+    `<(\\/?)(${knownTags.join('|')})(?![a-zA-Z])([^>]*?)(\\/?)>`,
+    'gi',
+  )
+
+  interface Token { type: 'open' | 'close'; tag: string; index: number }
+  const tokens: Token[] = []
+  let m: RegExpExecArray | null
+  while ((m = tokenRegex.exec(dtInner)) !== null) {
+    if (m[4] === '/') continue // skip self-closing tags
+    tokens.push({
+      type: m[1] === '/' ? 'close' : 'open',
+      tag: m[2],
+      index: m.index,
+    })
+  }
+
+  // Walk tokens with a stack.  When a new sub-section opens while another is
+  // still unclosed on the stack, insert the missing closing tag(s) just
+  // before the new opening tag.  Any tags still open at the end get closed
+  // before </DigestiveTract>.
+  const stack: string[] = []
+  const insertions: { pos: number; tag: string }[] = []
+
+  for (const token of tokens) {
+    if (token.type === 'open') {
+      // Close any unclosed sub-sections before this new one opens
+      while (stack.length > 0) {
+        const unclosed = stack.pop()!
+        insertions.push({ pos: token.index, tag: unclosed })
+      }
+      stack.push(token.tag)
+    } else {
+      // Close token: pop if it matches top of stack, otherwise ignore
+      if (stack.length > 0 && stack[stack.length - 1] === token.tag) {
+        stack.pop()
+      }
+    }
+  }
+
+  // Close any remaining unclosed tags at end of DigestiveTract inner
+  while (stack.length > 0) {
+    const unclosed = stack.pop()!
+    insertions.push({ pos: dtInner.length, tag: unclosed })
+  }
+
+  if (insertions.length === 0) return xml
+
+  // Apply insertions from rightmost to leftmost so positions stay valid
+  insertions.sort((a, b) => b.pos - a.pos)
+  let repaired = dtInner
+  for (const ins of insertions) {
+    repaired = repaired.slice(0, ins.pos) + `</${ins.tag}>\n    ` + repaired.slice(ins.pos)
+  }
+
+  return xml.replace(
+    /<DigestiveTract[^>]*>[\s\S]*?<\/DigestiveTract>/i,
+    `<DigestiveTract${dtAttrs}>${repaired}</DigestiveTract>`,
+  )
+}
+
 export function getAttrFromString(str: string, attr: string): string {
   const match = str.match(new RegExp(`${attr}="([^"]*)"`, 'i'))
   return match ? match[1] : ''

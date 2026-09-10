@@ -1742,18 +1742,8 @@ export function setup(ctx: SpindleFrontendContext) {
     }
     if (msg.type === 'SHEET_UPDATED' && msg.xml) {
       try {
-        const indMatch = msg.xml.match(/<Stomach(?![a-zA-Z])[^>]*\sindigestion="([^"]*)"/i)
-        // ── DIAGNOSTIC: log bowels section received via SHEET_UPDATED ──
-        const bowMatch = msg.xml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
-        console.log(`[SHEET_UPDATED] received indigestion="${indMatch ? indMatch[1] : 'MISSING'}"`)
-        console.log(`[SHEET_UPDATED] bowels=${bowMatch ? bowMatch[1].trim().slice(0, 400) : 'NONE'}`)
-        // ── MOBILE-VISIBLE DIAGNOSTIC: log Backpack section received ──
-        const bpMatch = msg.xml.match(/<Backpack[^>]*>([\s\S]*?)<\/Backpack>/i)
-        ctx.sendToBackend({ type: 'FRONTEND_DIAGNOSTIC', message: `[SHEET_UPDATED received] Backpack=${bpMatch ? bpMatch[1].trim().slice(0, 300) : 'NONE'}` })
         populateFormFromXml(msg.xml)
       } catch (e) {
-        console.error('[SHEET_UPDATED] populateFormFromXml failed:', e)
-        // ── MOBILE-VISIBLE DIAGNOSTIC: exception in populateFormFromXml ──
         ctx.sendToBackend({ type: 'FRONTEND_DIAGNOSTIC', message: `populateFormFromXml exception: ${(e as Error)?.message || String(e)}` })
       }
       if (currentSettings.ui.autoOpen) {
