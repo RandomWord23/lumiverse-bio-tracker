@@ -65,6 +65,22 @@ export async function runDigestionTick(
   // nutrientAbsorption) from discarding indigestion/struggle values
   // that processStruggle already computed and wrote.
   let updatedXml: string = newXml
+
+  // ── DIAGNOSTIC: toast raw LLM Bowels section BEFORE any processing ──
+  // This tells us whether the LLM output itself is malformed (missing
+  // </Bowels>) or whether runDigestionTick processing corrupts it.
+  {
+    const rawBowMatch = newXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
+    const rawDigestiveMatch = newXml.match(/<DigestiveTract[^>]*>([\s\S]*?)<\/DigestiveTract>/i)
+    const hasOpenBowels = /<Bowels[^>]*>/i.test(newXml)
+    const hasCloseBowels = /<\/Bowels>/i.test(newXml)
+    maybeToast(
+      'errors',
+      'info',
+      `[RAW LLM] Bowels open=${hasOpenBowels} close=${hasCloseBowels} match=${!!rawBowMatch} | DT close=${!!rawDigestiveMatch} | bowels=${rawBowMatch ? rawBowMatch[2].trim().slice(0, 200) : 'NO MATCH'}`,
+    )
+  }
+
   try {
     const getTimeHours = (xml: string) => {
       const match = xml.match(/<Time>(.*?)<\/Time>/i)
