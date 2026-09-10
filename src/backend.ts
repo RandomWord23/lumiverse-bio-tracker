@@ -165,6 +165,12 @@ spindle.onFrontendMessage(async (msg: any) => {
       spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
     }
   }
+
+  // ── MOBILE-VISIBLE DIAGNOSTIC: frontend sends diagnostic messages ──
+  if (msg.type === 'FRONTEND_DIAGNOSTIC' && msg.message) {
+    maybeToast('errors', 'info', `[Frontend] ${msg.message}`)
+    spindle.log.info(`[FRONTEND_DIAGNOSTIC] ${msg.message}`)
+  }
 })
 
 spindle.registerInterceptor(promptInterceptor, 50)

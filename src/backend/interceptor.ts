@@ -921,6 +921,10 @@ export async function commitUpdate(
     `[commitUpdate] chatId=${chatId} activeChatId=${activeChatId} match=${chatId === activeChatId} | bowels=${bowMatchFinal ? bowMatchFinal[1].trim().slice(0, 300) : 'NONE'}`,
   )
 
+  // ── MOBILE-VISIBLE DIAGNOSTIC: toast Backpack section after runDigestionTick ──
+  const bpMatchFinal = finalXml.match(/<Backpack[^>]*>([\s\S]*?)<\/Backpack>/i)
+  maybeToast('sheetSync', 'info', `[commitUpdate] Backpack=${bpMatchFinal ? bpMatchFinal[1].trim().slice(0, 300) : 'NONE'}`)
+
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml) // keep in-memory cache in sync
   const list = snapshots.get(chatId) || []
@@ -1023,6 +1027,10 @@ export async function contentProcessor(
   spindle.log.info(
     `[contentProcessor] chatId=${chatId} activeChatId=${activeChatId} match=${chatId === activeChatId} | bowels=${bowMatchCP ? bowMatchCP[1].trim().slice(0, 300) : 'NONE'}`,
   )
+
+  // ── MOBILE-VISIBLE DIAGNOSTIC: toast Backpack section after runDigestionTick ──
+  const bpMatchCP = finalXml.match(/<Backpack[^>]*>([\s\S]*?)<\/Backpack>/i)
+  maybeToast('sheetSync', 'info', `[contentProcessor] Backpack=${bpMatchCP ? bpMatchCP[1].trim().slice(0, 300) : 'NONE'}`)
 
   // ── Replace the <sheet_update> block in the message content ──────
   // The LLM's original block contained stale copied values.  We swap it
