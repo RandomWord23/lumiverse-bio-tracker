@@ -26,9 +26,13 @@ export const promptSheets: Map<string, string> = new Map()
 // On "swipe" we restore from here so every swipe variant computes
 // its digestion tick from the same pre-turn baseline — exactly what
 // "regenerate" achieves via MESSAGE_DELETED → rollbackOnDelete.
-// Persists across swipes of the same turn; overwritten on the next
-// normal/continue/regenerate, or cleared on chat switch.
-export const preGenerationSheets: Map<string, string> = new Map()
+//
+// NOTE: This was previously an in-memory Map, but that is volatile —
+// mobile browsers aggressively unload background extensions, which
+// clears the Map and causes swipes to fall through to the post-generation
+// sheet.  We now persist it via spindle.variables.chat so it survives
+// reloads, extension restarts, and mobile backgrounding.
+// See interceptor.ts getPreGenerationSheet/setPreGenerationSheet.
 
 // ─── Settings (received from frontend) ──────────────────────
 export let toastSettings: Record<string, boolean> = {

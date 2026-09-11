@@ -13,7 +13,6 @@ import {
   engineToggles,
   setEngineToggles,
   promptSheets,
-  preGenerationSheets,
 } from './state'
 
 import { processStruggle } from './struggle'
@@ -1079,11 +1078,11 @@ export async function contentProcessor(
   // the GENERATION_ENDED handler can detect that contentProcessor ran
   // (it checks promptSheets.has(chatId)).
   //
-  // preGenerationSheets is intentionally NOT deleted here — it must
-  // persist across swipes of the same turn so that every swipe
-  // variant can restore the same pre-turn baseline.  It is overwritten
-  // on the next normal/continue/regenerate generation, or cleared on
-  // chat switch.
+  // The pre-generation sheet (stored via spindle.variables.chat) is
+  // intentionally NOT deleted here — it must persist across swipes
+  // of the same turn so that every swipe variant can restore the
+  // same pre-turn baseline.  It is overwritten on the next
+  // normal/continue/regenerate generation.
   promptSheets.delete(chatId)
 
   // ── Notify the frontend panel so the UI updates immediately ──────
@@ -1140,6 +1139,30 @@ export async function rollbackOnDelete(chatId: string, messageId: string) {
  * commits any pending sheet updates from the last assistant message, and
  * strips stale <sheet_update> blocks from chat history.
  */
+
+// ─── Persistent pre-generation sheet helpers ──────────────────
+// These store the pre-generation sheet in a Lumiverse chat variable so it
+// survives page reloads, extension restarts, and mobile backgrounding —
+// which was the root cause of the swipe context bug (the in-memory Map was
+// lost, causing swipes to see the post-generation sheet instead of the
+// pre-generation baseline).
+async function getPreGenerationSheet(chatId: string): Promise<string | null> {
+  try {
+    const data = await spindle.variables.chat.get(chatId, 'preGenerationSheet')
+    return data || null
+  } catch {
+    return null
+  }
+}
+
+async function setPreGenerationSheet(chatId: string, sheet: string): Promise<void> {
+  try {
+    await spindle.variables.chat.set(chatId, 'preGenerationSheet', sheet)
+  } catch (e) {
+    spindle.log.error(`[setPreGenerationSheet] Failed to persist: ${e}`)
+  }
+}
+
 export async function promptInterceptor(messages: any[], context: any) {
   const ctx = context as any
   const chatId: string = ctx.chatId
@@ -1180,14 +1203,17 @@ export async function promptInterceptor(messages: any[], context: any) {
     // if the user swipes, we can restore this exact baseline — giving
     // every swipe variant the same correct elapsed time that
     // "regenerate" gets via MESSAGE_DELETED → rollbackOnDelete.
-    preGenerationSheets.set(chatId, sheet)
+    //
+    // PERSISTENT: stored via spindle.variables.chat so it survives
+    // page reloads, extension restarts, and mobile backgrounding.
+    await setPreGenerationSheet(chatId, sheet)
   } else if (genType === 'continue' || genType === 'regenerate') {
     // ── Capture the pre-generation sheet for this turn ──────────
     // Same as "normal" — store the current sheet as the pre-turn
     // baseline so swipes can restore to it.  Regenerate already gets
     // a rollback via MESSAGE_DELETED, but storing here is harmless
     // and keeps the logic uniform.
-    preGenerationSheets.set(chatId, sheet)
+    await setPreGenerationSheet(chatId, sheet)
   } else if (genType === 'swipe') {
     // ── Swipe: restore the pre-generation sheet ────────────────
     // Regenerate works correctly because it DELETEs the old message
@@ -1196,21 +1222,23 @@ export async function promptInterceptor(messages: any[], context: any) {
     // adds a variant without deleting, so the sheet stays at the
     // post-digestion state — making elapsed ≈ 0 and skipping the
     // digestion tick.  We replicate regenerate's behaviour here by
-    // restoring the sheet from preGenerationSheets, which was captured
-    // on the "normal"/"continue"/"regenerate" that started this turn.
-    // This works for any number of repeated swipes because
-    // preGenerationSheets persists across swipes of the same turn
-    // (never deleted by contentProcessor).  It is overwritten on the
-    // next normal/continue/regenerate, or cleared on chat switch
-    // (see storage.ts switchToChat).
-    const preGenSheet = preGenerationSheets.get(chatId)
+    // restoring the sheet from the persistent pre-generation snapshot,
+    // which was captured on the "normal"/"continue"/"regenerate" that
+    // started this turn.
+    //
+    // This works for any number of repeated swipes because the
+    // pre-generation sheet is never deleted by contentProcessor.
+    // It is overwritten on the next normal/continue/regenerate.
+    // It persists across page reloads and mobile backgrounding because
+    // it is stored in a chat variable, not an in-memory Map.
+    const preGenSheet = await getPreGenerationSheet(chatId)
     if (preGenSheet) {
       sheet = preGenSheet
       sheets.set(chatId, sheet)
       await saveChatSheet(chatId, sheet)
       spindle.log.info(
         `[promptInterceptor] Swipe: restored pre-generation sheet ` +
-          `from preGenerationSheets (len=${sheet.length})`,
+          `from chat variable (len=${sheet.length})`,
       )
     } else {
       spindle.log.info(

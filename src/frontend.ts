@@ -1848,9 +1848,6 @@ export function setup(ctx: SpindleFrontendContext) {
       if (msg && msg.swipes && msg.swipes[swipeId] !== undefined) {
         const swipeText = getSwipeText(msg.swipes[swipeId])
         const updateXml = extractSheetUpdateFromText(swipeText)
-        // ── DIAGNOSTIC: log bowels section from MESSAGE_SWIPED ──
-        const bowMatchSwipe = updateXml ? updateXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i) : null
-        console.log(`[MESSAGE_SWIPED] action=${payload.action} hasXml=${!!updateXml} bowels=${bowMatchSwipe ? bowMatchSwipe[1].trim().slice(0, 400) : 'NONE'}`)
         if (updateXml) {
           try { populateFormFromXml(updateXml) } catch (e) {}
         }
