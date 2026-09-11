@@ -637,13 +637,14 @@ export async function runDigestionTick(
         }
       }
 
-      // Apply hourly decay to the old value (modifiers can modify decay rate)
+      // Apply hourly decay to the LLM's value (modifiers can modify decay rate).
+      // The LLM sets the target arousal it wants for the scene; the engine
+      // subtracts natural decay on top. This lets the LLM raise OR lower
+      // arousal (e.g., post-climax resolution, cold shower) rather than
+      // being clamped to a floor.
       const arousalDecayRate = 50 * (1 + (modifiers.ArousalDecay || 0))
-      const decayedArousal = Math.max(0, oldArousal - arousalDecayRate * elapsed)
-
-      // If the LLM didn't add enough points to overcome the decay, it drops.
-      // If the LLM added more points than the decay, it rises.
-      let finalArousal = Math.max(newArousal * (1 + (modifiers.ArousalGain || 0)), decayedArousal)
+      let finalArousal = newArousal * (1 + (modifiers.ArousalGain || 0))
+      finalArousal = Math.max(0, finalArousal - arousalDecayRate * elapsed)
       finalArousal = Math.min(100, finalArousal)
 
       let finalClimax = getStat(oldXml, 'Climax') || 0

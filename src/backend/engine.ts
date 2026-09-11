@@ -1033,12 +1033,12 @@ These computed values are written into the stored sheet. The <CurrentCharacterSh
 CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is into your <sheet_update>. This includes indigestion, stamina, struggle, digestion, timeAdded, stress, condition, Climax, CurrentPenisLength_cm, and every other computed value. Never zero out, reset, or "forget" a value you see in the sheet. If you see indigestion="57", you MUST output indigestion="57". If you see stamina="45", you MUST output stamina="45". If you see digestion="25%", you MUST output digestion="25%". The extension will recompute these values again on the NEXT tick — your job is to preserve them, not override them.
 
 ─── YOUR RESPONSIBILITIES (what YOU must do) ───
-1. ADVANCE <Time> FORWARD every turn. If the scene progresses, increase the <Time> value. The extension uses the time delta to calculate digestion, arousal decay, and body growth. If you do not advance time, the simulation stalls.
+1. ADVANCE <Time> FORWARD every turn. Time passage is DYNAMIC — advance it proportionally to what's happening in the scene. A brief exchange with an NPC might be 1-2 minutes; a meal might be 20-30 minutes; travel might be hours. Be realistic: if the characters are just talking for a few minutes, advance by minutes, not hours. The extension uses the time delta to calculate digestion, arousal decay, and body growth, so unrealistic time jumps will cause unrealistic simulation results. If you do not advance time at all, the simulation stalls.
    FORMAT RULE: <Time> must contain ONLY a 24-hour clock value in "HH:MM" form (e.g. "10:23", "14:30"). Do NOT prefix it with a day, date, or any other text — "Day 1, 10:23" is INVALID and breaks the simulation. Correct: <Time>10:23</Time>. Incorrect: <Time>Day 1, 10:23</Time>.
    MANDATORY RULE: You MUST ALWAYS include a <Time> tag in every <sheet_update>. NEVER omit it, even if you think time didn't change — copy the previous value verbatim. If <Time> is missing from the sheet, the extension cannot calculate digestion and the simulation stalls completely.
 2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
 3. Add <Item> entries to <Stomach>, <Bowels>, <Womb> (unbirth), or <Balls> (cock vore) when the character eats or is eaten. Remove them only if the item was regurgitated, birthed out, or otherwise exits the body.
-4. Update <Arousal> based on what happens in the scene (intimacy raises it, time passes lowers it — the extension halves it each hour).
+4. Update <Arousal> based on what happens in the scene. Set it to the value you believe reflects the character's current arousal — the engine subtracts natural decay (50%/hour) on top. See rule 16 for details.
 5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
 6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
 7. Set prey willingness="willing|reluctant|fighting" based on the scene narrative (see STRUGGLE & INDIGESTION SYSTEM below).
@@ -1060,6 +1060,7 @@ The following values are computed by the extension's engines during the digestio
 - <InventoryCapacity> (computed from base 3 + sum of Equip slots)
 - <InventoryOvercapacity> (computed from unique item count vs capacity)
 - Clothing stress="..." and condition="..." attributes (computed from body growth)
+- stomachFatigue="..." on the <Stomach> tag (engine-internal value, copy it exactly — do NOT modify or reset it)
 - Height, Weight, BreastVolume, Hips, Penis dimensions (updated by nutrient absorption)
 
 If any of these values seem wrong or unexpected, DO NOT "fix" them — copy them exactly. The extension will recompute them on the next tick.
@@ -1100,7 +1101,7 @@ CRITICAL XML RULES:
 13. Always include all sections (State, BaseStats, Clothing, Backpack, SkillsAndTraits, DigestiveTract) even if some are empty.
 14. If any State or World field (Time, Weather, Temperature, Area, Building, Room, Health, Energy) is blank or "0" in the <CurrentCharacterSheet>, you MUST invent a sensible default consistent with the current scene. For example, if Weather is blank, set it based on the season or what's happening in the story. If Health or Energy is blank, default to 100. Never leave these fields empty in your <sheet_update>. For <Time>, the default MUST be a plain "HH:MM" 24-hour value (e.g. "08:00") with NO day/date prefix.
 15. Prey <Description> MUST reflect the prey's current action/state and update EVERY turn. <Appearance> stays the same unless the prey transforms. Use <Description> for what's happening now (squirming, dissolving, going limp) and <Appearance> for what they look like (age, species, build, hair, eyes).
-16. <Arousal> is a 0-100 meter. The extension AUTOMATICALLY decays it by 50% per hour. You MUST actively add points to it to keep it up during intimate scenes (e.g., add +30 if stimulated, +50 if highly stimulated). If no intimacy occurs, it will naturally drop.
+16. <Arousal> is a 0-100 meter. Set it to the value you believe reflects the character's current arousal based on the scene. The extension AUTOMATICALLY subtracts natural decay (50%/hour) from whatever value you set — so to keep arousal high during intimate scenes, set it HIGHER than the current value to compensate for decay (e.g., if the current value is 40 and the scene is stimulating, set it to 70-80 — the engine will subtract a small amount for decay, leaving it around 65-75). You CAN lower arousal for special occasions (e.g., a cold shower, sudden shock, post-climax resolution) — set it to the lower value and the engine will respect it. After a climax, arousal is reset to 0 by the engine. Do NOT immediately crank it back up — let it build gradually over subsequent turns as the scene warrants.
 17. <Climax> is a 0-100 meter computed by the extension from <Arousal>. Copy the value from the sheet exactly — do NOT change it yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
 18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension computes <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> from Arousal (0% arousal = 30% size, 100% arousal = 100% size). Copy the Current tags from the sheet exactly as-is — do NOT modify or remove them.
 19. Backpack (inventory) items use a SIMPLE format that is DIFFERENT from Stomach/Bowel prey items. Backpack items MUST use: <Item qty="..." desc="...">item name</Item>. Do NOT add type, name, volume_L, or digestion attributes to Backpack items. Backpack items are NOT prey — they do not get digested and must NEVER have a digestion meter. The desc attribute is OPTIONAL — include it only for items that benefit from a short note (8 words or fewer). Example:
@@ -1173,14 +1174,17 @@ PRED SUPPRESSION:
 The pred can actively suppress struggling prey. This is controlled by the suppressing="true|false" attribute on the <Stomach> tag. When suppressing="true":
 - Indigestion accumulation is greatly reduced (the pred is actively holding prey down).
 - BUT it drains the pred's Energy faster.
-- It also causes stomach fatigue over time, which reduces suppression effectiveness.
+- It also causes stomach fatigue over time, which reduces suppression effectiveness. This is handled automatically by the engine — just copy the stomachFatigue value from the sheet exactly. You do not need to track or calculate it.
 Set suppressing="true" when the pred is actively clenching, holding, or pinning down prey. Set suppressing="false" when the pred is relaxed or distracted.
 
 STOMACH RESISTANCE:
 <StomachResistance> in <BaseStats> is a multiplier (default 1.0) that affects how easily the pred's stomach endures struggling. Higher values = more resistant (less indigestion per struggle). Lower values = weaker stomach (more indigestion). This is a character trait — set it once and rarely change it (e.g., a pred with an "iron stomach" might have 2.0, a delicate pred might have 0.5).
 
+STOMACH CAPACITY:
+The stomach has a max capacity (height × weight × 0.012 × CapacityMultiplier). This affects struggle intensity — prey larger relative to stomach capacity contribute more to indigestion. Below capacity, prey have reduced struggle impact. Above capacity, struggle impact increases (capped at 2× normal at 200% capacity). There is no hard overflow limit — the engine does not reject or penalize overfilling mechanically. However, you should narrate discomfort and strain when the stomach is over capacity, and treat a significantly overfilled belly as impacting the character's movement and comfort. If the belly is under capacity, treat it as non-impacting — the character moves normally.
+
 ENERGY:
-<Energy> in <State> is drained by fighting prey and active suppression. The engine manages Energy drain from the struggle system. You may also adjust Energy for other reasons (exertion, rest, etc.). When Energy is low, suppression becomes less effective and the pred may struggle to hold prey. Copy the Energy value from the sheet, then adjust it only if the scene calls for additional exertion or rest.
+<Energy> in <State> is drained by fighting prey and active suppression (handled by the engine). Set Energy to the value you believe is appropriate for the scene — the engine will subtract struggle/suppression drain on top. You can RAISE Energy (resting, recovery) or LOWER it (exhaustion, overexertion — use sparingly for special occasions). To keep Energy stable during rest, set it slightly above the current value to compensate for any active drain. When Energy is low, suppression becomes less effective and the pred may struggle to hold prey.
 
 ─── ATTRIBUTE SYSTEM ───
 The character has six RPG attributes: STR (Strength), DEX (Dexterity), CON (Constitution), INT (Intelligence), WIS (Wisdom), CHA (Charisma). These are stored in an <Attributes> block inside <BaseStats>:

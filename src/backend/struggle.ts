@@ -51,10 +51,11 @@ export function processStruggle(
   const indigestionDecayRate = getStat(oldXml, 'IndigestionDecayRate') || 20
   const stomachResistanceFactor = 1.0 / stomachResistance
 
-  // --- Read struggle state, clamped against the OLD sheet so the LLM
-  // cannot "reset" energy, indigestion, or stomach fatigue to lower values. ---
+  // --- Read struggle state from the NEW sheet (LLM output). The LLM
+  // can raise OR lower energy — the engine applies drain on top. ---
   const oldEnergy = getStat(oldXml, 'Energy') || 100
-  let energy = Math.max(getStat(xml, 'Energy') || oldEnergy, oldEnergy)
+  let energy = getStat(xml, 'Energy') ?? oldEnergy
+  energy = Math.max(0, Math.min(100, energy))
 
   const oldIndigestion = parseFloat(getAttrFromString(oldStomAttrs, 'indigestion')) || 0
   const llmIndigestion = parseFloat(getAttrFromString(stomAttrs, 'indigestion'))
