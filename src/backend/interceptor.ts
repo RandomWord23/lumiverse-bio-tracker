@@ -657,11 +657,23 @@ export async function runDigestionTick(
         await spindle.variables.chat.delete(chatId, 'pendingOrgasmReset')
         spindle.log.info('Post-orgasm reset applied.')
       } else {
-        // Turn-based climax meter
+        // Banded climax accumulation: the higher the arousal, the faster
+        // climax rises. This replaces the old +25/-25 cliff at 95.
+        //   Arousal  0-29 (calm):      climax −10/turn
+        //   Arousal 30-59 (mild):      climax holds steady
+        //   Arousal 60-79 (moderate):  climax +5/turn
+        //   Arousal 80-94 (high):      climax +15/turn
+        //   Arousal 95-100 (peak):     climax +30/turn
         if (finalArousal >= 95) {
-          finalClimax = Math.min(100, finalClimax + 25)
+          finalClimax = Math.min(100, finalClimax + 30)
+        } else if (finalArousal >= 80) {
+          finalClimax = Math.min(100, finalClimax + 15)
+        } else if (finalArousal >= 60) {
+          finalClimax = Math.min(100, finalClimax + 5)
+        } else if (finalArousal >= 30) {
+          // Hold steady — no change
         } else {
-          finalClimax = Math.max(0, finalClimax - 25)
+          finalClimax = Math.max(0, finalClimax - 10)
         }
 
         // Trigger orgasm!
@@ -727,8 +739,32 @@ export async function runDigestionTick(
             }
           }
 
+          // Set climax event notification for the LLM — this is the signal
+          // that tells the LLM to narrate the orgasm. Without this signal,
+          // the LLM should NOT narrate an orgasm (see prompt rules 17).
+          await spindle.variables.chat.set(
+            chatId,
+            'pendingClimaxEvent',
+            JSON.stringify({
+              type: 'orgasm',
+            }),
+          )
+
           maybeToast('climaxEvents', 'success', '🔥 Climax reached! Resetting next turn.')
           spindle.log.info('Climax event triggered.')
+        } else if (finalClimax >= 75) {
+          // Edging notification — tell the LLM the character is on the edge
+          // but has NOT climaxed. This gives the LLM a narrative cue for
+          // high tension without permission to narrate an orgasm.
+          await spindle.variables.chat.set(
+            chatId,
+            'pendingClimaxEvent',
+            JSON.stringify({
+              type: 'edging',
+              climaxValue: finalClimax,
+            }),
+          )
+          spindle.log.info(`[runDigestionTick] Edging notification at climax ${finalClimax}`)
         }
       }
 
@@ -1286,6 +1322,40 @@ export async function promptInterceptor(messages: any[], context: any) {
     }
   }
 
+  // ─── Climax Event Notification ───────────────────────────────
+  // The engine sets `pendingClimaxEvent` during runDigestionTick when
+  // the climax meter hits 100 (orgasm) or enters the 75-99 range (edging).
+  // We read it here and inject a notification into the prompt so the LLM
+  // knows whether it has permission to narrate an orgasm or should
+  // describe high tension instead.
+  let climaxNotification = ''
+  const pendingClimaxEvent = await spindle.variables.chat.get(
+    chatId,
+    'pendingClimaxEvent',
+  )
+  if (pendingClimaxEvent) {
+    await spindle.variables.chat.delete(chatId, 'pendingClimaxEvent')
+    try {
+      const climaxEvent: { type: string; climaxValue?: number } =
+        JSON.parse(pendingClimaxEvent)
+      if (climaxEvent.type === 'orgasm') {
+        climaxNotification =
+          '\n\n─── CLIMAX EVENT: ORGASM TRIGGERED ───\n' +
+          'The character has reached climax (Climax = 100). You MUST narrate the full orgasm scene in your visible text. ' +
+          'After narrating, set <Arousal> to 0 and <Climax> to 0 in your <sheet_update> — the engine has already applied the reset.\n' +
+          'This is the ONLY time you are permitted to narrate an orgasm.'
+      } else if (climaxEvent.type === 'edging') {
+        climaxNotification =
+          '\n\n─── CLIMAX EVENT: EDGING ───\n' +
+          `The character is on the edge (Climax = ${climaxEvent.climaxValue ?? 'high'}). ` +
+          'Describe the intense tension and near-climax sensations, but do NOT narrate a full orgasm. ' +
+          'The character is close but has not tipped over the edge yet.'
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }
+
   // ─── Dice Pool: pre-roll dice and inject values into prompt ────
   // If the dice system is enabled and the sheet has a <DicePool> config,
   // we roll all dice NOW (before LLM generation) and store the results
@@ -1306,7 +1376,7 @@ export async function promptInterceptor(messages: any[], context: any) {
 
   const injection = {
     role: 'system' as const,
-    content: buildSheetPrompt(sheet) + populateInstructions + struggleNotification + dicePoolInjection,
+    content: buildSheetPrompt(sheet) + populateInstructions + struggleNotification + climaxNotification + dicePoolInjection,
   }
 
   // ─── Strip <sheet_update> blocks from chat history ──────────

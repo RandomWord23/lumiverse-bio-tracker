@@ -1102,7 +1102,29 @@ CRITICAL XML RULES:
 14. If any State or World field (Time, Weather, Temperature, Area, Building, Room, Health, Energy) is blank or "0" in the <CurrentCharacterSheet>, you MUST invent a sensible default consistent with the current scene. For example, if Weather is blank, set it based on the season or what's happening in the story. If Health or Energy is blank, default to 100. Never leave these fields empty in your <sheet_update>. For <Time>, the default MUST be a plain "HH:MM" 24-hour value (e.g. "08:00") with NO day/date prefix.
 15. Prey <Description> MUST reflect the prey's current action/state and update EVERY turn. <Appearance> stays the same unless the prey transforms. Use <Description> for what's happening now (squirming, dissolving, going limp) and <Appearance> for what they look like (age, species, build, hair, eyes).
 16. <Arousal> is a 0-100 meter. Set it to the value you believe reflects the character's current arousal based on the scene. The extension AUTOMATICALLY subtracts natural decay (50%/hour) from whatever value you set — so to keep arousal high during intimate scenes, set it HIGHER than the current value to compensate for decay (e.g., if the current value is 40 and the scene is stimulating, set it to 70-80 — the engine will subtract a small amount for decay, leaving it around 65-75). You CAN lower arousal for special occasions (e.g., a cold shower, sudden shock, post-climax resolution) — set it to the lower value and the engine will respect it. After a climax, arousal is reset to 0 by the engine. Do NOT immediately crank it back up — let it build gradually over subsequent turns as the scene warrants.
-17. <Climax> is a 0-100 meter computed by the extension from <Arousal>. Copy the value from the sheet exactly — do NOT change it yourself. If <Arousal> stays at 95-100, it will rise. If <Arousal> drops below 95, it will fall.
+
+17. <Climax> is a 0-100 meter computed by the extension from <Arousal>. Copy the value from the sheet exactly — do NOT change it yourself. The climax meter accumulates based on arousal bands:
+- Arousal 0-29 (calm): Climax falls by 10/turn.
+- Arousal 30-59 (mild): Climax holds steady (no change).
+- Arousal 60-79 (moderate): Climax rises by 5/turn.
+- Arousal 80-94 (high): Climax rises by 15/turn.
+- Arousal 95-100 (peak): Climax rises by 30/turn.
+This means it takes multiple turns of sustained high arousal to reach climax — the character can't orgasm instantly just because arousal is high.
+
+CLIMAX EVENT SYSTEM — CRITICAL:
+The extension sends CLIMAX EVENT notifications to tell you when to narrate climax-related events. Follow them exactly:
+
+- "EDGING" (Climax 75-99): The character is on the edge. Narrate intense tension — trembling, barely holding on, desperate need for release. Do NOT narrate an orgasm or ejaculation. The character has NOT climaxed. Describe the struggle of holding back.
+- "ORGASM TRIGGERED" (Climax 100): The character climaxes. Narrate the FULL orgasm/ejaculation scene with release. This is the ONLY time you may narrate an orgasm.
+
+NEVER narrate an orgasm, ejaculation, or climax scene unless you see an "ORGASM TRIGGERED" notification. If you do NOT see a CLIMAX EVENT notification, the character has NOT climaxed — narrate arousal and tension appropriate to the current <Climax> value but do NOT describe release. If <Climax> is 75-99 and you see an "EDGING" notification, describe maximum tension but NO orgasm.
+
+Climax narration guide (for when you do NOT have a notification):
+- Climax 0-24: No climax tension. Arousal is present but the character is not close.
+- Climax 25-49: Building tension. Describe growing arousal, heavier breathing, body responding.
+- Climax 50-74: High tension. Describe being close, struggling to hold back, body trembling.
+- Climax 75-99: Edge. Describe desperate edging, barely holding on — but NO orgasm. Wait for the "ORGASM TRIGGERED" notification.
+- Climax 100: This value should only appear when an "ORGASM TRIGGERED" notification is present. Narrate the full orgasm.
 18. <PenisLength_cm> and <PenisGirth_cm> are the MAX sizes. The extension computes <CurrentPenisLength_cm> and <CurrentPenisGirth_cm> from Arousal (0% arousal = 30% size, 100% arousal = 100% size). Copy the Current tags from the sheet exactly as-is — do NOT modify or remove them.
 19. Backpack (inventory) items use a SIMPLE format that is DIFFERENT from Stomach/Bowel prey items. Backpack items MUST use: <Item qty="..." desc="...">item name</Item>. Do NOT add type, name, volume_L, or digestion attributes to Backpack items. Backpack items are NOT prey — they do not get digested and must NEVER have a digestion meter. The desc attribute is OPTIONAL — include it only for items that benefit from a short note (8 words or fewer). Example:
  BAD (do NOT do this):
