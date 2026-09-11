@@ -24,6 +24,7 @@ import {
   sendGetLatestSheet,
   sendPopulateFields,
   sendGetTheme,
+  sendSpendAttributePoint,
 } from './frontend/api'
 import {
   buildToggleRow,
@@ -159,6 +160,32 @@ export function setup(ctx: SpindleFrontendContext) {
             <div>INT → Nutrient Absorption</div>
             <div>WIS → Indigestion Decay, Energy Regen</div>
             <div>CHA → Suppression</div>
+          </div>
+          <div class="bt-section-title" style="margin-top: 15px;">PROGRESSION</div>
+          <div class="bt-progression-info">
+            <div class="bt-prog-level">
+              <span class="bt-prog-level-label">Level</span>
+              <span class="bt-prog-level-badge" id="bt-prog-level">1</span>
+            </div>
+            <div class="bt-prog-xp">
+              <div class="bt-prog-xp-bar-container">
+                <div class="bt-prog-xp-bar" id="bt-prog-xp-bar" style="width: 0%"></div>
+              </div>
+              <span class="bt-prog-xp-text" id="bt-prog-xp-text">0 / 100 XP</span>
+            </div>
+            <div class="bt-prog-ap">
+              <span class="bt-prog-ap-label">Attribute Points:</span>
+              <span class="bt-prog-ap-val" id="bt-prog-ap">0</span>
+            </div>
+          </div>
+          <div class="bt-prog-spend" id="bt-prog-spend-section" data-level="1" data-xp-current="0" data-xp-next="100" data-ap="0">
+            <div class="bt-hint">Spend points to raise attributes. Cost scales with current score.</div>
+            <div class="bt-prog-spend-row"><span>STR</span><span class="bt-prog-cost" id="bt-prog-cost-str">1 pt</span><button class="bt-prog-spend-btn" id="bt-prog-spend-str" data-attr="STR">+1</button></div>
+            <div class="bt-prog-spend-row"><span>DEX</span><span class="bt-prog-cost" id="bt-prog-cost-dex">1 pt</span><button class="bt-prog-spend-btn" id="bt-prog-spend-dex" data-attr="DEX">+1</button></div>
+            <div class="bt-prog-spend-row"><span>CON</span><span class="bt-prog-cost" id="bt-prog-cost-con">1 pt</span><button class="bt-prog-spend-btn" id="bt-prog-spend-con" data-attr="CON">+1</button></div>
+            <div class="bt-prog-spend-row"><span>INT</span><span class="bt-prog-cost" id="bt-prog-cost-int">1 pt</span><button class="bt-prog-spend-btn" id="bt-prog-spend-int" data-attr="INT">+1</button></div>
+            <div class="bt-prog-spend-row"><span>WIS</span><span class="bt-prog-cost" id="bt-prog-cost-wis">1 pt</span><button class="bt-prog-spend-btn" id="bt-prog-spend-wis" data-attr="WIS">+1</button></div>
+            <div class="bt-prog-spend-row"><span>CHA</span><span class="bt-prog-cost" id="bt-prog-cost-cha">1 pt</span><button class="bt-prog-spend-btn" id="bt-prog-spend-cha" data-attr="CHA">+1</button></div>
           </div>
         </div>
       </div>
@@ -369,6 +396,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'struggleEvents', label: 'Struggle Events', desc: 'Indigestion thresholds and prey struggling' },
     { key: 'vomitEvents', label: 'Vomit Events', desc: 'Prey escape during vomit events' },
     { key: 'lactationEvents', label: 'Lactation Events', desc: 'Milk production, fullness, and leaking notifications' },
+    { key: 'progressionEvents', label: 'Progression Events', desc: 'XP gains, level ups, and attribute point spending' },
     { key: 'errors', label: 'Errors', desc: 'Populate failed and other errors' },
     { key: 'chatWarnings', label: 'Chat Warnings', desc: 'Open a chat first warnings' },
   ]
@@ -385,6 +413,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'cockVoreEngine', label: 'Cock Vore Engine', desc: 'Balls conversion of prey into cum, expelled on climax' },
     { key: 'lactationEngine', label: 'Lactation Engine', desc: 'Milk production, accumulation, and overcapacity leaking' },
     { key: 'healthSystem', label: 'Health System', desc: 'Health pool with digestion-driven regen and event-based damage' },
+    { key: 'progressionSystem', label: 'Progression System', desc: 'XP, leveling, and attribute points' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -594,7 +623,51 @@ export function setup(ctx: SpindleFrontendContext) {
   document.querySelectorAll('.bt-attr').forEach((el) => {
     el.addEventListener('input', () => {
       const attrKey = (el as HTMLInputElement).dataset.attr
-      if (attrKey) updateAttrModDisplay(attrKey)
+      if (attrKey) {
+        updateAttrModDisplay(attrKey)
+        updateProgressionDisplay()
+      }
+    })
+  })
+
+  // ─── Progression display ────────────────────────────────────
+  function updateProgressionDisplay() {
+    const section = document.getElementById('bt-prog-spend-section')
+    if (!section) return
+    const level = parseInt(section.dataset.level || '1') || 1
+    const xpCurrent = parseInt(section.dataset.xpCurrent || '0') || 0
+    const xpNext = parseInt(section.dataset.xpNext || '100') || 100
+    const ap = parseInt(section.dataset.ap || '0') || 0
+
+    const levelEl = document.getElementById('bt-prog-level')
+    if (levelEl) levelEl.textContent = String(level)
+
+    const xpBar = document.getElementById('bt-prog-xp-bar')
+    const xpText = document.getElementById('bt-prog-xp-text')
+    const pct = xpNext > 0 ? Math.min(100, (xpCurrent / xpNext) * 100) : 0
+    if (xpBar) xpBar.style.width = `${pct}%`
+    if (xpText) xpText.textContent = `${xpCurrent} / ${xpNext} XP`
+
+    const apEl = document.getElementById('bt-prog-ap')
+    if (apEl) apEl.textContent = String(ap)
+
+    const attrKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']
+    for (const ak of attrKeys) {
+      const attrInput = document.getElementById('bt-attr-' + ak.toLowerCase()) as HTMLInputElement
+      const score = parseInt(attrInput?.value || '10') || 10
+      const cost = Math.max(1, Math.floor((score - 10) / 5) + 1)
+      const costEl = document.getElementById('bt-prog-cost-' + ak.toLowerCase())
+      if (costEl) costEl.textContent = `${cost} pt${cost > 1 ? 's' : ''}`
+      const btn = document.getElementById('bt-prog-spend-' + ak.toLowerCase()) as HTMLButtonElement
+      if (btn) {
+        btn.disabled = ap < cost || score >= 20
+      }
+    }
+  }
+  document.querySelectorAll('.bt-prog-spend-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const attrKey = (btn as HTMLElement).dataset.attr
+      if (attrKey) sendSpendAttributePoint(ctx, attrKey)
     })
   })
 
@@ -1612,6 +1685,13 @@ export function setup(ctx: SpindleFrontendContext) {
     const healthVal = parseInt(healthInput?.value || '100') || 100
     const healthMax = parseInt(healthMaxInput?.value || '100') || 100
     xml += `  <Vitals>\n    <Health current="${healthVal}" max="${healthMax}" />\n  </Vitals>\n`
+    // Progression block — engine-managed, preserved on manual sync
+    const progSection = document.getElementById('bt-prog-spend-section')
+    const progLevel = parseInt(progSection?.dataset.level || '1') || 1
+    const progXpCurrent = parseInt(progSection?.dataset.xpCurrent || '0') || 0
+    const progXpNext = parseInt(progSection?.dataset.xpNext || '100') || 100
+    const progAp = parseInt(progSection?.dataset.ap || '0') || 0
+    xml += `  <Progression>\n    <Level value="${progLevel}" />\n    <XP current="${progXpCurrent}" next="${progXpNext}" />\n    <AttributePoints available="${progAp}" />\n  </Progression>\n`
     xml += `</CharacterSheet>`
     return xml
   }
@@ -1831,6 +1911,10 @@ export function setup(ctx: SpindleFrontendContext) {
         }
       }
     }
+    if (msg.type === 'ATTRIBUTE_SPENT') {
+      // SHEET_UPDATED (sent on success) already repopulates the form.
+      // On failure the backend toast already informed the user.
+    }
   })
 
   // ─── Helper: extract text from swipe content ───────────────
@@ -1957,6 +2041,25 @@ export function setup(ctx: SpindleFrontendContext) {
         updateAttrModDisplay(ak)
       }
     }
+
+    // Parse Progression block (engine-managed)
+    const progNode = doc.querySelector('Progression')
+    const progSection = document.getElementById('bt-prog-spend-section')
+    if (progNode && progSection) {
+      const levelNode = progNode.querySelector('Level')
+      const xpNode = progNode.querySelector('XP')
+      const apNode = progNode.querySelector('AttributePoints')
+      progSection.dataset.level = levelNode?.getAttribute('value') || '1'
+      progSection.dataset.xpCurrent = xpNode?.getAttribute('current') || '0'
+      progSection.dataset.xpNext = xpNode?.getAttribute('next') || '100'
+      progSection.dataset.ap = apNode?.getAttribute('available') || '0'
+    } else if (progSection) {
+      progSection.dataset.level = '1'
+      progSection.dataset.xpCurrent = '0'
+      progSection.dataset.xpNext = '100'
+      progSection.dataset.ap = '0'
+    }
+    updateProgressionDisplay()
 
     // Trigger visual updates
     document.getElementById('bt-height')?.dispatchEvent(new Event('input'))

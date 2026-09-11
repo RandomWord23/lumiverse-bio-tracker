@@ -17,10 +17,12 @@ import {
   maybeToast,
   extractTextContent,
   extractSheetUpdate,
+  spendAttributePoint,
 } from './backend/engine'
 
 import {
   saveChatSheet,
+  loadChatSheet,
   switchToChat,
 } from './backend/storage'
 
@@ -164,6 +166,28 @@ spindle.onFrontendMessage(async (msg: any) => {
       )
       spindle.sendToFrontend({ type: 'POPULATE_DONE', success: false })
     }
+  }
+
+  if (msg.type === 'SPEND_ATTRIBUTE_POINT' && msg.attrKey) {
+    if (!activeChatId) {
+      maybeToast('chatWarnings', 'warning', 'Open a chat first.')
+      return
+    }
+    const sheet = sheets.get(activeChatId) || (await loadChatSheet(activeChatId)) || ''
+    if (!sheet) {
+      maybeToast('errors', 'warning', 'No character sheet found to spend attribute points on.')
+      spindle.sendToFrontend({ type: 'ATTRIBUTE_SPENT', success: false, message: 'No sheet found.' })
+      return
+    }
+    const result = spendAttributePoint(sheet, msg.attrKey as string)
+    if (result.success) {
+      await saveChatSheet(activeChatId, result.xml)
+      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: result.xml })
+      maybeToast('progressionEvents', 'success', result.message)
+    } else {
+      maybeToast('progressionEvents', 'warning', result.message)
+    }
+    spindle.sendToFrontend({ type: 'ATTRIBUTE_SPENT', success: result.success, message: result.message })
   }
 
   // ── MOBILE-VISIBLE DIAGNOSTIC: frontend sends diagnostic messages ──

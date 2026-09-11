@@ -47,6 +47,10 @@ import {
   setHealth,
   getHealthState,
   computeMaxHP,
+  processXpAwards,
+  processProgression,
+  getProgression,
+  spendAttributePoint,
 } from './engine'
 
 import {
@@ -58,6 +62,7 @@ import {
 import {
   type MessageContentProcessorCtx,
   type MessageContentProcessorResult,
+  XP_AWARDS,
 } from './types'
 
 export async function runDigestionTick(
@@ -978,6 +983,76 @@ export async function runDigestionTick(
         )
         if (engineToggles.healthSystem) {
           maybeToast('healthEvents', 'warning', `💔 ${damageResult.events.join('; ')}`)
+        }
+      }
+    }
+
+    // ── PHASE 3: PROGRESSION SYSTEM (XP, Leveling, Attribute Points) ────
+    // Runs after all other engines. Collects engine-awarded XP from
+    // digestion events and struggle outcomes, parses LLM <xp_award> tags,
+    // then runs the full progression cycle (add XP, check level-ups,
+    // grant attribute points, inject <Progression> block).
+    if (engineToggles.progressionSystem) {
+      // ── Collect engine-awarded XP ──
+      let engineXp = 0
+
+      // Digest items: 5-20 XP per item digested (scaled by volume)
+      if (wasteCount > 0) {
+        const digestXp = Math.min(
+          XP_AWARDS.DIGEST_ITEM_MAX * wasteCount,
+          XP_AWARDS.DIGEST_ITEM_MIN * wasteCount + Math.floor(totalDigestedVol * 2),
+        )
+        engineXp += digestXp
+      }
+
+      // Struggle events: check for suppression, escape, vomit
+      for (const evt of struggleEvents) {
+        if (evt.includes('VOMIT')) {
+          engineXp += XP_AWARDS.VOMIT_EVENT
+          if (evt.includes('escaped')) {
+            engineXp += XP_AWARDS.PREY_ESCAPE
+          }
+        }
+      }
+
+      // Suppression: 2 XP per round if the pred is actively suppressing
+      if (struggleEvents.length > 0 && !struggleEvents.some(e => e.includes('VOMIT'))) {
+        engineXp += XP_AWARDS.SUPPRESSION_ROUND
+      }
+
+      // Survive critical health: 15 XP if health is below 25% max
+      if (engineToggles.healthSystem) {
+        const health = getHealth(updatedXml)
+        if (health.max > 0 && health.current > 0 && health.current < health.max * 0.25) {
+          engineXp += XP_AWARDS.SURVIVE_CRITICAL
+        }
+      }
+
+      // Full digestion of prey: 30 XP if stomach is now empty but had items before
+      if (wasteCount > 0 && totalItemCount === 0) {
+        engineXp += XP_AWARDS.DIGEST_PREY_FULL
+      }
+
+      // ── Parse LLM <xp_award> tags and strip them ──
+      const xpAwardResult = processXpAwards(updatedXml)
+      updatedXml = xpAwardResult.xml
+      const totalXp = engineXp + xpAwardResult.totalXp
+
+      // ── Run progression cycle ──
+      if (totalXp > 0 || /<Progression>/i.test(updatedXml)) {
+        const progResult = processProgression(updatedXml, totalXp)
+        updatedXml = progResult.xml
+
+        if (progResult.events.length > 0) {
+          spindle.log.info(
+            `[Progression] +${progResult.xpGained} XP, ` +
+              `level ${progResult.level}, ${progResult.attributePoints} attribute points available`,
+          )
+        }
+
+        // Log individual LLM XP awards for transparency
+        for (const award of xpAwardResult.awards) {
+          spindle.log.info(`[Progression] LLM awarded ${award.amount} XP: ${award.reason}`)
         }
       }
     }

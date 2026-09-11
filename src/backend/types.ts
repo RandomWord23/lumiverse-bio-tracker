@@ -136,6 +136,66 @@ export interface HealthDamageResult {
 }
 
 // ---------------------------------------------------------------------------
+// Progression System configuration (Proposal 5: XP, Leveling, Attribute Points)
+// ---------------------------------------------------------------------------
+
+/**
+ * XP required to advance from level *n* to level *n+1*.
+ * Formula: 100 × n × (n + 1) / 2
+ *   Level 1→2:  100 XP
+ *   Level 2→3:  300 XP
+ *   Level 3→4:  600 XP
+ *   Level 4→5:  1000 XP
+ */
+export function xpForLevel(n: number): number {
+  return Math.floor(100 * n * (n + 1) / 2)
+}
+
+/** Maximum level cap. */
+export const MAX_LEVEL = 50
+
+/** Starting attribute score (the "average" baseline, modifier = 0). */
+export const ATTRIBUTE_BASE = 10
+
+/** Maximum attribute score achievable via spending points. */
+export const ATTRIBUTE_MAX = 20
+
+/**
+ * Attribute point cost to raise an attribute from *currentScore* to *currentScore + 1*.
+ * Formula: max(1, floor((currentScore - 10) / 5) + 1)
+ *   10→11: 1 point
+ *   15→16: 2 points
+ *   18→19: 3 points
+ */
+export function attributePointCost(currentScore: number): number {
+  return Math.max(1, Math.floor((currentScore - ATTRIBUTE_BASE) / 5) + 1)
+}
+
+/** Engine-awarded XP values for various digestion / struggle events. */
+export const XP_AWARDS = {
+  DIGEST_ITEM_MIN: 5,
+  DIGEST_ITEM_MAX: 20,
+  SUPPRESSION_ROUND: 2,
+  PREY_ESCAPE: 25,
+  SURVIVE_CRITICAL: 15,
+  DIGEST_PREY_FULL: 30,
+  VOMIT_EVENT: 10,
+} as const
+
+/** Result of the full progression cycle (XP add, level-up, attribute points). */
+export interface ProgressionResult {
+  xml: string
+  level: number
+  xpCurrent: number
+  xpNext: number
+  attributePoints: number
+  xpGained: number
+  leveledUp: boolean
+  levelsGained: number
+  events: string[]
+}
+
+// ---------------------------------------------------------------------------
 // Shared interfaces
 // ---------------------------------------------------------------------------
 

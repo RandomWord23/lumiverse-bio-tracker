@@ -554,6 +554,76 @@ export const bioTrackerStylesheet = `
       outline-offset: 2px;
     }
 
+    /* ── Progression system ──────────────────────────────────────── */
+    .bt-progression-info {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+      margin-bottom: 10px;
+    }
+    .bt-prog-level {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .bt-prog-level-label {
+      font-size: var(--bt-font-xs); color: var(--bt-text-dim);
+    }
+    .bt-prog-level-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 32px; height: 32px; border-radius: 50%;
+      background: var(--bt-accent); color: #fff;
+      font-size: 15px; font-weight: 700;
+    }
+    .bt-prog-xp {
+      flex: 1; min-width: 120px; display: flex; flex-direction: column; gap: 3px;
+    }
+    .bt-prog-xp-bar-container {
+      height: 10px; border-radius: 5px;
+      background: var(--bt-surface-3); overflow: hidden;
+    }
+    .bt-prog-xp-bar {
+      height: 100%; border-radius: 5px;
+      background: var(--bt-success);
+      transition: width 0.3s ease;
+    }
+    .bt-prog-xp-text {
+      font-size: var(--bt-font-xs); color: var(--bt-text-dim);
+    }
+    .bt-prog-ap {
+      display: flex; align-items: center; gap: 4px;
+      font-size: var(--bt-font-sm);
+    }
+    .bt-prog-ap-label { color: var(--bt-text-dim); }
+    .bt-prog-ap-val {
+      font-weight: 700; color: var(--bt-accent);
+      min-width: 16px; text-align: center;
+    }
+    .bt-prog-spend {
+      margin-top: 8px;
+    }
+    .bt-prog-spend-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--bt-border);
+    }
+    .bt-prog-spend-row:last-child { border-bottom: none; }
+    .bt-prog-spend-row > span:first-child {
+      width: 36px; font-weight: 600; font-size: var(--bt-font-sm);
+    }
+    .bt-prog-cost {
+      flex: 1; font-size: var(--bt-font-xs); color: var(--bt-text-dim);
+    }
+    .bt-prog-spend-btn {
+      padding: 4px 12px; border-radius: var(--bt-radius);
+      border: 1px solid var(--bt-accent);
+      background: var(--bt-surface-2); color: var(--bt-accent);
+      font-size: var(--bt-font-sm); font-weight: 600;
+      cursor: pointer; transition: background 0.15s, opacity 0.15s;
+    }
+    .bt-prog-spend-btn:hover:not(:disabled) {
+      background: var(--bt-accent); color: #fff;
+    }
+    .bt-prog-spend-btn:disabled {
+      opacity: 0.35; cursor: not-allowed;
+    }
+
     /* ── Responsive (narrow viewports) ───────────────────────────── */
     @media (max-width: 480px) {
       #bio-tracker-panel { width: 100vw; }

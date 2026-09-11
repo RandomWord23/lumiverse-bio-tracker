@@ -24,6 +24,7 @@ export const defaultToastSettings: ToastSettings = {
   struggleEvents: true,
   vomitEvents: true,
   lactationEvents: true,
+  progressionEvents: true,
   healthEvents: true,
   errors: true,
   chatWarnings: false,
@@ -42,6 +43,7 @@ export const defaultEngineToggles: EngineToggles = {
   unbirthEngine: false,
   cockVoreEngine: false,
   lactationEngine: false,
+  progressionSystem: false,
 }
 
 export const defaultUiSettings: UiSettings = {
@@ -112,4 +114,11 @@ export function sendPopulateFields(
 
 export function sendGetTheme(ctx: SpindleFrontendContext): void {
   ctx.sendToBackend({ type: 'GET_THEME' })
+}
+
+export function sendSpendAttributePoint(
+  ctx: SpindleFrontendContext,
+  attrKey: string,
+): void {
+  ctx.sendToBackend({ type: 'SPEND_ATTRIBUTE_POINT', attrKey })
 }

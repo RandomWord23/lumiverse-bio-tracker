@@ -16,6 +16,12 @@ import {
   HEALTH_DAMAGE,
   HEALTH_STATE_MODIFIERS,
   HEALTH_STATE_THRESHOLDS,
+  xpForLevel,
+  MAX_LEVEL,
+  ATTRIBUTE_BASE,
+  ATTRIBUTE_MAX,
+  attributePointCost,
+  XP_AWARDS,
 } from './types'
 import type {
   DiceConfig,
@@ -27,6 +33,7 @@ import type {
   ConversionResult,
   HealthState,
   HealthDamageResult,
+  ProgressionResult,
 } from './types'
 
 /** Compute elapsed hours between two story-clock timestamps (0-24 range),
@@ -327,6 +334,160 @@ export function processAttributes(xml: string): Record<string, number> {
     }
   }
   return out
+}
+
+// ─── Progression System (XP, Leveling, Attribute Points) ───
+// Engine-managed meta-layer. The <Progression> block is injected by the
+// engine after LLM generation — the LLM must NOT create or modify it.
+
+/** Read the <Progression> block from sheet XML. Returns level, xp, attribute points. */
+export function getProgression(xml: string): { level: number; xpCurrent: number; xpNext: number; attributePoints: number } {
+  const match = xml.match(/<Progression>([\s\S]*?)<\/Progression>/i)
+  if (!match) {
+    return { level: 1, xpCurrent: 0, xpNext: xpForLevel(1), attributePoints: 0 }
+  }
+  const block = match[1]
+  const levelMatch = block.match(/<Level\s+value="(\d+)"/i)
+  const xpMatch = block.match(/<XP\s+current="([\d.]+)"\s+next="([\d.]+)"/i)
+  const apMatch = block.match(/<AttributePoints\s+available="(\d+)"/i)
+  const level = levelMatch ? parseInt(levelMatch[1]) || 1 : 1
+  const xpCurrent = xpMatch ? parseFloat(xpMatch[1]) || 0 : 0
+  const xpNext = xpMatch ? parseFloat(xpMatch[2]) || xpForLevel(level) : xpForLevel(level)
+  const attributePoints = apMatch ? parseInt(apMatch[1]) || 0 : 0
+  return { level, xpCurrent, xpNext, attributePoints }
+}
+
+/** Write (create or replace) the <Progression> block in sheet XML. */
+export function setProgression(xml: string, level: number, xpCurrent: number, xpNext: number, attributePoints: number): string {
+  const block = `<Progression>\n    <Level value="${level}" />\n    <XP current="${xpCurrent.toFixed(0)}" next="${xpNext.toFixed(0)}" />\n    <AttributePoints available="${attributePoints}" />\n  </Progression>`
+  if (/<Progression>[\s\S]*?<\/Progression>/i.test(xml)) {
+    return xml.replace(/<Progression>[\s\S]*?<\/Progression>/i, block)
+  }
+  if (/<\/CharacterSheet>/i.test(xml)) {
+    return xml.replace(/<\/CharacterSheet>/i, `  ${block}\n</CharacterSheet>`)
+  }
+  return xml + '\n' + block
+}
+
+/**
+ * Parse and strip <xp_award> tags from the sheet_update XML.
+ * The LLM may include <xp_award amount="X" reason="..." /> tags to award
+ * bonus XP for narrative milestones. Returns cleaned XML and total XP.
+ */
+export function processXpAwards(xml: string): { xml: string; totalXp: number; awards: { amount: number; reason: string }[] } {
+  const awards: { amount: number; reason: string }[] = []
+  const awardRegex = /<xp_award\s+amount="([\d.]+)"\s+reason="([^"]*)"\s*\/>/gi
+  let match: RegExpExecArray | null
+  while ((match = awardRegex.exec(xml)) !== null) {
+    const amount = parseFloat(match[1]) || 0
+    const reason = match[2] || ''
+    if (amount > 0) {
+      awards.push({ amount, reason })
+    }
+  }
+  const totalXp = awards.reduce((sum, a) => sum + a.amount, 0)
+  const cleanedXml = xml.replace(/<xp_award\s+[^>]*\/>/gi, '')
+  return { xml: cleanedXml, totalXp, awards }
+}
+
+/**
+ * Run the full progression cycle: add XP, check for level-ups,
+ * grant attribute points, and inject/update the <Progression> block.
+ */
+export function processProgression(xml: string, engineXp: number): ProgressionResult {
+  const events: string[] = []
+  const { level: curLevel, xpCurrent, attributePoints } = getProgression(xml)
+
+  let level = curLevel
+  let totalGained = engineXp
+  if (engineXp > 0) {
+    events.push(`+${engineXp} XP (engine: digestion events)`)
+  }
+
+  let newXp = xpCurrent + totalGained
+  let levelsGained = 0
+  let newAttributePoints = attributePoints
+
+  while (level < MAX_LEVEL && newXp >= xpForLevel(level)) {
+    newXp -= xpForLevel(level)
+    level++
+    levelsGained++
+    newAttributePoints += 2
+    events.push(`LEVEL UP! Reached level ${level}. +2 attribute points.`)
+  }
+
+  const xpNext = xpForLevel(level)
+  const displayXp = Math.min(newXp, xpNext)
+
+  xml = setProgression(xml, level, displayXp, xpNext, newAttributePoints)
+
+  if (totalGained > 0 || levelsGained > 0) {
+    maybeToast('progressionEvents', 'success',
+      levelsGained > 0
+        ? `Level up! Now level ${level}. +${levelsGained * 2} attribute points available.`
+        : `+${totalGained} XP gained.`
+    )
+  }
+
+  return {
+    xml, level, xpCurrent: displayXp, xpNext, attributePoints: newAttributePoints,
+    xpGained: totalGained, leveledUp: levelsGained > 0, levelsGained, events,
+  }
+}
+
+/** Set a single attribute score in the <Attributes> XML block. Creates the block if missing. */
+export function setAttribute(xml: string, key: string, value: number): string {
+  if (/<Attributes>[\s\S]*?<\/Attributes>/i.test(xml)) {
+    const attrRegex = new RegExp(`<${key}>.*?<\\/${key}>`, 'i')
+    if (attrRegex.test(xml)) {
+      return xml.replace(attrRegex, `<${key}>${value}</${key}>`)
+    }
+    return xml.replace(/<\/Attributes>/i, `    <${key}>${value}</${key}>\n  </Attributes>`)
+  }
+  const attrsBlock = `  <Attributes>\n    <${key}>${value}</${key}>\n  </Attributes>`
+  if (/<\/BaseStats>/i.test(xml)) {
+    return xml.replace(/<\/BaseStats>/i, `${attrsBlock}\n  </BaseStats>`)
+  }
+  if (/<\/CharacterSheet>/i.test(xml)) {
+    return xml.replace(/<\/CharacterSheet>/i, `${attrsBlock}\n</CharacterSheet>`)
+  }
+  return xml + '\n' + attrsBlock
+}
+
+/**
+ * Spend attribute points to raise a single attribute by 1.
+ * Called from the frontend RPC handler.
+ */
+export function spendAttributePoint(xml: string, attrKey: string): { xml: string; success: boolean; message: string } {
+  const { attributePoints } = getProgression(xml)
+  const currentScore = getAttribute(xml, attrKey)
+
+  if (!ATTRIBUTE_KEYS.includes(attrKey as typeof ATTRIBUTE_KEYS[number])) {
+    return { xml, success: false, message: `Invalid attribute: ${attrKey}` }
+  }
+  if (attributePoints <= 0) {
+    return { xml, success: false, message: 'No attribute points available.' }
+  }
+  if (currentScore >= ATTRIBUTE_MAX) {
+    return { xml, success: false, message: `${attrKey} is already at maximum (${ATTRIBUTE_MAX}).` }
+  }
+
+  const cost = attributePointCost(currentScore)
+  if (attributePoints < cost) {
+    return { xml, success: false, message: `Need ${cost} points to raise ${attrKey} from ${currentScore} to ${currentScore + 1}, but only have ${attributePoints}.` }
+  }
+
+  const newScore = currentScore + 1
+  xml = setAttribute(xml, attrKey, newScore)
+
+  const remainingPoints = attributePoints - cost
+  const { level, xpCurrent, xpNext } = getProgression(xml)
+  xml = setProgression(xml, level, xpCurrent, xpNext, remainingPoints)
+
+  return {
+    xml, success: true,
+    message: `Raised ${attrKey} from ${currentScore} to ${newScore}. Spent ${cost} attribute point(s). ${remainingPoints} remaining.`,
+  }
 }
 
 // ─── Health & Damage System ────────────────────────────────
@@ -1592,6 +1753,36 @@ BACKPACK ITEM FORMAT:
 - The extension computes <InventoryOvercapacity>. If it is >0, the character is carrying more unique items than they have slots for. Narrate them being overburdened and have them drop, store, or discard items until within capacity.
 - When the character equips or removes clothing, update the slots attribute on the relevant <Equip> tag. The capacity will recalculate automatically.
 - Copy <InventoryCapacity> and <InventoryOvercapacity> from the sheet exactly as-is — do NOT modify or recalculate them.
+
+─── PROGRESSION SYSTEM ───
+The character has a Level, XP, and Attribute Points tracked in a <Progression> block. This block is ENGINE-MANAGED — the engine injects and updates it automatically. You must NOT create, modify, or delete the <Progression> block. Simply copy it verbatim from the existing sheet into your updated sheet.
+
+The <Progression> block looks like:
+  <Progression>
+    <Level value="1" />
+    <XP current="0" next="100" />
+    <AttributePoints available="0" />
+  </Progression>
+
+- <Level value="N" /> is the character's current level (starts at 1, max 50).
+- <XP current="X" next="Y" /> shows current XP and XP needed for the next level. Both are managed by the engine.
+- <AttributePoints available="N" /> is the number of unspent attribute points. The player spends these via the UI — do NOT spend them yourself.
+
+XP AWARDS:
+You may award bonus XP to the character for significant narrative milestones by including <xp_award> tags inside your <sheet_update>, OUTSIDE the <CharacterSheet> block but inside <sheet_update>. Format:
+  <xp_award amount="15" reason="Survived a dangerous encounter" />
+- amount should be 5-50 depending on significance.
+- reason should be a short description of why the XP was awarded.
+- The engine will parse these, add the XP, and strip the tags automatically.
+- Award XP for: overcoming challenges, character growth, surviving dangerous situations, achieving story milestones, creative problem-solving.
+- Do NOT award XP for routine actions, eating, or resting.
+
+ATTRIBUTE POINTS:
+- Each level-up grants 2 attribute points.
+- The player spends attribute points via the UI to raise STR, DEX, CON, INT, WIS, or CHA.
+- Higher attribute scores cost more points: raising from 10→11 costs 1 point, 15→16 costs 2 points, 18→19 costs 3 points.
+- You do NOT spend attribute points — only the player does, through the UI.
+- When narrating, reflect the character's growing competence as they level up.
 
 <sheet_update>
 <CharacterSheet>
