@@ -41,11 +41,13 @@ export let toastSettings: Record<string, boolean> = {
   rollbackEvents: true, rollbackWarnings: true, errors: true, chatWarnings: false,
   struggleEvents: true, vomitEvents: true,
   lactationEvents: true,
+  healthEvents: true,
 }
 export let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
   struggleEngine: true, buffSystem: true,
   attributeSystem: false,
+  healthSystem: false,
   diceSystem: false,
   unbirthEngine: false,
   cockVoreEngine: false,

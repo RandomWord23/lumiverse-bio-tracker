@@ -41,6 +41,12 @@ import {
   buildDicePoolPrompt,
   processActionRolls,
   repairDigestiveTract,
+  processHealthRegen,
+  processHealthDamage,
+  getHealth,
+  setHealth,
+  getHealthState,
+  computeMaxHP,
 } from './engine'
 
 import {
@@ -169,6 +175,24 @@ export async function runDigestionTick(
     }
 
     updatedXml = newXml
+
+    // ── PHASE 1: HEALTH REGEN ──────────────────────────────────────────
+    // Runs BEFORE collectModifiers so health-state modifiers (from the
+    // pre-regen HP) are applied to all downstream engine stats. Regeneration
+    // uses digestion state (stomach item count) and resting status from oldXml.
+    let struggleEvents: string[] = []
+    if (engineToggles.healthSystem) {
+      // Count stomach items in oldXml for regen base rate
+      const stomMatch = oldXml.match(/<Stomach[^>]*>([\s\S]*?)<\/Stomach>/i)
+      const stomItemCount = stomMatch
+        ? (stomMatch[1].match(/<Item[\s>]/gi) || []).length
+        : 0
+      oldXml = processHealthRegen(oldXml, elapsed, stomItemCount)
+      spindle.log.info(
+        `[Health] Phase 1: regen applied (${elapsed.toFixed(2)}h, ${stomItemCount} stomach items)`,
+      )
+    }
+
     // Unified modifier pipeline: collects buffs + attributes (+ future sources),
     // sums them additively per stat key, and clamps to ±50%.
     const modifiers = collectModifiers(oldXml)
@@ -607,6 +631,7 @@ export async function runDigestionTick(
     if (engineToggles.struggleEngine) {
       const struggleResult = processStruggle(updatedXml, oldXml, elapsed, modifiers.StomachResistance || 0, modifiers.EnergyDrain || 0)
       updatedXml = struggleResult.xml
+      struggleEvents = struggleResult.struggleEvents
       if (struggleResult.struggleEvents.length > 0) {
         await spindle.variables.chat.set(
           chatId,
@@ -926,6 +951,36 @@ export async function runDigestionTick(
         spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
       }
     } // end clothingStress
+
+    // ── PHASE 2: HEALTH DAMAGE ─────────────────────────────────────────
+    // Runs AFTER all existing engines so it can read their results:
+    // struggleEvents (vomit, indigestion thresholds), acidLevel,
+    // totalItemCount (stomach + transit), and stomach capacity.
+    if (engineToggles.healthSystem) {
+      // Compute stomach max capacity using same formula as struggle.ts
+      const height = getStat(oldXml, 'Height_cm') || 160
+      const weight = getStat(oldXml, 'Weight_kg') || 60
+      const capacityMult = getStat(oldXml, 'CapacityMultiplier') || 1.0
+      const stomachMaxCap = height * weight * 0.012 * capacityMult
+
+      const damageResult = processHealthDamage(
+        updatedXml,
+        struggleEvents,
+        acidLevel,
+        totalItemCount,
+        stomachMaxCap,
+      )
+      updatedXml = damageResult.xml
+
+      if (damageResult.totalDamage > 0) {
+        spindle.log.info(
+          `[Health] Phase 2: -${damageResult.totalDamage} HP damage (${damageResult.events.join(', ')})`,
+        )
+        if (engineToggles.healthSystem) {
+          maybeToast('healthEvents', 'warning', `💔 ${damageResult.events.join('; ')}`)
+        }
+      }
+    }
 
     spindle.log.info(
       `Digestion tick: ${elapsed.toFixed(2)}h elapsed, ` +

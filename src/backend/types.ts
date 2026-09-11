@@ -68,6 +68,74 @@ export const stressMultipliers: Record<string, number> = {
 }
 
 // ---------------------------------------------------------------------------
+// Health & Damage System configuration
+// ---------------------------------------------------------------------------
+
+export const MAX_HP_BASE = 100
+export const CON_HP_BONUS = 10
+
+/** Regen rates (HP per hour). */
+export const HEALTH_REGEN = {
+  EMPTY_STOMACH: 1,
+  DIGESTING_BASE: 3,
+  DIGESTING_BONUS_PER_ITEM: 1,
+  DIGESTING_BONUS_CAP: 3,
+  RESTING_MULT: 2,
+  CON_MULT_WEIGHT: 0.05,
+  CRITICAL_MULT: 3,
+  CRITICAL_THRESHOLD_PCT: 4,
+} as const
+
+/** Damage values for discrete events. */
+export const HEALTH_DAMAGE = {
+  VOMIT: 8,
+  INDIGESTION_90: 4,
+  INDIGESTION_75: 2,
+  PREY_ESCAPE: 2,
+  ACID_OVERLOAD: 5,
+  OVERCAPACITY: 3,
+} as const
+
+export type HealthState = 'Healthy' | 'Bruised' | 'Wounded' | 'Critical' | 'Incapacitated'
+
+/**
+ * Modifier contributions per health state.
+ * Each entry is an additive modifier map (same format as buffs/attributes)
+ * that gets merged into collectModifiers() and clamped to ±50%.
+ */
+export const HEALTH_STATE_MODIFIERS: Record<Exclude<HealthState, 'Healthy' | 'Incapacitated'>, Record<string, number>> = {
+  Bruised: {
+    Suppression: -0.03,
+  },
+  Wounded: {
+    Suppression: -0.08,
+    EscapeChance: -0.05,
+    IndigestionGain: 0.03,
+  },
+  Critical: {
+    Suppression: -0.12,
+    EscapeChance: -0.10,
+    IndigestionGain: 0.08,
+    EnergyRegen: -0.05,
+  },
+}
+
+/** Threshold percentages (fraction of maxHP) for each health state. */
+export const HEALTH_STATE_THRESHOLDS = {
+  HEALTHY: 0.60,
+  BRUISED: 0.30,
+  WOUNDED: 0.10,
+  CRITICAL: 0.01,
+} as const
+
+/** Result of processing health damage events in Phase 2. */
+export interface HealthDamageResult {
+  xml: string
+  totalDamage: number
+  events: string[]
+}
+
+// ---------------------------------------------------------------------------
 // Shared interfaces
 // ---------------------------------------------------------------------------
 

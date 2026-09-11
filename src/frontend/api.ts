@@ -24,6 +24,7 @@ export const defaultToastSettings: ToastSettings = {
   struggleEvents: true,
   vomitEvents: true,
   lactationEvents: true,
+  healthEvents: true,
   errors: true,
   chatWarnings: false,
 }
@@ -34,6 +35,9 @@ export const defaultEngineToggles: EngineToggles = {
   nutrientAbsorption: true,
   arousalClimax: true,
   struggleEngine: true,
+  buffSystem: true,
+  attributeSystem: false,
+  healthSystem: false,
   diceSystem: false,
   unbirthEngine: false,
   cockVoreEngine: false,

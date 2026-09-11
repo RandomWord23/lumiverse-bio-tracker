@@ -32,6 +32,9 @@ export interface EngineToggles {
   nutrientAbsorption: boolean
   arousalClimax: boolean
   struggleEngine: boolean
+  buffSystem: boolean
+  attributeSystem: boolean
+  healthSystem: boolean
   diceSystem: boolean
   unbirthEngine: boolean
   cockVoreEngine: boolean

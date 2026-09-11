@@ -227,7 +227,7 @@ export function setup(ctx: SpindleFrontendContext) {
       </div>
       <div id="tab-state" class="bt-tab-content">
         <div class="bt-section-title first">CORE STATS</div>
-        <div class="bt-fillbar"><span class="bt-fillbar-label">Health</span><div class="bt-fillbar-track"><div id="bt-health-bar" class="bt-fillbar-fill tier-safe" style="width:100%"></div></div><span class="bt-fillbar-text"><input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100" style="width:60px;"> / 100</span><span class="bt-fillbar-status" id="bt-health-status">Healthy</span></div>
+        <div class="bt-fillbar"><span class="bt-fillbar-label">Health</span><div class="bt-fillbar-track"><div id="bt-health-bar" class="bt-fillbar-fill tier-safe" style="width:100%"></div></div><span class="bt-fillbar-text"><input type="number" class="bt-input bt-scrape" data-id="Health" id="bt-health" value="100" style="width:60px;"> / <span id="bt-health-max-display">100</span><input type="hidden" id="bt-health-max" value="100"></span><span class="bt-fillbar-status" id="bt-health-status">Healthy</span></div>
         <div class="bt-fillbar"><span class="bt-fillbar-label">Energy</span><div class="bt-fillbar-track"><div id="bt-energy-bar" class="bt-fillbar-fill tier-safe" style="width:100%"></div></div><span class="bt-fillbar-text"><input type="number" class="bt-input bt-scrape" data-id="Energy" id="bt-energy" value="100" style="width:60px;"> / 100</span><span class="bt-fillbar-status" id="bt-energy-status">Energetic</span></div>
         <div class="bt-section-title">VITALS</div>
         <div id="bt-arousal-slot" class="bt-slot-spacer"></div>
@@ -384,6 +384,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'unbirthEngine', label: 'Unbirth Engine', desc: 'Womb absorption of prey (same nutrient absorption as stomach)' },
     { key: 'cockVoreEngine', label: 'Cock Vore Engine', desc: 'Balls conversion of prey into cum, expelled on climax' },
     { key: 'lactationEngine', label: 'Lactation Engine', desc: 'Milk production, accumulation, and overcapacity leaking' },
+    { key: 'healthSystem', label: 'Health System', desc: 'Health pool with digestion-driven regen and event-based damage' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -976,17 +977,23 @@ export function setup(ctx: SpindleFrontendContext) {
   function updateHealthDisplay() {
     const healthInput = document.getElementById('bt-health') as HTMLInputElement
     if (!healthInput) return
-    const v = Math.max(0, Math.min(100, parseInt(healthInput.value) || 0))
+    const maxInput = document.getElementById('bt-health-max') as HTMLInputElement
+    const maxDisplay = document.getElementById('bt-health-max-display')
+    const maxHP = parseInt(maxInput?.value || '100') || 100
+    if (maxDisplay) maxDisplay.textContent = String(maxHP)
+    const v = Math.max(0, Math.min(maxHP, parseInt(healthInput.value) || 0))
+    const pct = maxHP > 0 ? (v / maxHP) * 100 : 0
     const bar = document.getElementById('bt-health-bar')
     const status = document.getElementById('bt-health-status')
-    const tier = v >= 75 ? 'tier-safe' : v >= 50 ? 'tier-mild' : v >= 25 ? 'tier-warn' : v >= 10 ? 'tier-high' : 'tier-crit'
+    // Health state thresholds: Healthy ≥60%, Bruised ≥30%, Wounded ≥10%, Critical ≥1%, Incapacitated 0%
+    const tier = v <= 0 ? 'tier-crit' : pct >= 60 ? 'tier-safe' : pct >= 30 ? 'tier-mild' : pct >= 10 ? 'tier-warn' : 'tier-high'
     if (bar) {
-      bar.style.width = v + '%'
+      bar.style.width = pct + '%'
       bar.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
       bar.classList.add(tier)
     }
     if (status) {
-      const label = v >= 75 ? 'Healthy' : v >= 50 ? 'Bruised' : v >= 25 ? 'Wounded' : v >= 10 ? 'Critical' : 'Dying'
+      const label = v <= 0 ? 'Incapacitated' : pct >= 60 ? 'Healthy' : pct >= 30 ? 'Bruised' : pct >= 10 ? 'Wounded' : 'Critical'
       status.textContent = label
       status.classList.remove('tier-safe', 'tier-mild', 'tier-warn', 'tier-high', 'tier-crit', 'tier-neutral')
       status.classList.add(tier)
@@ -1350,7 +1357,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
   // ─── Build current XML from form ───────────────────────────
   function buildCurrentXml(): string {
-    const stateTags = ['Health', 'Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
+    const stateTags = ['Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
 
     let xml = `<CharacterSheet>\n  <State>\n`
     document.querySelectorAll('.bt-scrape').forEach((el) => {
@@ -1599,6 +1606,12 @@ export function setup(ctx: SpindleFrontendContext) {
       })
       xml += `  </DicePool>\n`
     }
+    // Vitals block — health pool (current/max) managed by the health engine
+    const healthInput = document.getElementById('bt-health') as HTMLInputElement
+    const healthMaxInput = document.getElementById('bt-health-max') as HTMLInputElement
+    const healthVal = parseInt(healthInput?.value || '100') || 100
+    const healthMax = parseInt(healthMaxInput?.value || '100') || 100
+    xml += `  <Vitals>\n    <Health current="${healthVal}" max="${healthMax}" />\n  </Vitals>\n`
     xml += `</CharacterSheet>`
     return xml
   }
@@ -1878,7 +1891,7 @@ export function setup(ctx: SpindleFrontendContext) {
     const getText = (tag: string) => doc.querySelector(tag)?.textContent || ''
     const getAttr = (el: Element | null, attr: string) => el?.getAttribute(attr) || ''
 
-    const stateTags = ['Health', 'Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
+    const stateTags = ['Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
 
     const state = doc.querySelector('State')
     if (state) {
@@ -1890,6 +1903,27 @@ export function setup(ctx: SpindleFrontendContext) {
           if (node) input.value = node.textContent || ''
         }
       })
+    }
+
+    // Parse <Vitals><Health current="N" max="M" /></Vitals> (new format)
+    // or fall back to legacy <Health>N</Health> in <State>
+    const vitalsHealth = doc.querySelector('Vitals > Health')
+    if (vitalsHealth) {
+      const cur = vitalsHealth.getAttribute('current') || '100'
+      const max = vitalsHealth.getAttribute('max') || '100'
+      const healthInput = document.getElementById('bt-health') as HTMLInputElement
+      const healthMaxInput = document.getElementById('bt-health-max') as HTMLInputElement
+      const healthMaxDisplay = document.getElementById('bt-health-max-display')
+      if (healthInput) healthInput.value = cur
+      if (healthMaxInput) healthMaxInput.value = max
+      if (healthMaxDisplay) healthMaxDisplay.textContent = max
+    } else if (state) {
+      // Legacy fallback: <Health>N</Health> in <State>
+      const legacyHealth = state.querySelector('Health')
+      if (legacyHealth) {
+        const healthInput = document.getElementById('bt-health') as HTMLInputElement
+        if (healthInput) healthInput.value = legacyHealth.textContent || '100'
+      }
     }
 
     const baseStats = doc.querySelector('BaseStats')

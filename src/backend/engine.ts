@@ -10,6 +10,12 @@ import {
   conditionNames,
   slotBodyMap,
   stressMultipliers,
+  MAX_HP_BASE,
+  CON_HP_BONUS,
+  HEALTH_REGEN,
+  HEALTH_DAMAGE,
+  HEALTH_STATE_MODIFIERS,
+  HEALTH_STATE_THRESHOLDS,
 } from './types'
 import type {
   DiceConfig,
@@ -19,6 +25,8 @@ import type {
   ActionRoll,
   AbsorptionResult,
   ConversionResult,
+  HealthState,
+  HealthDamageResult,
 } from './types'
 
 /** Compute elapsed hours between two story-clock timestamps (0-24 range),
@@ -269,8 +277,18 @@ export function collectModifiers(xml: string): Record<string, number> {
     }
   }
 
-  // Future sources (health states, energy states, status effects) will be
-  // merged here in later phases, each guarded by its own toggle.
+  // 3. Health state modifiers
+  if (engineToggles.healthSystem) {
+    const state = getHealthState(xml)
+    if (state !== 'Healthy' && state !== 'Incapacitated') {
+      const stateMods = HEALTH_STATE_MODIFIERS[state]
+      if (stateMods) {
+        for (const [key, val] of Object.entries(stateMods)) {
+          modifiers[key] = (modifiers[key] || 0) + val
+        }
+      }
+    }
+  }
 
   return applyModifierCap(modifiers)
 }
@@ -309,6 +327,197 @@ export function processAttributes(xml: string): Record<string, number> {
     }
   }
   return out
+}
+
+// ─── Health & Damage System ────────────────────────────────
+// Health pool (0–maxHP) with event-based damage and digestion-driven regen.
+// Two-phase architecture:
+//   Phase 1 (processHealthRegen): runs BEFORE existing engines, applies
+//     digestion-driven regen so the modifier pool includes health state
+//     penalties for the current tick.
+//   Phase 2 (processHealthDamage): runs AFTER existing engines, reads their
+//     results (vomit, indigestion thresholds, prey escapes, acid, overcapacity)
+//     and applies discrete HP reductions.
+
+/** Read the <Vitals><Health current="N" max="M" /></Vitals> block. Returns { current, max }. */
+export function getHealth(xml: string): { current: number; max: number } {
+  const match = xml.match(/<Vitals>[\s\S]*?<Health\s+current="([\d.]+)"\s+max="([\d.]+)"\s*\/>/i)
+  if (match) {
+    return { current: parseFloat(match[1]) || 0, max: parseFloat(match[2]) || MAX_HP_BASE }
+  }
+  // Fallback: legacy <Health>N</Health> format
+  const legacy = getStat(xml, 'Health')
+  return { current: legacy > 0 ? legacy : MAX_HP_BASE, max: MAX_HP_BASE }
+}
+
+/** Compute max HP from CON modifier: 100 + (CON_mod × 10). */
+export function computeMaxHP(xml: string): number {
+  const conScore = getAttribute(xml, 'CON')
+  const conMod = attributeModifier(conScore)
+  return MAX_HP_BASE + (conMod * CON_HP_BONUS)
+}
+
+/** Write the <Vitals><Health … /></Vitals> block into XML. Creates or replaces it. */
+export function setHealth(xml: string, current: number, max: number): string {
+  const clamped = Math.max(0, Math.min(max, current))
+  const vitalsBlock = `<Vitals>\n    <Health current="${clamped.toFixed(0)}" max="${max.toFixed(0)}" />\n  </Vitals>`
+  // Replace existing <Vitals>…</Vitals> block
+  if (/<Vitals>[\s\S]*?<\/Vitals>/i.test(xml)) {
+    return xml.replace(/<Vitals>[\s\S]*?<\/Vitals>/i, vitalsBlock)
+  }
+  // Insert before </CharacterSheet> if no <Vitals> exists
+  if (/<\/CharacterSheet>/i.test(xml)) {
+    return xml.replace(/<\/CharacterSheet>/i, `  ${vitalsBlock}\n</CharacterSheet>`)
+  }
+  // Fallback: append
+  return xml + vitalsBlock
+}
+
+/** Determine the health state from current HP percentage. */
+export function getHealthState(xml: string): HealthState {
+  const { current, max } = getHealth(xml)
+  if (current <= 0) return 'Incapacitated'
+  const pct = current / max
+  if (pct >= HEALTH_STATE_THRESHOLDS.HEALTHY) return 'Healthy'
+  if (pct >= HEALTH_STATE_THRESHOLDS.BRUISED) return 'Bruised'
+  if (pct >= HEALTH_STATE_THRESHOLDS.WOUNDED) return 'Wounded'
+  if (pct >= HEALTH_STATE_THRESHOLDS.CRITICAL) return 'Critical'
+  return 'Incapacitated'
+}
+
+/** Check if <BaseStats> has resting="true". */
+function isResting(xml: string): boolean {
+  const match = xml.match(/<BaseStats\s+([^>]*?)>/i)
+  if (!match) return false
+  const restingVal = getAttrFromString(match[1], 'resting')
+  return restingVal === 'true'
+}
+
+/**
+ * Phase 1: Apply digestion-driven health regeneration.
+ * Mutates the XML to update <Vitals><Health … /></Vitals>.
+ * Returns the updated XML.
+ *
+ * Regen formula:
+ *   baseRate = 1 HP/h (empty stomach)
+ *   if stomachHasItems: baseRate = 3 + min(3, itemCount - 1)
+ *   if resting: baseRate *= 2
+ *   baseRate *= (1 + CON_mod × 0.05)
+ *   if healthPct <= 4%: baseRate *= 3
+ *   regen = baseRate × elapsed
+ */
+export function processHealthRegen(xml: string, elapsed: number, stomachItemCount: number): string {
+  const maxHP = computeMaxHP(xml)
+  const { current } = getHealth(xml)
+  const healthPct = (current / maxHP) * 100
+
+  // Base rate
+  let baseRate: number
+  if (stomachItemCount > 0) {
+    baseRate = HEALTH_REGEN.DIGESTING_BASE + Math.min(HEALTH_REGEN.DIGESTING_BONUS_CAP, stomachItemCount - 1) * HEALTH_REGEN.DIGESTING_BONUS_PER_ITEM
+  } else {
+    baseRate = HEALTH_REGEN.EMPTY_STOMACH
+  }
+
+  // Resting bonus
+  if (isResting(xml)) {
+    baseRate *= HEALTH_REGEN.RESTING_MULT
+  }
+
+  // CON bonus
+  const conScore = getAttribute(xml, 'CON')
+  const conMod = attributeModifier(conScore)
+  baseRate *= (1 + conMod * HEALTH_REGEN.CON_MULT_WEIGHT)
+
+  // Critical emergency regen
+  if (healthPct <= HEALTH_REGEN.CRITICAL_THRESHOLD_PCT) {
+    baseRate *= HEALTH_REGEN.CRITICAL_MULT
+  }
+
+  const regen = baseRate * elapsed
+  const newHealth = Math.min(maxHP, current + regen)
+
+  if (regen > 0.01) {
+    spindle.log.info(`[Health] Regen: +${regen.toFixed(2)} HP (${baseRate.toFixed(2)}/h × ${elapsed.toFixed(2)}h)`)
+  }
+
+  return setHealth(xml, newHealth, maxHP)
+}
+
+/**
+ * Phase 2: Apply event-based health damage.
+ * Reads engine results (struggle events, acid level, item count, capacity)
+ * and applies discrete HP reductions.
+ *
+ * Returns the updated XML and a list of damage event descriptions.
+ */
+export function processHealthDamage(
+  xml: string,
+  struggleEvents: string[],
+  acidLevel: number,
+  stomachItemCount: number,
+  stomachMaxCapacity: number,
+): HealthDamageResult {
+  const maxHP = computeMaxHP(xml)
+  const { current } = getHealth(xml)
+  let totalDamage = 0
+  const events: string[] = []
+
+  // 1. Vomit event: -8 HP
+  const vomitEvent = struggleEvents.find(e => e.startsWith('VOMIT:'))
+  if (vomitEvent) {
+    totalDamage += HEALTH_DAMAGE.VOMIT
+    events.push(`Vomit: -${HEALTH_DAMAGE.VOMIT} HP`)
+
+    // Count escaped prey from vomit event string — format uses quoted names:
+    // "The following prey escaped: "name1", "name2"."
+    const escapedSection = vomitEvent.match(/escaped:\s*(.+?)(?:\.|$)/i)
+    let escapedCount = 0
+    if (escapedSection) {
+      const nameMatches = escapedSection[1].match(/"[^"]+"/g)
+      escapedCount = nameMatches ? nameMatches.length : 0
+    }
+    if (escapedCount > 0) {
+      const escapeDmg = escapedCount * HEALTH_DAMAGE.PREY_ESCAPE
+      totalDamage += escapeDmg
+      events.push(`Prey escaped (${escapedCount}): -${escapeDmg} HP`)
+    }
+  }
+
+  // 2. Indigestion 90% threshold: -4 HP (one-time, detected by event string)
+  if (struggleEvents.some(e => e.includes('Indigestion reached 90%'))) {
+    totalDamage += HEALTH_DAMAGE.INDIGESTION_90
+    events.push(`Indigestion crisis (90%): -${HEALTH_DAMAGE.INDIGESTION_90} HP`)
+  }
+
+  // 3. Indigestion 75% threshold: -2 HP (one-time)
+  if (struggleEvents.some(e => e.includes('Indigestion reached 75%'))) {
+    totalDamage += HEALTH_DAMAGE.INDIGESTION_75
+    events.push(`Indigestion strain (75%): -${HEALTH_DAMAGE.INDIGESTION_75} HP`)
+  }
+
+  // 4. Acid overload: -5 HP (one-time, acid reaches 100%)
+  if (acidLevel >= 100) {
+    totalDamage += HEALTH_DAMAGE.ACID_OVERLOAD
+    events.push(`Acid overload: -${HEALTH_DAMAGE.ACID_OVERLOAD} HP`)
+  }
+
+  // 5. Overcapacity strain: -3 HP (one-time, stomach crosses 150% capacity)
+  if (stomachMaxCapacity > 0 && stomachItemCount > 0) {
+    const capacityPct = (stomachItemCount / stomachMaxCapacity) * 100
+    if (capacityPct >= 150) {
+      totalDamage += HEALTH_DAMAGE.OVERCAPACITY
+      events.push(`Overcapacity strain (${capacityPct.toFixed(0)}%): -${HEALTH_DAMAGE.OVERCAPACITY} HP`)
+    }
+  }
+
+  if (totalDamage > 0) {
+    const newHealth = Math.max(0, current - totalDamage)
+    spindle.log.info(`[Health] Damage: -${totalDamage} HP (${events.join(', ')})`)
+    return { xml: setHealth(xml, newHealth, maxHP), totalDamage, events }
+  }
+
+  return { xml, totalDamage: 0, events: [] }
 }
 
 export function getStat(xml: string, tag: string): number {
@@ -1061,6 +1270,8 @@ The following values are computed by the extension's engines during the digestio
 - <InventoryOvercapacity> (computed from unique item count vs capacity)
 - Clothing stress="..." and condition="..." attributes (computed from body growth)
 - stomachFatigue="..." on the <Stomach> tag (engine-internal value, copy it exactly — do NOT modify or reset it)
+- <Vitals><Health current="N" max="M" /></Vitals> (computed by the health engine — copy exactly, do NOT modify)
+- resting="true|false" on <BaseStats> (set by you based on scene — see HEALTH SYSTEM below)
 - Height, Weight, BreastVolume, Hips, Penis dimensions (updated by nutrient absorption)
 
 If any of these values seem wrong or unexpected, DO NOT "fix" them — copy them exactly. The extension will recompute them on the next tick.
@@ -1207,6 +1418,47 @@ The stomach has a max capacity (height × weight × 0.012 × CapacityMultiplier)
 
 ENERGY:
 <Energy> in <State> is drained by fighting prey and active suppression (handled by the engine). Set Energy to the value you believe is appropriate for the scene — the engine will subtract struggle/suppression drain on top. You can RAISE Energy (resting, recovery) or LOWER it (exhaustion, overexertion — use sparingly for special occasions). To keep Energy stable during rest, set it slightly above the current value to compensate for any active drain. When Energy is low, suppression becomes less effective and the pred may struggle to hold prey.
+
+─── HEALTH SYSTEM ───
+The character has a Health pool representing their overall physical condition. Health is stored in a <Vitals> block inside the sheet:
+
+<Vitals>
+  <Health current="100" max="100" />
+</Vitals>
+
+- current: the character's current HP (0 to max)
+- max: maximum HP, computed as 100 + (CON modifier × 10). The extension calculates this automatically — copy the max value from the sheet exactly.
+
+HEALTH REGENERATION (Phase 1 — runs before other engines):
+The extension automatically regenerates Health each digestion tick. Regen rate depends on:
+- Stomach contents: An empty stomach regenerates slowly (1 HP/hour). A digesting stomach regenerates faster (3 HP/hour base, +1/hour per additional item, capped at +3).
+- Resting: If resting="true" on <BaseStats>, regen rate is doubled. Set resting="true" when the character is sleeping, lying down, or otherwise at rest. Set resting="false" when active, walking, fighting, or under stress.
+- Constitution: Higher CON modifier slightly boosts regen rate (×(1 + CON_mod × 0.05)).
+- Critical emergency: If HP drops to 4% or below, regen rate triples (emergency recovery).
+
+HEALTH DAMAGE (Phase 2 — runs after other engines):
+The extension applies discrete HP reductions when specific events occur during the digestion tick:
+- Vomit event: -8 HP (the body rejects its contents violently)
+- Indigestion at 90%: -4 HP (severe internal strain)
+- Indigestion at 75%: -2 HP (significant discomfort)
+- Prey escape during vomit: -2 HP per escaped prey
+- Acid overload (100%): -5 HP (acid burns the stomach lining)
+- Stomach overcapacity (≥150%): -3 HP (physical tearing from overfilling)
+
+HEALTH STATES:
+The character's health state is derived from their HP percentage and applies small penalties to other systems:
+- Healthy (100-60%): No penalties.
+- Bruised (59-30%): -3% suppression effectiveness.
+- Wounded (29-10%): -8% suppression, -5% escape chance, +3% indigestion gain.
+- Critical (9-1%): -12% suppression, -10% escape chance, +8% indigestion gain, -5% energy regen.
+- Incapacitated (0%): Cannot suppress prey, digestion pauses, regen triples, auto-rest applied.
+
+YOUR RESPONSIBILITIES FOR HEALTH:
+1. Copy the <Vitals><Health current="N" max="M" /></Vitals> block exactly as-is from the sheet. The extension computes both current and max — do NOT modify them.
+2. Set resting="true|false" on <BaseStats> based on the scene narrative. Resting doubles health regen.
+3. Narrate health changes in your visible text. When the character takes damage from vomit, indigestion, or overcapacity, describe the physical toll. When health is low, narrate weakness, pain, and difficulty functioning.
+4. At 0 HP (Incapacitated), the character cannot actively suppress prey — narrate this as physical collapse or being overwhelmed.
+5. Health naturally recovers over time through digestion. A well-fed, resting pred recovers fastest.
 
 ─── ATTRIBUTE SYSTEM ───
 The character has six RPG attributes: STR (Strength), DEX (Dexterity), CON (Constitution), INT (Intelligence), WIS (Wisdom), CHA (Charisma). These are stored in an <Attributes> block inside <BaseStats>:
