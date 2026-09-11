@@ -43,6 +43,7 @@ export let toastSettings: Record<string, boolean> = {
   lactationEvents: true,
   healthEvents: true,
   progressionEvents: true,
+  questEvents: true,
 }
 export let engineToggles: Record<string, boolean> = {
   digestionEngine: true, clothingStress: true, nutrientAbsorption: true, arousalClimax: true,
@@ -54,6 +55,7 @@ export let engineToggles: Record<string, boolean> = {
   cockVoreEngine: false,
   lactationEngine: false,
   progressionSystem: false,
+  questSystem: false,
 }
 
 // ─── Setters (writes must go through these to reassign the live bindings) ──

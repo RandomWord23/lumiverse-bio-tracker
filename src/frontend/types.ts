@@ -19,6 +19,7 @@ export interface ToastSettings {
   vomitEvents: boolean
   lactationEvents: boolean
   progressionEvents: boolean
+  questEvents: boolean
   errors: boolean
   chatWarnings: boolean
 }
@@ -41,6 +42,7 @@ export interface EngineToggles {
   cockVoreEngine: boolean
   lactationEngine: boolean
   progressionSystem: boolean
+  questSystem: boolean
 }
 
 /**

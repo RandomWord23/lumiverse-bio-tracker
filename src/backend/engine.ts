@@ -22,6 +22,8 @@ import {
   ATTRIBUTE_MAX,
   attributePointCost,
   XP_AWARDS,
+  QUEST_MIN_XP,
+  QUEST_MAX_XP,
 } from './types'
 import type {
   DiceConfig,
@@ -34,6 +36,8 @@ import type {
   HealthState,
   HealthDamageResult,
   ProgressionResult,
+  Quest,
+  QuestResult,
 } from './types'
 
 /** Compute elapsed hours between two story-clock timestamps (0-24 range),
@@ -432,6 +436,144 @@ export function processProgression(xml: string, engineXp: number): ProgressionRe
   return {
     xml, level, xpCurrent: displayXp, xpNext, attributePoints: newAttributePoints,
     xpGained: totalGained, leveledUp: levelsGained > 0, levelsGained, events,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Quest & Objective Tracker system
+// ---------------------------------------------------------------------------
+
+/** Read all quests from the engine-managed <Quests> block. Returns an empty
+ *  array if the block is absent. */
+export function getQuests(xml: string): Quest[] {
+  const quests: Quest[] = []
+  const blockMatch = xml.match(/<Quests>([\s\S]*?)<\/Quests>/i)
+  if (!blockMatch) return quests
+  const block = blockMatch[1]
+  const questRegex = /<Quest\s+([^>]*?)\/>/gi
+  let match: RegExpExecArray | null
+  while ((match = questRegex.exec(block)) !== null) {
+    const attrs = match[1]
+    const id = getAttrFromString(attrs, 'id')
+    const name = getAttrFromString(attrs, 'name')
+    const description = getAttrFromString(attrs, 'description')
+    const status = (getAttrFromString(attrs, 'status') || 'active') as Quest['status']
+    const rewardXP = parseInt(getAttrFromString(attrs, 'rewardXP') || '0') || 0
+    const rewardItems = getAttrFromString(attrs, 'rewardItems') || ''
+    if (id && name) {
+      quests.push({ id, name, description, status, rewardXP, rewardItems })
+    }
+  }
+  return quests
+}
+
+/** Serialize a quest array into the <Quests> block and inject/replace it in the XML. */
+export function setQuests(xml: string, quests: Quest[]): string {
+  const lines = quests.map(q => {
+    const desc = q.description.replace(/"/g, '"')
+    const items = q.rewardItems.replace(/"/g, '"')
+    return `    <Quest id="${q.id}" name="${q.name}" description="${desc}" status="${q.status}" rewardXP="${q.rewardXP}" rewardItems="${items}" />`
+  })
+  const block = `<Quests>\n${lines.join('\n')}\n  </Quests>`
+  if (/<Quests>[\s\S]*?<\/Quests>/i.test(xml)) {
+    return xml.replace(/<Quests>[\s\S]*?<\/Quests>/i, block)
+  }
+  if (/<\/CharacterSheet>/i.test(xml)) {
+    return xml.replace(/<\/CharacterSheet>/i, `  ${block}\n</CharacterSheet>`)
+  }
+  return xml + '\n' + block
+}
+
+/** Parse LLM-created <quest_create>, <quest_complete>, and <quest_abandon>
+ *  tags from the XML, apply them to the quest list, strip the tags, and
+ *  return the updated XML plus any XP from completed quests. */
+export function processQuestTags(xml: string): { xml: string; questXp: number; events: string[] } {
+  const events: string[] = []
+  let quests = getQuests(xml)
+  let questXp = 0
+
+  // Determine next auto-incremented quest ID
+  let maxId = 0
+  for (const q of quests) {
+    const num = parseInt(q.id.replace(/^q/, '')) || 0
+    if (num > maxId) maxId = num
+  }
+
+  // ── Parse <quest_create> tags ──
+  const createRegex = /<quest_create\s+([^>]*?)\/>/gi
+  let match: RegExpExecArray | null
+  while ((match = createRegex.exec(xml)) !== null) {
+    const attrs = match[1]
+    const name = getAttrFromString(attrs, 'name')
+    const description = getAttrFromString(attrs, 'description') || ''
+    let rewardXP = parseInt(getAttrFromString(attrs, 'rewardXP') || '50') || 50
+    rewardXP = Math.max(QUEST_MIN_XP, Math.min(QUEST_MAX_XP, rewardXP))
+    const rewardItems = getAttrFromString(attrs, 'rewardItems') || ''
+    if (!name) continue
+    maxId++
+    const id = `q${maxId}`
+    quests.push({ id, name, description, status: 'active', rewardXP, rewardItems })
+    events.push(`Quest created: ${name} (${id})`)
+    maybeToast('questEvents', 'info', `📜 New quest: ${name}`)
+  }
+
+  // ── Parse <quest_complete> tags ──
+  const completeRegex = /<quest_complete\s+([^>]*?)\/>/gi
+  while ((match = completeRegex.exec(xml)) !== null) {
+    const attrs = match[1]
+    const id = getAttrFromString(attrs, 'id')
+    if (!id) continue
+    const quest = quests.find(q => q.id === id)
+    if (!quest) {
+      events.push(`Quest complete: unknown quest ${id}`)
+      continue
+    }
+    if (quest.status === 'completed') continue
+    quest.status = 'completed'
+    questXp += quest.rewardXP
+    events.push(`Quest completed: ${quest.name} (${id}) +${quest.rewardXP} XP`)
+    maybeToast('questEvents', 'success', `✅ Quest complete: ${quest.name} (+${quest.rewardXP} XP)`)
+  }
+
+  // ── Parse <quest_abandon> tags ──
+  const abandonRegex = /<quest_abandon\s+([^>]*?)\/>/gi
+  while ((match = abandonRegex.exec(xml)) !== null) {
+    const attrs = match[1]
+    const id = getAttrFromString(attrs, 'id')
+    if (!id) continue
+    const quest = quests.find(q => q.id === id)
+    if (!quest) {
+      events.push(`Quest abandon: unknown quest ${id}`)
+      continue
+    }
+    if (quest.status === 'abandoned') continue
+    quest.status = 'abandoned'
+    events.push(`Quest abandoned: ${quest.name} (${id})`)
+    maybeToast('questEvents', 'warning', `🗑️ Quest abandoned: ${quest.name}`)
+  }
+
+  // ── Strip all quest tags from the XML ──
+  let cleanedXml = xml
+    .replace(/<quest_create\s+[^>]*?\/>/gi, '')
+    .replace(/<quest_complete\s+[^>]*?\/>/gi, '')
+    .replace(/<quest_abandon\s+[^>]*?\/>/gi, '')
+
+  // ── Re-inject the updated <Quests> block ──
+  if (quests.length > 0 || /<Quests>/i.test(cleanedXml)) {
+    cleanedXml = setQuests(cleanedXml, quests)
+  }
+
+  return { xml: cleanedXml, questXp, events }
+}
+
+/** Full quest cycle: parse LLM tags, update quest state, and return XP
+ *  from completed quests so the caller can feed it into processProgression. */
+export function processQuests(xml: string): QuestResult {
+  const tagResult = processQuestTags(xml)
+  return {
+    xml: tagResult.xml,
+    questXp: tagResult.questXp,
+    events: tagResult.events,
   }
 }
 
@@ -1783,6 +1925,47 @@ ATTRIBUTE POINTS:
 - Higher attribute scores cost more points: raising from 10→11 costs 1 point, 15→16 costs 2 points, 18→19 costs 3 points.
 - You do NOT spend attribute points — only the player does, through the UI.
 - When narrating, reflect the character's growing competence as they level up.
+
+─── QUEST & OBJECTIVE TRACKER ───
+The character has a quest log tracked in a <Quests> block. This block is ENGINE-MANAGED — the engine injects and updates it automatically. You must NOT create, modify, or delete the <Quests> block. Simply copy it verbatim from the existing sheet into your updated sheet.
+
+The <Quests> block looks like:
+  <Quests>
+    <Quest id="q1" name="Find the Lost Amulet" description="Retrieve the amulet from the ruins" status="active" rewardXP="150" rewardItems="Amulet of Vigor" />
+    <Quest id="q2" name="Defeat the Bandit Leader" description="Challenge and defeat the bandit leader" status="completed" rewardXP="200" rewardItems="" />
+  </Quests>
+
+- id is an auto-incremented identifier (q1, q2, q3, ...) assigned by the engine.
+- status is one of: "active", "completed", "abandoned".
+- rewardXP is clamped to 10-500 by the engine.
+- rewardItems is a free-text description of item rewards (may be empty).
+
+CREATING QUESTS:
+You may create new quests for the character by including <quest_create> tags inside your <sheet_update>, OUTSIDE the <CharacterSheet> block but inside <sheet_update>. Format:
+  <quest_create name="Quest Name" description="What must be done" rewardXP="100" rewardItems="Optional item reward" />
+- rewardXP should be 10-500 depending on difficulty (10 = trivial, 500 = epic).
+- rewardItems is optional (omit or leave empty if no item reward).
+- The engine will parse these, assign IDs, add them to the <Quests> block, and strip the tags.
+- Create quests for: story objectives, character goals, tasks given by NPCs, personal motivations, exploration goals.
+- Do NOT create quests for trivial actions (eating, resting, walking).
+
+COMPLETING QUESTS:
+When the character achieves a quest objective, include a <quest_complete> tag:
+  <quest_complete id="q1" />
+- The engine will mark the quest as completed and award its rewardXP to the character.
+- Only complete quests that are currently "active".
+
+ABANDONING QUESTS:
+If the character gives up on or fails a quest, include a <quest_abandon> tag:
+  <quest_abandon id="q3" />
+- The engine will mark the quest as abandoned (no XP awarded).
+- Use sparingly — only when the character truly abandons the objective.
+
+NARRATIVE INTEGRATION:
+- Reference active quests in your narration when relevant.
+- Create quests that emerge naturally from the story.
+- Complete quests promptly when objectives are met.
+- Keep quest names concise and descriptions clear.
 
 <sheet_update>
 <CharacterSheet>

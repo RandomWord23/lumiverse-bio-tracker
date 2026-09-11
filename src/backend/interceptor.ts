@@ -51,6 +51,7 @@ import {
   processProgression,
   getProgression,
   spendAttributePoint,
+  processQuests,
 } from './engine'
 
 import {
@@ -1054,6 +1055,30 @@ export async function runDigestionTick(
         for (const award of xpAwardResult.awards) {
           spindle.log.info(`[Progression] LLM awarded ${award.amount} XP: ${award.reason}`)
         }
+      }
+    }
+
+    // ── PHASE 4: QUEST & OBJECTIVE TRACKER ──────────────────────────
+    // Parses LLM <quest_create>, <quest_complete>, <quest_abandon> tags,
+    // updates the engine-managed <Quests> block, and collects XP from
+    // completed quests. Quest XP is re-fed into the progression cycle.
+    if (engineToggles.questSystem) {
+      const questResult = processQuests(updatedXml)
+      updatedXml = questResult.xml
+
+      if (questResult.events.length > 0) {
+        spindle.log.info(
+          `[Quests] ${questResult.events.length} quest event(s): ${questResult.events.join('; ')}`,
+        )
+      }
+
+      // Re-feed quest completion XP into the progression cycle
+      if (questResult.questXp > 0 && engineToggles.progressionSystem) {
+        const progResult = processProgression(updatedXml, questResult.questXp)
+        updatedXml = progResult.xml
+        spindle.log.info(
+          `[Quests] +${questResult.questXp} XP from quest completions re-fed into progression`,
+        )
       }
     }
 

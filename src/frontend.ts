@@ -267,6 +267,13 @@ export function setup(ctx: SpindleFrontendContext) {
         <input type="text" class="bt-input full bt-scrape" data-id="Area" placeholder="Area (e.g. City Center)" id="bt-area">
         <input type="text" class="bt-input full bt-scrape" data-id="Building" placeholder="Building (e.g. The Rusty Tankard)" id="bt-building">
         <input type="text" class="bt-input full bt-scrape" data-id="Room" placeholder="Room (e.g. Back Alley)" id="bt-room">
+        <div class="bt-section-title">QUESTS</div>
+        <div id="bt-quest-section" class="bt-quest-section" data-quests="">
+          <div class="bt-quest-empty" id="bt-quest-empty">No active quests. The AI will create quests as the story unfolds.</div>
+          <div id="bt-quest-active" class="bt-quest-list"></div>
+          <div class="bt-quest-completed-header" id="bt-quest-completed-header" style="display:none;">Completed / Abandoned</div>
+          <div id="bt-quest-completed" class="bt-quest-list bt-quest-list-done"></div>
+        </div>
       </div>
       <div id="tab-vitals" class="bt-tab-content">
         <div class="bt-section-title first">METABOLIC ENGINE</div>
@@ -397,6 +404,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'vomitEvents', label: 'Vomit Events', desc: 'Prey escape during vomit events' },
     { key: 'lactationEvents', label: 'Lactation Events', desc: 'Milk production, fullness, and leaking notifications' },
     { key: 'progressionEvents', label: 'Progression Events', desc: 'XP gains, level ups, and attribute point spending' },
+    { key: 'questEvents', label: 'Quest Events', desc: 'Quest creation, completion, and abandonment notifications' },
     { key: 'errors', label: 'Errors', desc: 'Populate failed and other errors' },
     { key: 'chatWarnings', label: 'Chat Warnings', desc: 'Open a chat first warnings' },
   ]
@@ -414,6 +422,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'lactationEngine', label: 'Lactation Engine', desc: 'Milk production, accumulation, and overcapacity leaking' },
     { key: 'healthSystem', label: 'Health System', desc: 'Health pool with digestion-driven regen and event-based damage' },
     { key: 'progressionSystem', label: 'Progression System', desc: 'XP, leveling, and attribute points' },
+    { key: 'questSystem', label: 'Quest Tracker', desc: 'LLM-driven quest creation, completion, and abandonment with XP rewards' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },
@@ -664,6 +673,66 @@ export function setup(ctx: SpindleFrontendContext) {
       }
     }
   }
+
+  // ─── Quest display ──────────────────────────────────────────
+  function updateQuestDisplay() {
+    const section = document.getElementById('bt-quest-section')
+    if (!section) return
+
+    const activeList = document.getElementById('bt-quest-active')
+    const completedList = document.getElementById('bt-quest-completed')
+    const completedHeader = document.getElementById('bt-quest-completed-header')
+    const emptyHint = document.getElementById('bt-quest-empty')
+
+    if (!activeList || !completedList) return
+
+    // Read quest data from the section's data attribute
+    const raw = section.dataset.quests || ''
+    const quests: { id: string; name: string; description: string; status: string; rewardXP: number; rewardItems: string }[] = []
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) quests.push(...parsed)
+      } catch { /* ignore parse errors */ }
+    }
+
+    const active = quests.filter(q => q.status === 'active')
+    const done = quests.filter(q => q.status === 'completed' || q.status === 'abandoned')
+
+    if (activeList) activeList.innerHTML = ''
+    if (completedList) completedList.innerHTML = ''
+
+    if (emptyHint) emptyHint.style.display = active.length > 0 ? 'none' : 'block'
+    if (completedHeader) completedHeader.style.display = done.length > 0 ? 'block' : 'none'
+
+    for (const q of active) {
+      const card = document.createElement('div')
+      card.className = 'bt-quest-card bt-quest-active'
+      card.innerHTML =
+        `<div class="bt-quest-card-head">` +
+        `<span class="bt-quest-id">${q.id}</span>` +
+        `<span class="bt-quest-name">${q.name}</span>` +
+        `<span class="bt-quest-reward">+${q.rewardXP} XP</span>` +
+        `</div>` +
+        (q.description ? `<div class="bt-quest-desc">${q.description}</div>` : '') +
+        (q.rewardItems ? `<div class="bt-quest-items">🎁 ${q.rewardItems}</div>` : '')
+      if (activeList) activeList.appendChild(card)
+    }
+
+    for (const q of done) {
+      const card = document.createElement('div')
+      const isAbandoned = q.status === 'abandoned'
+      card.className = 'bt-quest-card bt-quest-' + q.status
+      card.innerHTML =
+        `<div class="bt-quest-card-head">` +
+        `<span class="bt-quest-id">${q.id}</span>` +
+        `<span class="bt-quest-name ${isAbandoned ? 'bt-quest-strike' : ''}">${q.name}</span>` +
+        `<span class="bt-quest-status-badge bt-quest-status-${q.status}">${isAbandoned ? '⊘' : '✓'}</span>` +
+        `</div>`
+      if (completedList) completedList.appendChild(card)
+    }
+  }
+
   document.querySelectorAll('.bt-prog-spend-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const attrKey = (btn as HTMLElement).dataset.attr
@@ -1692,6 +1761,21 @@ export function setup(ctx: SpindleFrontendContext) {
     const progXpNext = parseInt(progSection?.dataset.xpNext || '100') || 100
     const progAp = parseInt(progSection?.dataset.ap || '0') || 0
     xml += `  <Progression>\n    <Level value="${progLevel}" />\n    <XP current="${progXpCurrent}" next="${progXpNext}" />\n    <AttributePoints available="${progAp}" />\n  </Progression>\n`
+    // Quests block — engine-managed, preserved on manual sync
+    const questSection = document.getElementById('bt-quest-section')
+    if (questSection && questSection.dataset.quests) {
+      try {
+        const questData = JSON.parse(questSection.dataset.quests)
+        if (Array.isArray(questData) && questData.length > 0) {
+          const questLines = questData.map((q: any) => {
+            const desc = String(q.description || '').replace(/"/g, '"')
+            const items = String(q.rewardItems || '').replace(/"/g, '"')
+            return `    <Quest id="${q.id}" name="${q.name}" description="${desc}" status="${q.status}" rewardXP="${q.rewardXP}" rewardItems="${items}" />`
+          })
+          xml += `  <Quests>\n${questLines.join('\n')}\n  </Quests>\n`
+        }
+      } catch { /* ignore malformed quest data */ }
+    }
     xml += `</CharacterSheet>`
     return xml
   }
@@ -2060,6 +2144,27 @@ export function setup(ctx: SpindleFrontendContext) {
       progSection.dataset.ap = '0'
     }
     updateProgressionDisplay()
+
+    // Parse Quests block (engine-managed)
+    const questsNode = doc.querySelector('Quests')
+    const questSection = document.getElementById('bt-quest-section')
+    if (questsNode && questSection) {
+      const questList: { id: string; name: string; description: string; status: string; rewardXP: number; rewardItems: string }[] = []
+      questsNode.querySelectorAll('Quest').forEach((questNode) => {
+        questList.push({
+          id: questNode.getAttribute('id') || '',
+          name: questNode.getAttribute('name') || '',
+          description: questNode.getAttribute('description') || '',
+          status: questNode.getAttribute('status') || 'active',
+          rewardXP: parseInt(questNode.getAttribute('rewardXP') || '0') || 0,
+          rewardItems: questNode.getAttribute('rewardItems') || '',
+        })
+      })
+      questSection.dataset.quests = JSON.stringify(questList)
+    } else if (questSection) {
+      questSection.dataset.quests = ''
+    }
+    updateQuestDisplay()
 
     // Trigger visual updates
     document.getElementById('bt-height')?.dispatchEvent(new Event('input'))

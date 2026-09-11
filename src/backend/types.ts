@@ -182,6 +182,20 @@ export const XP_AWARDS = {
   VOMIT_EVENT: 10,
 } as const
 
+/** Minimum and maximum XP reward for a single quest. */
+export const QUEST_MIN_XP = 10
+export const QUEST_MAX_XP = 500
+
+/** A single quest entry parsed from the engine-managed <Quests> block. */
+export interface Quest {
+  id: string
+  name: string
+  description: string
+  status: 'active' | 'completed' | 'abandoned'
+  rewardXP: number
+  rewardItems: string
+}
+
 /** Result of the full progression cycle (XP add, level-up, attribute points). */
 export interface ProgressionResult {
   xml: string
@@ -192,6 +206,13 @@ export interface ProgressionResult {
   xpGained: number
   leveledUp: boolean
   levelsGained: number
+  events: string[]
+}
+
+/** Result of processing LLM quest tags and running the quest cycle. */
+export interface QuestResult {
+  xml: string
+  questXp: number
   events: string[]
 }
 

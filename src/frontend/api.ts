@@ -25,6 +25,7 @@ export const defaultToastSettings: ToastSettings = {
   vomitEvents: true,
   lactationEvents: true,
   progressionEvents: true,
+  questEvents: true,
   healthEvents: true,
   errors: true,
   chatWarnings: false,
@@ -44,6 +45,7 @@ export const defaultEngineToggles: EngineToggles = {
   cockVoreEngine: false,
   lactationEngine: false,
   progressionSystem: false,
+  questSystem: false,
 }
 
 export const defaultUiSettings: UiSettings = {

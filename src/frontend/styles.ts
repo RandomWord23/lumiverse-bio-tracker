@@ -624,6 +624,93 @@ export const bioTrackerStylesheet = `
       opacity: 0.35; cursor: not-allowed;
     }
 
+    /* ── Quest tracker ───────────────────────────────────────────── */
+    .bt-quest-section {
+      margin-top: 4px;
+    }
+    .bt-quest-empty {
+      font-size: var(--bt-font-sm);
+      color: var(--bt-text-dim);
+      padding: 8px 4px;
+      text-align: center;
+      font-style: italic;
+    }
+    .bt-quest-list {
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .bt-quest-list-done {
+      gap: 3px;
+    }
+    .bt-quest-completed-header {
+      font-size: var(--bt-font-xs);
+      color: var(--bt-text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 10px;
+      margin-bottom: 4px;
+      padding-bottom: 2px;
+      border-bottom: 1px solid var(--bt-border);
+    }
+    .bt-quest-card {
+      border-radius: var(--bt-radius);
+      padding: 8px 10px;
+      background: var(--bt-surface-2);
+      border: 1px solid var(--bt-border);
+    }
+    .bt-quest-card.bt-quest-active {
+      border-left: 3px solid var(--bt-accent);
+    }
+    .bt-quest-card.bt-quest-completed {
+      border-left: 3px solid var(--bt-success);
+      opacity: 0.7;
+    }
+    .bt-quest-card.bt-quest-abandoned {
+      border-left: 3px solid var(--bt-text-dim);
+      opacity: 0.5;
+    }
+    .bt-quest-card-head {
+      display: flex; align-items: center; gap: 6px;
+    }
+    .bt-quest-id {
+      font-size: var(--bt-font-xs);
+      color: var(--bt-text-dim);
+      font-weight: 600;
+      min-width: 24px;
+    }
+    .bt-quest-name {
+      flex: 1;
+      font-size: var(--bt-font-sm);
+      font-weight: 600;
+      color: var(--bt-text);
+    }
+    .bt-quest-strike {
+      text-decoration: line-through;
+      color: var(--bt-text-dim);
+    }
+    .bt-quest-reward {
+      font-size: var(--bt-font-xs);
+      color: var(--bt-success);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .bt-quest-status-badge {
+      font-size: 14px;
+      line-height: 1;
+    }
+    .bt-quest-status-completed { color: var(--bt-success); }
+    .bt-quest-status-abandoned { color: var(--bt-text-dim); }
+    .bt-quest-desc {
+      font-size: var(--bt-font-xs);
+      color: var(--bt-text-dim);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .bt-quest-items {
+      font-size: var(--bt-font-xs);
+      color: var(--bt-text-dim);
+      margin-top: 2px;
+    }
+
     /* ── Responsive (narrow viewports) ───────────────────────────── */
     @media (max-width: 480px) {
       #bio-tracker-panel { width: 100vw; }
