@@ -1440,6 +1440,16 @@ export async function promptInterceptor(messages: any[], context: any) {
     }
   }
 
+  // ─── Repair malformed DigestiveTract XML before prompt ──────
+  // If the stored sheet has unclosed <Stomach>, <Bowels>, <Womb>, or
+  // <Balls> tags (a common LLM error), the LLM sees broken XML in its
+  // prompt and copies that broken structure — perpetuating the cycle.
+  // Repair it here so the LLM always sees well-formed XML.
+  // Also update the in-memory sheets Map so all downstream code
+  // paths (commitUpdate, contentProcessor, etc.) see the repaired version.
+  sheet = repairDigestiveTract(sheet)
+  sheets.set(chatId, sheet)
+
   // ─── Store the prompt-time sheet snapshot ───────────────────
   // This is the exact sheet XML the LLM sees in its prompt.  The
   // contentProcessor and commitUpdate use it as the "old" sheet for

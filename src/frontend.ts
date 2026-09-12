@@ -1675,6 +1675,7 @@ export function setup(ctx: SpindleFrontendContext) {
         xml += `      </Item>\n`
       }
     })
+    xml += `    </Bowels>\n`
 
     // Womb
     const wombFill = document.getElementById('bt-womb-fill')?.innerText || '0 L'
