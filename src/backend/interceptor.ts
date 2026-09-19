@@ -80,19 +80,6 @@ export async function runDigestionTick(
   // that processStruggle already computed and wrote.
   let updatedXml: string = newXml
 
-  // ── Repair: fix unclosed DigestiveTract sub-sections ──────────────
-  // The LLM sometimes forgets to close <Bowels> (or other sub-sections)
-  // before </DigestiveTract>, producing malformed XML that causes a
-  // parsererror in the frontend DOMParser. This inserts missing closing
-  // tags so the downstream regex extraction and replacement work correctly.
-  updatedXml = repairDigestiveTract(updatedXml)
-
-  // ── Sanitize: fix common LLM attribute mistakes ───────────────────
-  // The LLM sometimes writes conversion="X%" on Stomach prey items
-  // (should be digestion="X%") and puts newlines inside capacity
-  // multiplier tags. This normalizes those before the tick runs.
-  updatedXml = sanitizeSheetXml(updatedXml)
-
   try {
     const getTimeHours = (xml: string) => {
       const match = xml.match(/<Time>(.*?)<\/Time>/i)
@@ -149,17 +136,25 @@ export async function runDigestionTick(
       spindle.log.info('Old sheet had no <Time>; re-established time reference from new sheet')
     }
 
+    // ── Repair & Sanitize: fix common LLM XML mistakes ───────────────
+    // Applied AFTER time carry-forward so the injected <Time> tag is
+    // included in the repaired/sanitized output. All early-return paths
+    // below use updatedXml (not raw newXml) so the user never sees
+    // malformed XML even when the tick is skipped.
+    updatedXml = repairDigestiveTract(newXml)
+    updatedXml = sanitizeSheetXml(updatedXml)
+
     if (oldTime === null || newTime === null) {
       maybeToast('digestionSkips', 'info', 'Digestion tick skipped: missing time')
       spindle.log.info('Digestion tick skipped: missing time')
       if (engineToggles.clothingStress) {
-        const clothingResult = processClothingStress(newXml, oldXml)
+        const clothingResult = processClothingStress(updatedXml, oldXml)
         if (clothingResult.damageEvents.length > 0) {
           spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
         }
         return clothingResult.xml
       }
-      return newXml
+      return updatedXml
     }
 
     let elapsed = newTime - oldTime
@@ -171,24 +166,22 @@ export async function runDigestionTick(
       } else {
         maybeToast('digestionSkips', 'info', 'Digestion tick skipped: time went backwards (rollback)')
         spindle.log.info('Digestion tick skipped: time went backwards (rollback)')
-        return newXml
+        return updatedXml
       }
     }
 
     if (elapsed === 0) {
-      maybeToast('digestionSkips', 'info', 'Digestion tick skipped: 0 hours elapsed')
-      spindle.log.info('Digestion tick skipped: 0 hours elapsed')
-      if (engineToggles.clothingStress) {
-        const clothingResult = processClothingStress(newXml, oldXml)
-        if (clothingResult.damageEvents.length > 0) {
-          spindle.log.info(`Clothing damage: ${clothingResult.damageEvents.join(', ')}`)
-        }
-        return clothingResult.xml
-      }
-      return newXml
+      // Don't skip the tick when 0 hours elapsed — the LLM frequently
+      // copies the same <Time> value, and skipping means no timestamps
+      // (timeAdded, FirstItemTime, StomachEmptyTime, CurrentAcidPct) get
+      // written. Instead, let the normal flow run: clockDelta returns 0
+      // so digestion percentages won't change, but all timestamps will
+      // be (re)written to the sheet. No code path divides by elapsed,
+      // so elapsed=0 is safe throughout.
+      spindle.log.info('Digestion tick: 0 hours elapsed — running tick for timestamp persistence')
     }
 
-    updatedXml = newXml
+    // updatedXml already holds the repaired/sanitized newXml from above.
 
     // ── PHASE 1: HEALTH REGEN ──────────────────────────────────────────
     // Runs BEFORE collectModifiers so health-state modifiers (from the
