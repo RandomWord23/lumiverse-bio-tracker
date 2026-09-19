@@ -1449,6 +1449,11 @@ export async function promptInterceptor(messages: any[], context: any) {
   // Also update the in-memory sheets Map so all downstream code
   // paths (commitUpdate, contentProcessor, etc.) see the repaired version.
   sheet = repairDigestiveTract(sheet)
+  // ── Sanitize: fix common LLM attribute mistakes before the LLM ──
+  // sees the sheet. If the stored sheet already has conversion="X%" on
+  // stomach items or newlines inside multiplier tags, the LLM copies
+  // those errors. Sanitizing here breaks the copy-cycle.
+  sheet = sanitizeSheetXml(sheet)
   sheets.set(chatId, sheet)
 
   // ─── Store the prompt-time sheet snapshot ───────────────────
