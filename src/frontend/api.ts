@@ -46,6 +46,7 @@ export const defaultEngineToggles: EngineToggles = {
   lactationEngine: false,
   progressionSystem: false,
   questSystem: false,
+  dynamicMode: false,
 }
 
 export const defaultUiSettings: UiSettings = {

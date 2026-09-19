@@ -56,6 +56,7 @@ export let engineToggles: Record<string, boolean> = {
   lactationEngine: false,
   progressionSystem: false,
   questSystem: false,
+  dynamicMode: false,
 }
 
 // ─── Setters (writes must go through these to reassign the live bindings) ──

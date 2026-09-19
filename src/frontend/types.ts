@@ -43,6 +43,7 @@ export interface EngineToggles {
   lactationEngine: boolean
   progressionSystem: boolean
   questSystem: boolean
+  dynamicMode: boolean
 }
 
 /**

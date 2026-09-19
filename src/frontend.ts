@@ -423,6 +423,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'healthSystem', label: 'Health System', desc: 'Health pool with digestion-driven regen and event-based damage' },
     { key: 'progressionSystem', label: 'Progression System', desc: 'XP, leveling, and attribute points' },
     { key: 'questSystem', label: 'Quest Tracker', desc: 'LLM-driven quest creation, completion, and abandonment with XP rewards' },
+    { key: 'dynamicMode', label: 'Dynamic Mode', desc: 'Allow LLM to freely fill out and modify non-engine-computed sheet fields' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },

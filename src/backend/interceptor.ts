@@ -36,6 +36,7 @@ import {
   convertItemsInContent,
   clockDelta,
   buildSheetPrompt,
+  buildContextualExamples,
   parseDiceConfig,
   rollDicePool,
   buildDicePoolPrompt,
@@ -1539,9 +1540,10 @@ export async function promptInterceptor(messages: any[], context: any) {
     }
   }
 
+  const contextualExamples = buildContextualExamples(sheet)
   const injection = {
     role: 'system' as const,
-    content: buildSheetPrompt(sheet) + populateInstructions + struggleNotification + climaxNotification + dicePoolInjection,
+    content: buildSheetPrompt(sheet, contextualExamples, engineToggles.dynamicMode ?? false) + populateInstructions + struggleNotification + climaxNotification + dicePoolInjection,
   }
 
   // ─── Strip <sheet_update> blocks from chat history ──────────

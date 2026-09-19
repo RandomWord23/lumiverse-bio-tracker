@@ -1518,7 +1518,199 @@ export function convertItemsInContent(
   return { content, convertedPrey, conversionCount }
 }
 
-export function buildSheetPrompt(sheetXml: string): string {
+// ---------------------------------------------------------------------------
+// Contextual Examples — generates format examples for empty sheet fields
+// ---------------------------------------------------------------------------
+
+/**
+ * Scans the current sheet XML for empty/missing fields and generates
+ * minimal FORMAT EXAMPLES showing how each empty field should look.
+ * Examples are clearly labeled as FORMAT ONLY — the LLM must NOT copy
+ * the example values into the sheet.
+ *
+ * Returns an empty string when all fields are filled (zero token waste).
+ */
+export function buildContextualExamples(sheetXml: string): string {
+  const examples: string[] = []
+
+  // ── Helpers ──────────────────────────────────────────────
+  /** True if a simple text tag is missing or has empty/whitespace content. */
+  const isTagEmpty = (tag: string): boolean => {
+    const m = sheetXml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`, 'i'))
+    return !m || m[1].trim() === ''
+  }
+
+  /** True if a tag exists anywhere in the sheet (self-closing or paired). */
+  const hasTag = (tag: string): boolean =>
+    new RegExp(`<${tag}[\\s/>]`, 'i').test(sheetXml)
+
+  /** True if a parent element contains at least one child element of the
+   *  given type. Returns false if the parent is missing or self-closing. */
+  const hasChildren = (parent: string, child: string): boolean => {
+    const re = new RegExp(`<${parent}\\b[^>]*>([\\s\\S]*?)</${parent}>`, 'i')
+    const m = sheetXml.match(re)
+    if (!m) return false
+    return new RegExp(`<${child}\\b`, 'i').test(m[1])
+  }
+
+  // ── State / World fields ─────────────────────────────────
+  if (isTagEmpty('Weather')) examples.push('EXAMPLE FORMAT: <Weather>Overcast, light drizzle</Weather>')
+  if (isTagEmpty('Temperature')) examples.push('EXAMPLE FORMAT: <Temperature>18°C</Temperature>')
+  if (isTagEmpty('Area')) examples.push('EXAMPLE FORMAT: <Area>Old Town Market</Area>')
+  if (isTagEmpty('Building')) examples.push('EXAMPLE FORMAT: <Building>The Copper Mug Tavern</Building>')
+  if (isTagEmpty('Room')) examples.push('EXAMPLE FORMAT: <Room>Common Hall</Room>')
+
+  // ── Clothing ─────────────────────────────────────────────
+  if (!hasChildren('Clothing', 'Equip')) {
+    examples.push('EXAMPLE FORMAT: <Equip slot="Torso Base" elasticity="standard">Linen Shirt</Equip>')
+  }
+
+  // ── Backpack ─────────────────────────────────────────────
+  if (!hasChildren('Backpack', 'Item')) {
+    examples.push('EXAMPLE FORMAT: <Item qty="1" desc="Holds 2L">Waterskin</Item>')
+  }
+
+  // ── Skills & Traits ──────────────────────────────────────
+  if (!hasChildren('SkillsAndTraits', 'Skill')) {
+    examples.push('EXAMPLE FORMAT: <Skill name="Iron Stomach" level="3" buffs="BaseDigestionRate:+25">Iron-lined stomach.</Skill>')
+  }
+  if (!hasChildren('SkillsAndTraits', 'Trait')) {
+    examples.push('EXAMPLE FORMAT: <Trait name="Patient Hunter" buffs="ArousalDecay:-20">Calm under pressure.</Trait>')
+  }
+
+  // ── Attributes (only if attribute system is enabled) ────
+  if (engineToggles.attributeSystem) {
+    if (!hasTag('Attributes') || !hasChildren('Attributes', 'STR')) {
+      examples.push('EXAMPLE FORMAT: <Attributes><STR>10</STR><DEX>10</DEX><CON>10</CON><INT>10</INT><WIS>10</WIS><CHA>10</CHA></Attributes>  (set scores 8-15)')
+    }
+  }
+
+  // ── Vitals / Health (only if health system is enabled) ──
+  if (engineToggles.healthSystem) {
+    if (!hasTag('Vitals') || !/<Health\s/i.test(sheetXml)) {
+      examples.push('EXAMPLE FORMAT: <Vitals><Health current="100" max="100" /></Vitals>')
+    }
+  }
+
+  // ── Stomach contents ─────────────────────────────────────
+  if (!hasChildren('Stomach', 'Item')) {
+    examples.push('EXAMPLE FORMAT: <Item type="Food" name="Bread" volume_L="0.5" digestion="0%"><Description>Half a loaf.</Description></Item>')
+  }
+
+  // ── Bowels contents ──────────────────────────────────────
+  const bowelsMatch = sheetXml.match(/<Bowels\b[^>]*>([\s\S]*?)<\/Bowels>/i)
+  if (bowelsMatch && !/<Item\b/i.test(bowelsMatch[1]) && !/<Remains\b/i.test(bowelsMatch[1])) {
+    examples.push('EXAMPLE FORMAT: <Remains volume_L="0.5">Waste</Remains>')
+  }
+
+  // ── Womb contents (only if unbirth engine is enabled) ───
+  if (engineToggles.unbirthEngine && !hasChildren('Womb', 'Item')) {
+    examples.push('EXAMPLE FORMAT: <Item type="Prey" name="..." volume_L="60" absorption="0%"><Description>...</Description></Item>')
+  }
+
+  // ── Balls contents (only if cock vore engine is enabled) ─
+  if (engineToggles.cockVoreEngine && !hasChildren('Balls', 'Item')) {
+    examples.push('EXAMPLE FORMAT: <Item type="Prey" name="..." volume_L="60" conversion="0%"><Description>...</Description></Item>')
+  }
+
+  // ── Currency fields ──────────────────────────────────────
+  const currencySystem = /<CurrencySystem>\s*(\w+)\s*<\/CurrencySystem>/i.exec(sheetXml)?.[1]?.toLowerCase() ?? 'modern'
+  if (currencySystem === 'modern') {
+    if (isTagEmpty('CashBalance')) examples.push('EXAMPLE FORMAT: <CashBalance>1500</CashBalance>')
+  } else {
+    if (isTagEmpty('Gold')) examples.push('EXAMPLE FORMAT: <Gold>12</Gold>')
+    if (isTagEmpty('Silver')) examples.push('EXAMPLE FORMAT: <Silver>50</Silver>')
+    if (isTagEmpty('Copper')) examples.push('EXAMPLE FORMAT: <Copper>3</Copper>')
+  }
+
+  // ── Prey items with missing sub-tags ─────────────────────
+  // Show format examples for missing Description/Appearance/BoundGear
+  // on the first prey item that lacks them (once, to save tokens).
+  const preyItemRegex = /<Item\s+[^>]*type="Prey"[^>]*>([\s\S]*?)<\/Item>/gi
+  let preyMatch: RegExpExecArray | null
+  while ((preyMatch = preyItemRegex.exec(sheetXml)) !== null) {
+    const inner = preyMatch[1]
+    if (!/<Description>/i.test(inner)) examples.push('EXAMPLE FORMAT (prey sub-tag): <Description>Squirming as acids rise.</Description>')
+    if (!/<Appearance>/i.test(inner)) examples.push('EXAMPLE FORMAT (prey sub-tag): <Appearance>22-year-old human woman, slender, red hair, green eyes</Appearance>')
+    if (!/<BoundGear>/i.test(inner)) examples.push('EXAMPLE FORMAT (prey sub-tag): <BoundGear>blue dress, leather boots</BoundGear>')
+    break // Only show once to save tokens
+  }
+
+  if (examples.length === 0) return ''
+
+  return `
+─── EMPTY FIELD EXAMPLES (EXAMPLES ONLY — DO NOT COPY THESE VALUES) ───
+The following fields in your sheet are currently empty. Here is the correct FORMAT for each.
+These are EXAMPLES ONLY — do NOT copy these example values into your sheet. Use them as a
+structural template and fill in your own scene-appropriate values.
+
+${examples.join('\n')}
+
+The above are FORMAT EXAMPLES showing XML structure only. Do NOT copy the example text/values
+into your sheet. Create your own content matching the scene.
+─── END EMPTY FIELD EXAMPLES ───
+`
+}
+
+// ---------------------------------------------------------------------------
+// Sheet Prompt — the full LLM instruction system
+// ---------------------------------------------------------------------------
+
+export function buildSheetPrompt(sheetXml: string, contextualExamples: string, dynamicMode: boolean): string {
+  const conservativeResponsibilities = `─── YOUR RESPONSIBILITIES (what YOU must do) ───
+1. ADVANCE <Time> FORWARD every turn — but ONLY for events happening in THIS response. The <Time> value in <CurrentCharacterSheet> is the CURRENT moment: it ALREADY reflects all time that passed in previous turns (travel, meals, conversations, etc.). Do NOT re-advance time for things that already happened. Only add time for NEW events that occur in your current response. For example: if the sheet says <Time>08:30</Time> because travel already advanced time to 08:30 in the previous turn, and in THIS turn the character has a 5-minute conversation, set <Time>08:35</Time> — NOT 09:00. Time passage is DYNAMIC — advance it proportionally to what's happening in THIS response only. A brief exchange with an NPC might be 1-2 minutes; a meal might be 20-30 minutes; travel might be hours. Be realistic: if the characters are just talking for a few minutes, advance by minutes, not hours. The extension uses the time delta to calculate digestion, arousal decay, and body growth, so unrealistic time jumps will cause unrealistic simulation results. If you do not advance time at all, the simulation stalls.
+   FORMAT RULE: <Time> must contain ONLY a 24-hour clock value in "HH:MM" form (e.g. "10:23", "14:30"). Do NOT prefix it with a day, date, or any other text — "Day 1, 10:23" is INVALID and breaks the simulation. Correct: <Time>10:23</Time>. Incorrect: <Time>Day 1, 10:23</Time>.
+   MANDATORY RULE: You MUST ALWAYS include a <Time> tag in every <sheet_update>. NEVER omit it, even if you think time didn't change — copy the previous value verbatim. If <Time> is missing from the sheet, the extension cannot calculate digestion and the simulation stalls completely.
+2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
+3. Add <Item> entries to <Stomach>, <Bowels>, <Womb> (unbirth), or <Balls> (cock vore) when the character eats or is eaten. Remove them only if the item was regurgitated, birthed out, or otherwise exits the body.
+4. Update <Arousal> based on what happens in the scene. Set it to the value you believe reflects the character's current arousal — the engine subtracts natural decay (50%/hour) on top. See rule 16 for details.
+5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
+6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
+7. Set prey willingness="willing|reluctant|fighting" based on the scene narrative (see STRUGGLE & INDIGESTION SYSTEM below).
+8. Set suppressing="true|false" on the <Stomach> tag based on the scene narrative.
+9. Narrate struggle threshold events and vomit events when you receive STRUGGLE EVENTS notifications (see below).`
+
+  const dynamicResponsibilities = `─── YOUR RESPONSIBILITIES (DYNAMIC MODE ENABLED) ───
+You have CREATIVE FREEDOM over the character sheet. You may fill out, modify, and
+update ANY field on the sheet — including Skills, Traits, Clothing, Backpack items,
+State/World fields, BaseStats, Attributes, and character identity fields — to reflect
+what is happening in the story and what makes sense for the character.
+
+The ONLY values you must NOT modify are the ENGINE-COMPUTED VALUES listed in the
+PRE-COMPUTED VALUES section below. Those are calculated by the extension and must be
+copied verbatim.
+
+When you fill out an empty field for the first time, use the EMPTY FIELD EXAMPLES
+section above as a format guide. Once a field has content, maintain and update it
+as the story progresses.
+
+BASE RESPONSIBILITIES (always required, even in dynamic mode):
+1. ADVANCE <Time> FORWARD every turn — but ONLY for events happening in THIS response. The <Time> value in <CurrentCharacterSheet> is the CURRENT moment: it ALREADY reflects all time that passed in previous turns (travel, meals, conversations, etc.). Do NOT re-advance time for things that already happened. Only add time for NEW events that occur in your current response. For example: if the sheet says <Time>08:30</Time> because travel already advanced time to 08:30 in the previous turn, and in THIS turn the character has a 5-minute conversation, set <Time>08:35</Time> — NOT 09:00. Time passage is DYNAMIC — advance it proportionally to what's happening in THIS response only. A brief exchange with an NPC might be 1-2 minutes; a meal might be 20-30 minutes; travel might be hours. Be realistic: if the characters are just talking for a few minutes, advance by minutes, not hours. The extension uses the time delta to calculate digestion, arousal decay, and body growth, so unrealistic time jumps will cause unrealistic simulation results. If you do not advance time at all, the simulation stalls.
+   FORMAT RULE: <Time> must contain ONLY a 24-hour clock value in "HH:MM" form (e.g. "10:23", "14:30"). Do NOT prefix it with a day, date, or any other text — "Day 1, 10:23" is INVALID and breaks the simulation. Correct: <Time>10:23</Time>. Incorrect: <Time>Day 1, 10:23</Time>.
+   MANDATORY RULE: You MUST ALWAYS include a <Time> tag in every <sheet_update>. NEVER omit it, even if you think time didn't change — copy the previous value verbatim. If <Time> is missing from the sheet, the extension cannot calculate digestion and the simulation stalls completely.
+2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
+3. Add <Item> entries to <Stomach>, <Bowels>, <Womb> (unbirth), or <Balls> (cock vore) when the character eats or is eaten. Remove them only if the item was regurgitated, birthed out, or otherwise exits the body.
+4. Update <Arousal> based on what happens in the scene. Set it to the value you believe reflects the character's current arousal — the engine subtracts natural decay (50%/hour) on top. See rule 16 for details.
+5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
+6. Set prey willingness="willing|reluctant|fighting" based on the scene narrative (see STRUGGLE & INDIGESTION SYSTEM below).
+7. Set suppressing="true|false" on the <Stomach> tag based on the scene narrative.
+8. Narrate struggle threshold events and vomit events when you receive STRUGGLE EVENTS notifications (see below).
+
+CREATIVE FREEDOM (dynamic mode — you ARE encouraged to do these):
+- Add new Skills and Traits as the character develops them
+- Add or change Clothing as the character dresses/undresses/changes
+- Add Backpack items when the character acquires things
+- Fill in State/World fields (Weather, Area, Building, Room) to set the scene
+- Adjust Attributes when the character grows (rarely — through training or transformation)
+- Set character identity fields (Name, Age, Species, etc.) if they are blank
+- Update Currency fields when money is earned or spent
+- Create new quests via <quest_create> tags as story objectives emerge
+- Complete quests via <quest_complete> when objectives are met
+- Abandon quests via <quest_abandon> when the character gives up or fails
+- Award bonus XP via <xp_award> tags for significant narrative milestones`
+
+  const responsibilitiesSection = dynamicMode ? dynamicResponsibilities : conservativeResponsibilities
+
   return `[CHARACTER SHEET SYSTEM
 
 You are the active manager of a persistent character sheet. The extension provides you with the current sheet state below. Every value in this sheet has been computed by the extension's simulation engines and represents the TRUE current state of the character. Your job is to produce an updated <sheet_update> block that copies ALL existing values exactly, advances time, and makes scene-appropriate changes ONLY to the fields you control.
@@ -1526,7 +1718,7 @@ You are the active manager of a persistent character sheet. The extension provid
 <CurrentCharacterSheet>
 ${sheetXml}
 </CurrentCharacterSheet>
-
+${contextualExamples}
 ─── HOW THE SYSTEM WORKS ───
 The extension runs a "digestion tick" AFTER each of your responses. During this tick, the extension's engines compute:
 - Digestion percentages (from each item's timeAdded timestamp and the current <Time>)
@@ -1544,18 +1736,7 @@ These computed values are written into the stored sheet. The <CurrentCharacterSh
 
 CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is into your <sheet_update>. This includes indigestion, stamina, struggle, digestion, timeAdded, stress, condition, Climax, CurrentPenisLength_cm, and every other computed value. Never zero out, reset, or "forget" a value you see in the sheet. If you see indigestion="57", you MUST output indigestion="57". If you see stamina="45", you MUST output stamina="45". If you see digestion="25%", you MUST output digestion="25%". The extension will recompute these values again on the NEXT tick — your job is to preserve them, not override them.
 
-─── YOUR RESPONSIBILITIES (what YOU must do) ───
-1. ADVANCE <Time> FORWARD every turn — but ONLY for events happening in THIS response. The <Time> value in <CurrentCharacterSheet> is the CURRENT moment: it ALREADY reflects all time that passed in previous turns (travel, meals, conversations, etc.). Do NOT re-advance time for things that already happened. Only add time for NEW events that occur in your current response. For example: if the sheet says <Time>08:30</Time> because travel already advanced time to 08:30 in the previous turn, and in THIS turn the character has a 5-minute conversation, set <Time>08:35</Time> — NOT 09:00. Time passage is DYNAMIC — advance it proportionally to what's happening in THIS response only. A brief exchange with an NPC might be 1-2 minutes; a meal might be 20-30 minutes; travel might be hours. Be realistic: if the characters are just talking for a few minutes, advance by minutes, not hours. The extension uses the time delta to calculate digestion, arousal decay, and body growth, so unrealistic time jumps will cause unrealistic simulation results. If you do not advance time at all, the simulation stalls.
-   FORMAT RULE: <Time> must contain ONLY a 24-hour clock value in "HH:MM" form (e.g. "10:23", "14:30"). Do NOT prefix it with a day, date, or any other text — "Day 1, 10:23" is INVALID and breaks the simulation. Correct: <Time>10:23</Time>. Incorrect: <Time>Day 1, 10:23</Time>.
-   MANDATORY RULE: You MUST ALWAYS include a <Time> tag in every <sheet_update>. NEVER omit it, even if you think time didn't change — copy the previous value verbatim. If <Time> is missing from the sheet, the extension cannot calculate digestion and the simulation stalls completely.
-2. Write a complete <sheet_update> block at the END of every response (see rules below). Previous sheet_update blocks have been removed from your chat history — you MUST still write a new one each turn.
-3. Add <Item> entries to <Stomach>, <Bowels>, <Womb> (unbirth), or <Balls> (cock vore) when the character eats or is eaten. Remove them only if the item was regurgitated, birthed out, or otherwise exits the body.
-4. Update <Arousal> based on what happens in the scene. Set it to the value you believe reflects the character's current arousal — the engine subtracts natural decay (50%/hour) on top. See rule 16 for details.
-5. Update <Description> tags for prey each turn to reflect their current state (squirming, dissolving, going limp).
-6. Fill in any blank State/World fields (Time, Weather, Temperature, etc.) with sensible defaults.
-7. Set prey willingness="willing|reluctant|fighting" based on the scene narrative (see STRUGGLE & INDIGESTION SYSTEM below).
-8. Set suppressing="true|false" on the <Stomach> tag based on the scene narrative.
-9. Narrate struggle threshold events and vomit events when you receive STRUGGLE EVENTS notifications (see below).
+${responsibilitiesSection}
 
 ─── PRE-COMPUTED VALUES (copy these EXACTLY as-is — do NOT modify, reset, or zero them) ───
 The following values are computed by the extension's engines during the digestion tick. The sheet you receive already contains the correct values. You MUST copy them verbatim into your <sheet_update>:
