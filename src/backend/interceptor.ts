@@ -42,6 +42,7 @@ import {
   buildDicePoolPrompt,
   processActionRolls,
   repairDigestiveTract,
+  sanitizeSheetXml,
   processHealthRegen,
   processHealthDamage,
   getHealth,
@@ -85,6 +86,12 @@ export async function runDigestionTick(
   // parsererror in the frontend DOMParser. This inserts missing closing
   // tags so the downstream regex extraction and replacement work correctly.
   updatedXml = repairDigestiveTract(updatedXml)
+
+  // ── Sanitize: fix common LLM attribute mistakes ───────────────────
+  // The LLM sometimes writes conversion="X%" on Stomach prey items
+  // (should be digestion="X%") and puts newlines inside capacity
+  // multiplier tags. This normalizes those before the tick runs.
+  updatedXml = sanitizeSheetXml(updatedXml)
 
   try {
     const getTimeHours = (xml: string) => {

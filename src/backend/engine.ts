@@ -222,6 +222,64 @@ export function repairDigestiveTract(xml: string): string {
   )
 }
 
+/**
+ * Sanitize LLM-produced sheet XML to fix common attribute mistakes before
+ * the digestion tick processes it.
+ *
+ * Bug 1: The LLM sometimes writes conversion="X%" on <Stomach> prey items
+ *        (confusing the balls conversion attribute with the stomach
+ *        digestion attribute). This rewrites conversion→digestion on any
+ *        <Item> that appears inside a <Stomach> block.
+ *
+ * Bug 2: The LLM sometimes writes capacity multiplier tags with newlines
+ *        or extra whitespace inside the tag value, e.g.
+ *        <WombCapacityMultiplier>\n1</WombCapacityMultiplier>.
+ *        This strips interior whitespace from known numeric scalar tags.
+ */
+export function sanitizeSheetXml(xml: string): string {
+  let result = xml
+
+  // ── Bug 1: conversion→digestion on Stomach items ──────────────────
+  // Find each <Stomach> block and replace conversion="..." with
+  // digestion="..." on any <Item> inside it. We operate per-block so
+  // we never touch conversion attributes on Balls items.
+  result = result.replace(
+    /<Stomach\b([^>]*)>([\s\S]*?)<\/Stomach>/gi,
+    (_match, attrs: string, inner: string) => {
+      const fixed = inner.replace(
+        /(<Item\b[^>]*?)\s+conversion="([^"]*)"/gi,
+        (_m: string, prefix: string, val: string) => `${prefix} digestion="${val}"`,
+      )
+      return `<Stomach${attrs}>${fixed}</Stomach>`
+    },
+  )
+
+  // ── Bug 2: strip whitespace from numeric scalar tags ──────────────
+  // The LLM sometimes puts newlines or extra spaces inside these tags.
+  // Normalize to a single trimmed value.
+  const numericScalarTags = [
+    'CapacityMultiplier',
+    'WombCapacityMultiplier',
+    'BallsCapacityMultiplier',
+    'LactationRateMultiplier',
+    'StomachResistance',
+    'AcidRiseRate',
+    'BaseDigestionRate',
+  ]
+  for (const tag of numericScalarTags) {
+    const re = new RegExp(
+      `(<${tag}\\s*>)\\s*([\\s\\S]*?)\\s*(<\\/${tag}>)`,
+      'gi',
+    )
+    result = result.replace(re, (_m: string, open: string, val: string, close: string) => {
+      const trimmed = val.trim()
+      return `${open}${trimmed}${close}`
+    })
+  }
+
+  return result
+}
+
 export function getAttrFromString(str: string, attr: string): string {
   const match = str.match(new RegExp(`${attr}="([^"]*)"`, 'i'))
   return match ? match[1] : ''
@@ -1613,6 +1671,17 @@ export function buildContextualExamples(sheetXml: string): string {
     examples.push('EXAMPLE FORMAT: <Item type="Prey" name="..." volume_L="60" conversion="0%"><Description>...</Description></Item>')
   }
 
+  // ── Capacity multipliers (single number, NO newlines inside tag) ──
+  if (isTagEmpty('CapacityMultiplier')) {
+    examples.push('EXAMPLE FORMAT: <CapacityMultiplier>1.0</CapacityMultiplier>  (single decimal number on ONE line — no newlines or extra whitespace inside the tag)')
+  }
+  if (engineToggles.unbirthEngine && isTagEmpty('WombCapacityMultiplier')) {
+    examples.push('EXAMPLE FORMAT: <WombCapacityMultiplier>1.0</WombCapacityMultiplier>  (single decimal number on ONE line — no newlines or extra whitespace inside the tag)')
+  }
+  if (engineToggles.cockVoreEngine && isTagEmpty('BallsCapacityMultiplier')) {
+    examples.push('EXAMPLE FORMAT: <BallsCapacityMultiplier>1.0</BallsCapacityMultiplier>  (single decimal number on ONE line — no newlines or extra whitespace inside the tag)')
+  }
+
   // ── Currency fields ──────────────────────────────────────
   const currencySystem = /<CurrencySystem>\s*(\w+)\s*<\/CurrencySystem>/i.exec(sheetXml)?.[1]?.toLowerCase() ?? 'modern'
   if (currencySystem === 'modern') {
@@ -1770,6 +1839,13 @@ CRITICAL XML RULES:
    VALID SLOT NAMES ONLY: "Head Top", "Face", "Head Lower", "Neck", "Underwear Top", "Underwear Bottom", "Torso Base", "Torso Mid", "Torso Outer", "Torso Shell", "Hands Base", "Hands Outer", "Legs Base", "Legs Outer", "Feet Base", "Feet Outer", "Jewelry", "Back", "Waist".
 3. The <Equip> tag MUST ALWAYS have an elasticity attribute. Valid values are "rigid", "standard", "stretchy", or "magic". Never omit it. If the extension has added stress="..." or condition="..." attributes to an Equip tag, copy them exactly as-is. Do NOT modify or remove them.
 4. Stomach and Bowel contents MUST use the <Item type="Liquid|Food|Prey" name="..." volume_L="..." digestion="...%"> format for <Stomach> items. For <Bowels> prey items, use transit="...%" instead of digestion="...%" (see BOWELS TRANSIT SYSTEM below). Do not use a <Prey> tag. Items can be inside <Stomach> or <Bowels> (for full-tour scenarios). Backpack (inventory) items use a DIFFERENT, simpler format — see rule 19.
+   CRITICAL — DO NOT CONFUSE ATTRIBUTE NAMES ACROSS BODY ZONES. Each zone has its OWN progress attribute — using the wrong one BREAKS THE UI:
+   - <Stomach> items use digestion="X%" — NEVER use conversion, transit, or absorption on Stomach items.
+   - <Bowels> prey items use transit="X%" — NEVER use digestion or conversion on Bowels prey.
+   - <Womb> items use absorption="X%" — NEVER use digestion or conversion on Womb items.
+   - <Balls> items use conversion="X%" — NEVER use digestion or absorption on Balls items.
+   BAD (BREAKS THE UI): <Item type="Prey" name="Harper" volume_L="17" conversion="1.86%" ...>  ← this is a STOMACH item with the WRONG attribute
+   GOOD: <Item type="Prey" name="Harper" volume_L="17" digestion="1.86%" ...>  ← correct attribute for Stomach
 5. Prey identity, action, and gear go in SEPARATE tags. NEVER mix them:
    - <Appearance> = static identity (age, species, gender, build, hair, eyes). Stays the same unless the prey transforms.
    - <Description> = current dynamic action/state (squirming, dissolving, going limp). Updates EVERY turn.
@@ -1899,6 +1975,7 @@ STOMACH RESISTANCE:
 
 STOMACH CAPACITY:
 The stomach has a max capacity (height × weight × 0.012 × CapacityMultiplier). This affects struggle intensity — prey larger relative to stomach capacity contribute more to indigestion. Below capacity, prey have reduced struggle impact. Above capacity, struggle impact increases (capped at 2× normal at 200% capacity). There is no hard overflow limit — the engine does not reject or penalize overfilling mechanically. However, you should narrate discomfort and strain when the stomach is over capacity, and treat a significantly overfilled belly as impacting the character's movement and comfort. If the belly is under capacity, treat it as non-impacting — the character moves normally.
+ALWAYS include <CapacityMultiplier>1.0</CapacityMultiplier> in the sheet (default 1.0). It must be a single decimal number on ONE line — NEVER put newlines or extra whitespace inside the tag. Example: <CapacityMultiplier>1.0</CapacityMultiplier>
 
 ENERGY:
 <Energy> in <State> is drained by fighting prey and active suppression (handled by the engine). Set Energy to the value you believe is appropriate for the scene — the engine will subtract struggle/suppression drain on top. You can RAISE Energy (resting, recovery) or LOWER it (exhaustion, overexertion — use sparingly for special occasions). To keep Energy stable during rest, set it slightly above the current value to compensate for any active drain. When Energy is low, suppression becomes less effective and the pred may struggle to hold prey.
@@ -2025,6 +2102,7 @@ Rules for womb prey:
 - The struggle/indigestion system does NOT affect prey in the Womb.
 - When absorption reaches 100%, the prey vanishes from <Womb> in the next sheet. Narrate the prey being fully absorbed into the predator's body.
 - The LLM may choose to "birth" a prey out before 100% absorption — simply remove the item from <Womb> and narrate the rebirth. The prey exits with reduced stamina.
+- ALWAYS include <WombCapacityMultiplier>1.0</WombCapacityMultiplier> in the sheet (default 1.0). It must be a single decimal number on ONE line — NEVER put newlines or extra whitespace inside the tag. Example: <WombCapacityMultiplier>1.0</WombCapacityMultiplier>
 
 ─── BALLS CONVERSION SYSTEM ───
 Prey placed into the Balls (cock vore) do NOT digest. Instead they are CONVERTED into cum — a churning process represented by the conversion="X%" attribute. When conversion reaches 100%, the extension AUTOMATICALLY removes the prey and adds their volume to CumVolume_ml. When the predator climaxes, the accumulated cum is expelled.
@@ -2038,6 +2116,7 @@ Rules for balls prey:
 - The struggle/indigestion system does NOT affect prey in the Balls.
 - When conversion reaches 100%, the prey vanishes from <Balls> in the next sheet and their volume is added to CumVolume_ml. Narrate the prey being fully converted.
 - When the predator climaxes (orgasm), CumVolume_ml is expelled and reset to 0. Narrate the expulsion.
+- ALWAYS include <BallsCapacityMultiplier>1.0</BallsCapacityMultiplier> in the sheet (default 1.0). It must be a single decimal number on ONE line — NEVER put newlines or extra whitespace inside the tag. Example: <BallsCapacityMultiplier>1.0</BallsCapacityMultiplier>
 
 ─── LACTATION SYSTEM ───
 The character's breasts produce milk passively over time. The extension AUTOMATICALLY computes milk production each tick — copy the MilkVolume_ml value exactly.
