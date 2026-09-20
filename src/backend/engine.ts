@@ -1177,9 +1177,10 @@ export function digestItemsInContent(
     oldClock: number
     oldDigestionMap: Map<string, number>
     /** Map of item name -> timeAdded from the previous tick's stored sheet.
-     *  The LLM never includes timeAdded in its output, so without this map
-     *  every item would be treated as brand-new (timeAdded = currentClock)
-     *  and digestion would always compute to 0. */
+     *  The LLM is instructed to copy timeAdded verbatim but frequently drops
+     *  it, so this map is the primary lookup. Without it, every item would be
+     *  treated as brand-new (timeAdded = currentClock) and digestion would
+     *  always compute to 0. */
     oldTimeAddedMap: Map<string, number>
   },
 ): {
@@ -1220,10 +1221,11 @@ export function digestItemsInContent(
     // recomputed from scratch every tick:
     //   digestion = baseDigRate * speedMult * acidMult * clockDelta(now, timeAdded)
     // Self-healing — skipped ticks, crashes, and rollbacks cannot lose time.
-    // The LLM never includes the engine-injected timeAdded attribute in its
-    // output, so we must look it up from the old (stored) sheet's map first.
-    // Only fall back to the LLM's attribute or back-calculation if the old
-    // sheet doesn't have it (truly new item or legacy migration).
+    // The LLM is instructed to copy timeAdded verbatim from the sheet, but it
+    // frequently drops the attribute anyway. We therefore look it up from the
+    // old (stored) sheet's map FIRST, then fall back to the LLM's attribute
+    // (if it did copy it), then to back-calculation from digestion %, then to
+    // oldClock, and finally to currentClock for truly new items.
     let timeAdded = ctx.oldTimeAddedMap.get(name) ?? NaN
     let oldDigNum = ctx.oldDigestionMap.get(name) ?? 0
 
@@ -1809,7 +1811,7 @@ The extension runs a "digestion tick" AFTER each of your responses. During this 
 
 These computed values are written into the stored sheet. The <CurrentCharacterSheet> you see above ALREADY contains all of these computed values from the last tick. They are the current truth.
 
-CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is into your <sheet_update>. This includes indigestion, stamina, struggle, digestion, timeAdded, stress, condition, Climax, CurrentPenisLength_cm, and every other computed value. Never zero out, reset, or "forget" a value you see in the sheet. If you see indigestion="57", you MUST output indigestion="57". If you see stamina="45", you MUST output stamina="45". If you see digestion="25%", you MUST output digestion="25%". The extension will recompute these values again on the NEXT tick — your job is to preserve them, not override them.
+CRITICAL: You MUST copy ALL values from <CurrentCharacterSheet> exactly as-is into your <sheet_update>. This includes indigestion, stamina, struggle, digestion, timeAdded, stress, condition, Climax, CurrentPenisLength_cm, and every other computed value. Never zero out, reset, or "forget" a value you see in the sheet. If you see indigestion="57", you MUST output indigestion="57". If you see stamina="45", you MUST output stamina="45". If you see digestion="25%", you MUST output digestion="25%". If you see timeAdded="14:30", you MUST output timeAdded="14:30" — NEVER drop this attribute. The extension will recompute these values again on the NEXT tick — your job is to preserve them, not override them.
 
 ${responsibilitiesSection}
 
@@ -1868,7 +1870,15 @@ CRITICAL XML RULES:
      <Description>Squirming helplessly as acids rise past her waist.</Description>
      <BoundGear>blue dress, leather boots</BoundGear>
    </Item>
-6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag. When copying existing prey items, COPY the digestion="...%" AND timeAdded="HH:MM" attributes EXACTLY as they appear in <CurrentCharacterSheet> — do NOT set digestion to "0%", remove it, or alter timeAdded. The timeAdded value is a 24-hour clock timestamp (e.g. timeAdded="14:30") indicating when the item was eaten — copy it verbatim. The extension advances the values automatically; your job is to preserve them as-is. When adding a NEW item that the character just ate, do NOT include a timeAdded attribute — the extension stamps it automatically.
+6. DO NOT calculate digestion percentages yourself. The extension's Metabolic Engine handles all digestion math automatically based on the <Time> you set. You only need to add items to the stomach or bowels when eaten, and update the <Time> tag.
+
+   ── EXISTING ITEMS (already present in <CurrentCharacterSheet>) ──
+   You MUST copy the digestion="...%" AND timeAdded="HH:MM" attributes EXACTLY as they appear in the sheet — character-for-character, verbatim. Do NOT set digestion to "0%", do NOT remove the timeAdded attribute, do NOT alter its value. The timeAdded value is a 24-hour clock timestamp (e.g. timeAdded="14:30") indicating when the item was eaten. The extension advances digestion automatically; your job is to PRESERVE both attributes as-is. This rule applies to ALL existing prey items regardless of which organ they are in — Stomach, Bowels, Womb, or Balls. If you see timeAdded="14:30" on an item, you MUST output timeAdded="14:30" on that same item.
+
+   ── NEW ITEMS (the character just ate/absorbed them THIS turn) ──
+   Do NOT include a timeAdded attribute. Set digestion="0%" (or transit/absorption/conversion="0%" as appropriate for the organ). The extension will stamp the timeAdded attribute automatically on the next tick. This rule applies ONLY to items being added for the first time — items that did NOT exist in the previous sheet.
+
+   SUMMARY: If the item is already in the sheet → copy timeAdded exactly. If the item is brand-new this turn → omit timeAdded entirely.
 7. If prey is fully digested (reaches 100%), the extension will AUTOMATICALLY move their remains to the Bowels section. You do NOT need to move the remains yourself. Just let the item disappear from <Stomach> in your next update if it was fully digested, and the extension will handle the transfer to <Bowels>. Similarly, if prey reaches 100% transit in the Bowels, the extension will AUTOMATICALLY move them to the Stomach — you do NOT need to move them yourself (see BOWELS TRANSIT SYSTEM below).
 8. The extension handles nutrient absorption and body growth. When items are digested, the character's Height, Weight, BreastVolume, Hips, and Penis dimensions increase proportionally. Copy these values from the sheet exactly as-is — do NOT manually adjust them based on digestion. Only adjust them if something else changes them (e.g. magic, transformation).
 9. The extension AUTOMATICALLY handles clothing stress and condition in "hardcore" mode. Clothes degrade as the body grows: intact → snug → strained → tight → damaged → ruined. Once "damaged" or "ruined", the condition is permanent. In "flavor" mode, clothes never degrade. You can narrate clothing straining or tearing based on the condition values you see in the sheet, but do NOT change the stress or condition attributes yourself.

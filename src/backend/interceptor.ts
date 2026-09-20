@@ -283,20 +283,26 @@ export async function runDigestionTick(
     updatedXml = setStat(updatedXml, 'CurrentAcidPct', acidLevel)
 
     // Build maps of item name -> digestion % AND item name -> timeAdded from
-    // the old (stored) sheet. The timeAdded map is critical: the LLM never
-    // includes the engine-injected timeAdded attribute in its output, so
+    // the old (stored) sheet. The timeAdded map is critical: the LLM often
+    // drops the engine-injected timeAdded attribute from its output, so
     // without this map every item would be treated as brand-new on every tick
     // (timeAdded = currentElapsed → digestion = rate × 0 = 0).
-    // IMPORTANT: Only scan Stomach and Bowels sections — Backpack items use a
-    // different format (no digestion attribute) and including them would cause
-    // name collisions and incorrect clamping.
+    // IMPORTANT: Scan ALL digestive organs — Stomach, Bowels, Womb, and Balls.
+    // Each organ's engine (digest/transit/absorb/convert) receives this same
+    // map and uses it as the primary timeAdded lookup. Backpack items are
+    // excluded because they use a different format (no digestion attribute)
+    // and would cause name collisions and incorrect clamping.
     const oldDigestionMap = new Map<string, number>()
     const oldTimeAddedMap = new Map<string, number>()
     const oldStomMatch = oldXml.match(/<Stomach(?![a-zA-Z])[^>]*>([\s\S]*?)<\/Stomach>/i)
     const oldBowMatch = oldXml.match(/<Bowels[^>]*>([\s\S]*?)<\/Bowels>/i)
+    const oldWombMatch = oldXml.match(/<Womb(?![a-zA-Z])[^>]*>([\s\S]*?)<\/Womb>/i)
+    const oldBallsMatch = oldXml.match(/<Balls(?![a-zA-Z])[^>]*>([\s\S]*?)<\/Balls>/i)
     const oldDigestiveContent = [
       oldStomMatch ? oldStomMatch[1] : '',
       oldBowMatch ? oldBowMatch[1] : '',
+      oldWombMatch ? oldWombMatch[1] : '',
+      oldBallsMatch ? oldBallsMatch[1] : '',
     ].join('\n')
     const oldItemRegex = /<Item\s+([^>]+?)[\s/]*>/gi
     let oldItemMatch: RegExpExecArray | null
