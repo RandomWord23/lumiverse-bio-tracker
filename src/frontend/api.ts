@@ -47,6 +47,7 @@ export const defaultEngineToggles: EngineToggles = {
   progressionSystem: false,
   questSystem: false,
   dynamicMode: false,
+  xmlSanitize: true,
 }
 
 export const defaultUiSettings: UiSettings = {

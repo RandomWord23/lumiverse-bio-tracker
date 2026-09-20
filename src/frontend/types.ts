@@ -44,6 +44,7 @@ export interface EngineToggles {
   progressionSystem: boolean
   questSystem: boolean
   dynamicMode: boolean
+  xmlSanitize: boolean
 }
 
 /**

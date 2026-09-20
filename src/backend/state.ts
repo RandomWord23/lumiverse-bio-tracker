@@ -57,6 +57,7 @@ export let engineToggles: Record<string, boolean> = {
   progressionSystem: false,
   questSystem: false,
   dynamicMode: false,
+  xmlSanitize: true,
 }
 
 // ─── Setters (writes must go through these to reassign the live bindings) ──

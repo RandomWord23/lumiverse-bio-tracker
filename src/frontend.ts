@@ -424,6 +424,7 @@ export function setup(ctx: SpindleFrontendContext) {
     { key: 'progressionSystem', label: 'Progression System', desc: 'XP, leveling, and attribute points' },
     { key: 'questSystem', label: 'Quest Tracker', desc: 'LLM-driven quest creation, completion, and abandonment with XP rewards' },
     { key: 'dynamicMode', label: 'Dynamic Mode', desc: 'Allow LLM to freely fill out and modify non-engine-computed sheet fields' },
+    { key: 'xmlSanitize', label: 'XML Sanitizer', desc: 'Auto-fix LLM attribute mistakes (conversion→digestion, strip newlines from multiplier tags, repair unclosed DigestiveTract tags). Disable if the sanitizer itself is causing issues.' },
   ]
   const buffTargetDefs: BuffTargetDef[] = [
     { value: 'BaseDigestionRate', label: 'Digestion Rate' },

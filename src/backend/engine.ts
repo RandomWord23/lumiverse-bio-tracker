@@ -153,6 +153,7 @@ export function findLastAssistantMessage(messages: any[]): any | null {
 // tag.  Any tags still open at the end get closed before </DigestiveTract>.
 // ---------------------------------------------------------------------------
 export function repairDigestiveTract(xml: string): string {
+  if (!engineToggles.xmlSanitize) return xml
   const dtMatch = xml.match(/<DigestiveTract([^>]*)>([\s\S]*?)<\/DigestiveTract>/i)
   if (!dtMatch) return xml
 
@@ -237,6 +238,7 @@ export function repairDigestiveTract(xml: string): string {
  *        This strips interior whitespace from known numeric scalar tags.
  */
 export function sanitizeSheetXml(xml: string): string {
+  if (!engineToggles.xmlSanitize) return xml
   let result = xml
 
   // ── Bug 1: conversion→digestion on Stomach items ──────────────────
