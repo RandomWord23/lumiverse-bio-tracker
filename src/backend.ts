@@ -249,7 +249,6 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
       `[GENERATION_ENDED] chatId ${chatId} !== activeChatId ${activeChatId} — proceeding anyway`,
     )
   }
-  if (committedMessageIds.has(messageId)) return
   if (!update) return
 
   // ─── Determine if contentProcessor (Tier 1) already ran ──────
@@ -261,14 +260,31 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   // commitUpdate — that would use the already-computed sheet as
   // "old", making elapsed=0, skipping the tick, and overwriting
   // sheets with the LLM's raw (indigestion=0) values.
+  //
+  // NOTE: We do NOT use committedMessageIds as a blanket early-return
+  // guard here.  Swipes share the same messageId as the first
+  // generation, and contentProcessor adds the messageId to
+  // committedMessageIds during the first generation's create origin.
+  // A blanket early return would skip the visible-text rewrite for
+  // every swipe, leaving the user seeing the LLM's raw output (which
+  // often omits timeAdded).  Instead, we only guard the commitUpdate
+  // branch to prevent duplicate snapshots if GENERATION_ENDED fires
+  // twice for the same message without a promptInterceptor in between.
   let finalXml: string
 
   if (promptSheets.has(chatId)) {
-    // contentProcessor did NOT run — compute now
-    const list = snapshots.get(chatId) || []
-    const chatIndex = list.length
-    finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
-    committedMessageIds.add(messageId)
+    // contentProcessor did NOT run — compute now.
+    // Guard against double-commit if GENERATION_ENDED fires twice.
+    if (committedMessageIds.has(messageId)) {
+      // Already committed via commitUpdate — use the cached result
+      // so we still rewrite visible text without duplicating snapshots.
+      finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
+    } else {
+      const list = snapshots.get(chatId) || []
+      const chatIndex = list.length
+      finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
+      committedMessageIds.add(messageId)
+    }
     // The pre-generation sheet (stored via spindle.variables.chat) is
     // intentionally NOT deleted here — it must persist across swipes
     // of the same turn so every swipe variant restores the same
