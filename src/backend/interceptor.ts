@@ -1125,10 +1125,6 @@ export async function commitUpdate(
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml) // keep in-memory cache in sync
 
-  maybeToast('errors', 'info',
-    `[preGen] commitUpdate: saved sheet len=${finalXml.length} ` +
-      `msgId=${messageId} preview="${finalXml.slice(0, 80)}..."`)
-
   const list = snapshots.get(chatId) || []
   list.push({ messageId, sheetXml: finalXml, chatIndex })
   snapshots.set(chatId, list)
@@ -1250,10 +1246,6 @@ export async function contentProcessor(
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml)
 
-  maybeToast('errors', 'info',
-    `[preGen] contentProcessor: saved sheet len=${finalXml.length} ` +
-      `origin="${ctx.origin}" preview="${finalXml.slice(0, 80)}..."`)
-
   // ── Push a snapshot for rollback support ────────────────────────
   // commitUpdate (Tier 2) pushes a snapshot so rollbackOnDelete can
   // restore the previous sheet state when a message is deleted or
@@ -1357,15 +1349,9 @@ export async function rollbackOnDelete(chatId: string, messageId: string) {
 async function getPreGenerationSheet(chatId: string): Promise<string | null> {
   try {
     const data = await spindle.variables.chat.get(chatId, 'preGenerationSheet')
-    if (data) {
-      maybeToast('errors', 'info',
-        `[preGen] GET ok len=${data.length} preview="${data.slice(0, 80)}..."`)
-    } else {
-      maybeToast('errors', 'warning', `[preGen] GET returned null/empty`)
-    }
     return data || null
   } catch (e) {
-    maybeToast('errors', 'error', `[preGen] GET FAILED: ${e}`)
+    spindle.log.error(`[getPreGenerationSheet] Failed to read: ${e}`)
     return null
   }
 }
@@ -1373,11 +1359,8 @@ async function getPreGenerationSheet(chatId: string): Promise<string | null> {
 async function setPreGenerationSheet(chatId: string, sheet: string): Promise<void> {
   try {
     await spindle.variables.chat.set(chatId, 'preGenerationSheet', sheet)
-    maybeToast('errors', 'info',
-      `[preGen] SET ok len=${sheet.length} preview="${sheet.slice(0, 80)}..."`)
   } catch (e) {
     spindle.log.error(`[setPreGenerationSheet] Failed to persist: ${e}`)
-    maybeToast('errors', 'error', `[preGen] SET FAILED: ${e}`)
   }
 }
 
@@ -1393,20 +1376,12 @@ export async function promptInterceptor(messages: any[], context: any) {
     sheet = (await loadChatSheet(chatId)) || ''
   }
 
-  maybeToast('errors', 'info',
-    `[preGen] ENTRY genType="${genType}" chatId=${chatId} ` +
-      `sheetLen=${sheet?.length ?? 0} ` +
-      `preview="${(sheet || '').slice(0, 80)}..."`)
-
   if (!sheet) return messages
 
   const manualSyncPending = await spindle.variables.chat.get(chatId, 'manualSyncPending')
   if (manualSyncPending === 'true') {
     await spindle.variables.chat.delete(chatId, 'manualSyncPending')
     spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
-    maybeToast('errors', 'info',
-      `[preGen] MANUAL_SYNC: storing synced sheet len=${sheet.length} ` +
-        `preview="${sheet.slice(0, 80)}..."`)
     // ── Update preGenerationSheet so swipes restore to the SYNCED sheet ──
     // Without this, the preGenerationSheet chat variable still holds the
     // pre-sync sheet (with old timeAdded values). On swipe, the stale
@@ -1437,9 +1412,6 @@ export async function promptInterceptor(messages: any[], context: any) {
     //
     // PERSISTENT: stored via spindle.variables.chat so it survives
     // page reloads, extension restarts, and mobile backgrounding.
-    maybeToast('errors', 'info',
-      `[preGen] NORMAL: storing sheet len=${sheet.length} ` +
-      `preview="${sheet.slice(0, 80)}..."`)
     await setPreGenerationSheet(chatId, sheet)
   } else if (genType === 'continue' || genType === 'regenerate') {
     // ── Capture the pre-generation sheet for this turn ──────────
@@ -1447,9 +1419,6 @@ export async function promptInterceptor(messages: any[], context: any) {
     // baseline so swipes can restore to it.  Regenerate already gets
     // a rollback via MESSAGE_DELETED, but storing here is harmless
     // and keeps the logic uniform.
-    maybeToast('errors', 'info',
-      `[preGen] ${genType.toUpperCase()}: storing sheet len=${sheet.length} ` +
-      `preview="${sheet.slice(0, 80)}..."`)
     await setPreGenerationSheet(chatId, sheet)
   } else if (genType === 'swipe') {
     // ── Swipe: restore the pre-generation sheet ────────────────
@@ -1473,17 +1442,11 @@ export async function promptInterceptor(messages: any[], context: any) {
       sheet = preGenSheet
       sheets.set(chatId, sheet)
       await saveChatSheet(chatId, sheet)
-      maybeToast('errors', 'info',
-        `[preGen] SWIPE: restored from chat var len=${sheet.length} ` +
-          `preview="${sheet.slice(0, 80)}..."`)
       spindle.log.info(
         `[promptInterceptor] Swipe: restored pre-generation sheet ` +
           `from chat variable (len=${sheet.length})`,
       )
     } else {
-      maybeToast('errors', 'warning',
-        `[preGen] SWIPE: NO preGenSheet found — using current sheet ` +
-          `len=${sheet.length} preview="${sheet.slice(0, 80)}..."`)
       spindle.log.info(
         `[promptInterceptor] Swipe: no preGenerationSheet found ` +
           `— using current sheet (first-ever generation or chat reload)`,
@@ -1505,10 +1468,6 @@ export async function promptInterceptor(messages: any[], context: any) {
   // those errors. Sanitizing here breaks the copy-cycle.
   sheet = sanitizeSheetXml(sheet)
   sheets.set(chatId, sheet)
-
-  maybeToast('errors', 'info',
-    `[preGen] FINAL: genType="${genType}" sheetLen=${sheet.length} ` +
-      `promptSheet preview="${sheet.slice(0, 80)}..."`)
 
   // ─── Store the prompt-time sheet snapshot ───────────────────
   // This is the exact sheet XML the LLM sees in its prompt.  The

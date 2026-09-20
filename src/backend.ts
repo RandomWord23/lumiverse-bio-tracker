@@ -261,48 +261,47 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   // "old", making elapsed=0, skipping the tick, and overwriting
   // sheets with the LLM's raw (indigestion=0) values.
   //
-  // NOTE: We do NOT use committedMessageIds as a blanket early-return
-  // guard here.  Swipes share the same messageId as the first
-  // generation, and contentProcessor adds the messageId to
-  // committedMessageIds during the first generation's create origin.
-  // A blanket early return would skip the visible-text rewrite for
-  // every swipe, leaving the user seeing the LLM's raw output (which
-  // often omits timeAdded).  Instead, we only guard the commitUpdate
-  // branch to prevent duplicate snapshots if GENERATION_ENDED fires
-  // twice for the same message without a promptInterceptor in between.
+  // ── Duplicate GENERATION_ENDED prevention ────────────────────
+  // After running commitUpdate, we delete promptSheets so a
+  // duplicate GENERATION_ENDED for the same message falls through
+  // to the else branch (using the cached result, no duplicate
+  // snapshot).  This replaces the old committedMessageIds guard.
+  //
+  // CRITICAL: We must NOT use committedMessageIds as a guard here.
+  // Swipes share the same messageId as the first generation, so
+  // committedMessageIds already has the messageId from Gen 1's
+  // contentProcessor.  Guarding on it would skip commitUpdate for
+  // swipes when contentProcessor didn't run, causing the handler to
+  // use the restored pre-generation sheet (Sheet 1) instead of
+  // computing the digestion tick — producing the wrong sheet.
+  // promptInterceptor sets a fresh promptSheets entry for every
+  // generation (including swipes), so it is the correct signal.
   let finalXml: string
 
   if (promptSheets.has(chatId)) {
     // contentProcessor did NOT run — compute now.
-    // Guard against double-commit if GENERATION_ENDED fires twice.
-    if (committedMessageIds.has(messageId)) {
-      // Already committed via commitUpdate — use the cached result
-      // so we still rewrite visible text without duplicating snapshots.
-      finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
-      maybeToast('errors', 'info',
-        `[preGen] GEN_ENDED: Tier2 already-committed msgId=${messageId} ` +
-          `finalXml len=${finalXml.length}`)
-    } else {
-      const list = snapshots.get(chatId) || []
-      const chatIndex = list.length
-      finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
-      committedMessageIds.add(messageId)
-    }
+    const list = snapshots.get(chatId) || []
+    const chatIndex = list.length
+    finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
+    committedMessageIds.add(messageId)
+    // Delete promptSheets so a duplicate GENERATION_ENDED for the
+    // same message falls through to the else branch (cached result,
+    // no duplicate snapshot).
+    promptSheets.delete(chatId)
     // The pre-generation sheet (stored via spindle.variables.chat) is
     // intentionally NOT deleted here — it must persist across swipes
     // of the same turn so every swipe variant restores the same
     // pre-turn baseline.  It is overwritten on the next
     // normal/continue/regenerate generation.
   } else {
-    // contentProcessor already ran — use its result directly.
-    // Sanitize as a safety net: if sheets cache is empty and we
-    // fall back to raw LLM output (update), it may contain
-    // conversion on Stomach items or newlines in multiplier tags.
+    // contentProcessor already ran OR we already processed this
+    // generation in a previous GENERATION_ENDED — use the cached
+    // result directly.  Sanitize as a safety net: if sheets cache
+    // is empty and we fall back to raw LLM output (update), it may
+    // contain conversion on Stomach items or newlines in multiplier
+    // tags.
     finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
     committedMessageIds.add(messageId)
-    maybeToast('errors', 'info',
-      `[preGen] GEN_ENDED: Tier1 ran, using cached sheet ` +
-        `len=${finalXml.length} msgId=${messageId}`)
   }
 
   // ─── Rewrite visible chat text with computed values ─────────
