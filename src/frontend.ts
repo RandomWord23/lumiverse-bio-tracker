@@ -2059,8 +2059,8 @@ export function setup(ctx: SpindleFrontendContext) {
       return
     }
 
-    const getText = (tag: string) => doc.querySelector(tag)?.textContent || ''
-    const getAttr = (el: Element | null, attr: string) => el?.getAttribute(attr) || ''
+    const getText = (tag: string) => (doc.querySelector(tag)?.textContent || '').trim()
+    const getAttr = (el: Element | null, attr: string) => (el?.getAttribute(attr) || '').trim()
 
     const stateTags = ['Energy', 'Time', 'Weather', 'Temperature', 'Area', 'Building', 'Room']
 
@@ -2071,7 +2071,7 @@ export function setup(ctx: SpindleFrontendContext) {
         const id = input.getAttribute('data-id')
         if (id && stateTags.includes(id)) {
           const node = state.querySelector(id)
-          if (node) input.value = node.textContent || ''
+          if (node) input.value = (node.textContent || '').trim()
         }
       })
     }
@@ -2093,7 +2093,7 @@ export function setup(ctx: SpindleFrontendContext) {
       const legacyHealth = state.querySelector('Health')
       if (legacyHealth) {
         const healthInput = document.getElementById('bt-health') as HTMLInputElement
-        if (healthInput) healthInput.value = legacyHealth.textContent || '100'
+        if (healthInput) healthInput.value = (legacyHealth.textContent || '100').trim()
       }
     }
 
@@ -2104,7 +2104,7 @@ export function setup(ctx: SpindleFrontendContext) {
         const id = input.getAttribute('data-id')
         if (id && !stateTags.includes(id)) {
           const node = baseStats.querySelector(id)
-          if (node) input.value = node.textContent || ''
+          if (node) input.value = (node.textContent || '').trim()
         }
       })
     }
@@ -2116,7 +2116,7 @@ export function setup(ctx: SpindleFrontendContext) {
       for (const ak of attrKeys) {
         const node = attrBlock.querySelector(ak)
         const input = document.getElementById('bt-attr-' + ak.toLowerCase()) as HTMLInputElement
-        if (node && input) input.value = node.textContent || '10'
+        if (node && input) input.value = (node.textContent || '10').trim()
         if (ak) updateAttrModDisplay(ak)
       }
     } else {
@@ -2198,7 +2198,7 @@ export function setup(ctx: SpindleFrontendContext) {
     doc.querySelectorAll('Equip').forEach((equipNode) => {
       const slot = equipNode.getAttribute('slot')
       const elasticity = equipNode.getAttribute('elasticity') || 'standard'
-      const value = equipNode.textContent || ''
+      const value = (equipNode.textContent || '').trim()
       const condition = equipNode.getAttribute('condition') || 'intact'
       const slots = equipNode.getAttribute('slots') || '0'
       if (!slot) return
@@ -2233,7 +2233,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
     doc.querySelectorAll('Backpack > Item').forEach((itemNode) => {
       const qty = itemNode.getAttribute('qty') || '1'
-      const name = itemNode.textContent || ''
+      const name = (itemNode.textContent || '').trim()
       const desc = itemNode.getAttribute('desc') || ''
       const div = createInvItem()
       document.getElementById('inv-container')?.appendChild(div)
@@ -2256,7 +2256,7 @@ export function setup(ctx: SpindleFrontendContext) {
       document.getElementById('skills-container')?.appendChild(div)
       ;(div.querySelector('.d-name') as HTMLInputElement).value = skillNode.getAttribute('name') || ''
       ;(div.querySelector('.d-lvl') as HTMLInputElement).value = skillNode.getAttribute('level') || '1'
-      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = skillNode.textContent || ''
+      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = (skillNode.textContent || '').trim()
       const buffsAttr = skillNode.getAttribute('buffs')
       if (buffsAttr) {
         const container = div.querySelector('.bt-buffs-container')
@@ -2276,7 +2276,7 @@ export function setup(ctx: SpindleFrontendContext) {
       const div = createTraitItem()
       document.getElementById('traits-container')?.appendChild(div)
       ;(div.querySelector('.d-name') as HTMLInputElement).value = traitNode.getAttribute('name') || ''
-      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = traitNode.textContent || ''
+      ;(div.querySelector('.d-desc') as HTMLTextAreaElement).value = (traitNode.textContent || '').trim()
       const buffsAttr = traitNode.getAttribute('buffs')
       if (buffsAttr) {
         const container = div.querySelector('.bt-buffs-container')
@@ -2337,14 +2337,14 @@ export function setup(ctx: SpindleFrontendContext) {
       typeSelect.dispatchEvent(new Event('change'))
 
       const appearanceNode = itemNode.querySelector('Appearance')
-      ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
+      ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = (appearanceNode?.textContent || '').trim()
 
       const descNode = itemNode.querySelector('Description')
-      ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
+      ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = (descNode?.textContent || '').trim()
 
       if (type === 'Prey') {
         const gearNode = itemNode.querySelector('BoundGear')
-        ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+        ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = (gearNode?.textContent || '').trim()
 
         const rawWillingness = (getAttr(itemNode, 'willingness') || 'reluctant').toLowerCase()
         const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
@@ -2400,14 +2400,14 @@ export function setup(ctx: SpindleFrontendContext) {
           typeSelect.dispatchEvent(new Event('change'))
 
           const appearanceNode = child.querySelector('Appearance')
-          ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
+          ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = (appearanceNode?.textContent || '').trim()
 
           const descNode = child.querySelector('Description')
-          ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
+          ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = (descNode?.textContent || '').trim()
 
           if (type === 'Prey') {
             const gearNode = child.querySelector('BoundGear')
-            ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+            ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = (gearNode?.textContent || '').trim()
 
             const rawWillingness = (getAttr(child, 'willingness') || 'reluctant').toLowerCase()
             const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
@@ -2434,7 +2434,7 @@ export function setup(ctx: SpindleFrontendContext) {
         } else if (child.nodeName === 'Remains') {
           const div = createRemainsItem()
           document.getElementById('bowel-container')?.appendChild(div)
-          ;(div.querySelector('.v-name') as HTMLInputElement).value = child.textContent || ''
+          ;(div.querySelector('.v-name') as HTMLInputElement).value = (child.textContent || '').trim()
           ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(child, 'volume_L')
         }
       })
@@ -2457,14 +2457,14 @@ export function setup(ctx: SpindleFrontendContext) {
         typeSelect.dispatchEvent(new Event('change'))
 
         const appearanceNode = itemNode.querySelector('Appearance')
-        ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
+        ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = (appearanceNode?.textContent || '').trim()
 
         const descNode = itemNode.querySelector('Description')
-        ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
+        ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = (descNode?.textContent || '').trim()
 
         if (type === 'Prey') {
           const gearNode = itemNode.querySelector('BoundGear')
-          ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+          ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = (gearNode?.textContent || '').trim()
 
           const rawWillingness = (getAttr(itemNode, 'willingness') || 'reluctant').toLowerCase()
           const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
@@ -2508,14 +2508,14 @@ export function setup(ctx: SpindleFrontendContext) {
         typeSelect.dispatchEvent(new Event('change'))
 
         const appearanceNode = itemNode.querySelector('Appearance')
-        ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = appearanceNode?.textContent || ''
+        ;(div.querySelector('.v-appearance') as HTMLTextAreaElement).value = (appearanceNode?.textContent || '').trim()
 
         const descNode = itemNode.querySelector('Description')
-        ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = descNode?.textContent || ''
+        ;(div.querySelector('.v-flavor') as HTMLTextAreaElement).value = (descNode?.textContent || '').trim()
 
         if (type === 'Prey') {
           const gearNode = itemNode.querySelector('BoundGear')
-          ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = gearNode?.textContent || ''
+          ;(div.querySelector('.v-gear') as HTMLTextAreaElement).value = (gearNode?.textContent || '').trim()
 
           const rawWillingness = (getAttr(itemNode, 'willingness') || 'reluctant').toLowerCase()
           const willingness = ['willing', 'reluctant', 'fighting'].includes(rawWillingness) ? rawWillingness : 'reluctant'
