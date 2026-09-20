@@ -313,7 +313,7 @@ export async function runDigestionTick(
       }
     }
     const stomMatch = updatedXml.match(/<Stomach(?![a-zA-Z])([^>]*)>([\s\S]*?)<\/Stomach>/i)
-    const bowMatch = updatedXml.match(/<Bowels([^>]*)>([\s\S]*?)<\/Bowels>/i)
+    const bowMatch = updatedXml.match(/<Bowels(?![a-zA-Z])([^>]*)>([\s\S]*?)<\/Bowels>/i)
 
     let stomContent = stomMatch ? stomMatch[2].trim() : ''
     let bowContent = bowMatch ? bowMatch[2].trim() : ''
@@ -423,7 +423,7 @@ export async function runDigestionTick(
     )
 
     updatedXml = updatedXml.replace(
-      /<Bowels([^>]*)>[\s\S]*?<\/Bowels>/i,
+      /<Bowels(?![a-zA-Z])([^>]*)>[\s\S]*?<\/Bowels>/i,
       (match, attrs) => {
         return `<Bowels${attrs}>\n${bowContent}\n    </Bowels>`
       },
@@ -431,7 +431,7 @@ export async function runDigestionTick(
 
     // ── WOMB ABSORPTION ──
     if (engineToggles.unbirthEngine) {
-      const wombMatch = updatedXml.match(/<Womb[^>]*>([\s\S]*?)<\/Womb>/i)
+      const wombMatch = updatedXml.match(/<Womb(?![a-zA-Z])[^>]*>([\s\S]*?)<\/Womb>/i)
       let wombContent = wombMatch ? wombMatch[1].trim() : ''
 
       if (wombContent) {
@@ -489,7 +489,7 @@ export async function runDigestionTick(
 
         wombContent = wombContent.replace(/^\s*\n/gm, '').trim()
         updatedXml = updatedXml.replace(
-          /<Womb([^>]*)>[\s\S]*?<\/Womb>/i,
+          /<Womb(?![a-zA-Z])([^>]*)>[\s\S]*?<\/Womb>/i,
           (match, attrs) => `<Womb${attrs}>\n${wombContent}\n    </Womb>`,
         )
       }
@@ -497,7 +497,7 @@ export async function runDigestionTick(
 
     // ── BALLS CONVERSION ──
     if (engineToggles.cockVoreEngine) {
-      const ballsMatch = updatedXml.match(/<Balls[^>]*>([\s\S]*?)<\/Balls>/i)
+      const ballsMatch = updatedXml.match(/<Balls(?![a-zA-Z])[^>]*>([\s\S]*?)<\/Balls>/i)
       let ballsContent = ballsMatch ? ballsMatch[1].trim() : ''
 
       if (ballsContent) {
@@ -560,7 +560,7 @@ export async function runDigestionTick(
 
         ballsContent = ballsContent.replace(/^\s*\n/gm, '').trim()
         updatedXml = updatedXml.replace(
-          /<Balls([^>]*)>[\s\S]*?<\/Balls>/i,
+          /<Balls(?![a-zA-Z])([^>]*)>[\s\S]*?<\/Balls>/i,
           (match, attrs) => `<Balls${attrs}>\n${ballsContent}\n    </Balls>`,
         )
       }

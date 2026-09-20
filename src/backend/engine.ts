@@ -153,7 +153,8 @@ export function findLastAssistantMessage(messages: any[]): any | null {
 // tag.  Any tags still open at the end get closed before </DigestiveTract>.
 // ---------------------------------------------------------------------------
 export function repairDigestiveTract(xml: string): string {
-  if (!engineToggles.xmlSanitize) return xml
+  // Always run — unclosed tags cause section-isolation regexes to fail,
+  // which is the root cause of Stomach/Balls content bleeding.
   const dtMatch = xml.match(/<DigestiveTract([^>]*)>([\s\S]*?)<\/DigestiveTract>/i)
   if (!dtMatch) return xml
 
@@ -238,7 +239,10 @@ export function repairDigestiveTract(xml: string): string {
  *        This strips interior whitespace from known numeric scalar tags.
  */
 export function sanitizeSheetXml(xml: string): string {
-  if (!engineToggles.xmlSanitize) return xml
+  // Always run — fixes LLM attribute mistakes (conversion→digestion on
+  // Stomach items) and strips whitespace from numeric scalar tags.
+  // Gating this behind engineToggles.xmlSanitize allowed the bugs to
+  // persist when the toggle was off.
   let result = xml
 
   // ── Bug 1: conversion→digestion on Stomach items ──────────────────
@@ -284,7 +288,7 @@ export function sanitizeSheetXml(xml: string): string {
 
 export function getAttrFromString(str: string, attr: string): string {
   const match = str.match(new RegExp(`${attr}="([^"]*)"`, 'i'))
-  return match ? match[1] : ''
+  return match ? match[1].trim() : ''
 }
 
 export function collectBuffs(xml: string): Record<string, number> {
@@ -372,7 +376,7 @@ export function collectModifiers(xml: string): Record<string, number> {
 
 /** Read a single attribute score from the <Attributes> XML block. */
 export function getAttribute(xml: string, key: string): number {
-  const match = xml.match(new RegExp(`<${key}>(.*?)<\\/${key}>`, 'i'))
+  const match = xml.match(new RegExp(`<${key}>([\\s\\S]*?)<\\/${key}>`, 'i'))
   return match ? parseFloat(match[1]) || 10 : 10
 }
 
@@ -884,14 +888,14 @@ export function processHealthDamage(
 }
 
 export function getStat(xml: string, tag: string): number {
-  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>(.*?)<\\/${tag}>`, 'i'))
-  return match ? parseFloat(match[1]) || 0 : 0
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+  return match ? parseFloat(match[1].trim()) || 0 : 0
 }
 
 export function setStat(xml: string, tag: string, value: number): string {
   // Allow tags that carry attributes (e.g. <StomachResistance ...>1.0</...>)
   // while preserving them on replacement.
-  const regex = new RegExp(`<${tag}(\\s[^>]*)?>.*?<\\/${tag}>`, 'i')
+  const regex = new RegExp(`<${tag}(\\s[^>]*)?>[\\s\\S]*?<\\/${tag}>`, 'i')
   if (regex.test(xml)) {
     return xml.replace(
       regex,
@@ -927,7 +931,7 @@ export function setStat(xml: string, tag: string, value: number): string {
  *  (FirstItemTime, StomachEmptyTime) so the LLM doesn't misread them. */
 export function setStatClock(xml: string, tag: string, value: number): string {
   const clockStr = value <= 0 ? '00:00' : decimalToClock(value)
-  const regex = new RegExp(`<${tag}(\\s[^>]*)?>.*?<\\/${tag}>`, 'i')
+  const regex = new RegExp(`<${tag}(\\s[^>]*)?>[\\s\\S]*?<\\/${tag}>`, 'i')
   if (regex.test(xml)) {
     return xml.replace(
       regex,
@@ -956,8 +960,8 @@ export function setStatClock(xml: string, tag: string, value: number): string {
 /** Like getStat, but parses a "HH:MM" clock string (or legacy decimal)
  *  back into decimal hours. Used for story-clock timestamp tags. */
 export function getStatClock(xml: string, tag: string): number {
-  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>(.*?)<\\/${tag}>`, 'i'))
-  return match ? clockToDecimal(match[1]) : 0
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'))
+  return match ? clockToDecimal(match[1].trim()) : 0
 }
 
 export function deriveCondition(
@@ -1331,7 +1335,7 @@ export function transitItemsInContent(
   const transitItem = (attrs: string, inner: string | null, isSelfClosing: boolean): string => {
     const type = getAttrFromString(attrs, 'type') || 'Food'
     // Only live Prey transit. Food/Liquid/Remains stay inert in bowels.
-    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs} />` : `<Item ${attrs}>${inner}</Item>`
+    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs.trim()} />` : `<Item ${attrs.trim()}>${inner}</Item>`
 
     const name = getAttrFromString(attrs, 'name')
     const vol = getAttrFromString(attrs, 'volume_L')
@@ -1420,7 +1424,7 @@ export function absorbItemsInContent(
 
   const absorbItem = (attrs: string, inner: string | null, isSelfClosing: boolean): string => {
     const type = getAttrFromString(attrs, 'type') || 'Food'
-    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs} />` : `<Item ${attrs}>${inner}</Item>`
+    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs.trim()} />` : `<Item ${attrs.trim()}>${inner}</Item>`
 
     const name = getAttrFromString(attrs, 'name')
     const vol = parseFloat(getAttrFromString(attrs, 'volume_L') || '0') || 0
@@ -1511,7 +1515,7 @@ export function convertItemsInContent(
 
   const convertItem = (attrs: string, inner: string | null, isSelfClosing: boolean): string => {
     const type = getAttrFromString(attrs, 'type') || 'Food'
-    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs} />` : `<Item ${attrs}>${inner}</Item>`
+    if (type !== 'Prey') return isSelfClosing ? `<Item ${attrs.trim()} />` : `<Item ${attrs.trim()}>${inner}</Item>`
 
     const name = getAttrFromString(attrs, 'name')
     const vol = parseFloat(getAttrFromString(attrs, 'volume_L') || '0') || 0
