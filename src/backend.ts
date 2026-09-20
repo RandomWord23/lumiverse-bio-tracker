@@ -279,6 +279,9 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
       // Already committed via commitUpdate — use the cached result
       // so we still rewrite visible text without duplicating snapshots.
       finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
+      maybeToast('errors', 'info',
+        `[preGen] GEN_ENDED: Tier2 already-committed msgId=${messageId} ` +
+          `finalXml len=${finalXml.length}`)
     } else {
       const list = snapshots.get(chatId) || []
       const chatIndex = list.length
@@ -297,6 +300,9 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
     // conversion on Stomach items or newlines in multiplier tags.
     finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
     committedMessageIds.add(messageId)
+    maybeToast('errors', 'info',
+      `[preGen] GEN_ENDED: Tier1 ran, using cached sheet ` +
+        `len=${finalXml.length} msgId=${messageId}`)
   }
 
   // ─── Rewrite visible chat text with computed values ─────────
