@@ -18,6 +18,7 @@ import {
   extractTextContent,
   extractSheetUpdate,
   spendAttributePoint,
+  sanitizeSheetXml,
 } from './backend/engine'
 
 import {
@@ -274,8 +275,11 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
     // pre-turn baseline.  It is overwritten on the next
     // normal/continue/regenerate generation.
   } else {
-    // contentProcessor already ran — use its result directly
-    finalXml = sheets.get(chatId) || update
+    // contentProcessor already ran — use its result directly.
+    // Sanitize as a safety net: if sheets cache is empty and we
+    // fall back to raw LLM output (update), it may contain
+    // conversion on Stomach items or newlines in multiplier tags.
+    finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
     committedMessageIds.add(messageId)
   }
 

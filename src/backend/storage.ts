@@ -1,22 +1,32 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
 import { sheets, snapshots, committedMessageIds, setActiveChatId, type Snapshot } from './state'
-import { sheetPath, snapshotsPath } from './engine'
+import { sheetPath, snapshotsPath, sanitizeSheetXml } from './engine'
 
 export async function loadChatSheet(chatId: string) {
   try {
     const data = await spindle.storage.read(sheetPath(chatId))
     if (data) {
-      sheets.set(chatId, data)
-      return data
+      // Sanitize on load — fixes any corruption that was persisted
+      // to disk before the sanitize gate was added to saveChatSheet.
+      const clean = sanitizeSheetXml(data)
+      sheets.set(chatId, clean)
+      return clean
     }
   } catch (e) {}
   return null
 }
 
 export async function saveChatSheet(chatId: string, xml: string) {
-  sheets.set(chatId, xml)
-  await spindle.storage.write(sheetPath(chatId), xml)
+  // Universal sanitization gate — every save goes through this,
+  // regardless of which code path calls saveChatSheet.  This
+  // catches corruption from the LLM (conversion on Stomach items,
+  // newlines inside multiplier tags) that bypassed runDigestionTick
+  // via unsanitized paths (GENERATION_ENDED fallback, SYNC_BIO_DATA,
+  // GET_LATEST_SHEET, SPEND_ATTRIBUTE_POINT, rollbackOnDelete).
+  const clean = sanitizeSheetXml(xml)
+  sheets.set(chatId, clean)
+  await spindle.storage.write(sheetPath(chatId), clean)
 }
 
 export async function loadChatSnapshots(chatId: string) {
