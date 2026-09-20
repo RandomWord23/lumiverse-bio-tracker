@@ -152,7 +152,7 @@ export async function getLatestAssistantMessage(
     const messages = (await spindle.chat.getMessages(chatId)) as any[]
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
-      if (msg.role !== 'assistant' || !msg.__isChatHistory) continue
+      if (msg.role !== 'assistant') continue
       if (excludeMessageId && msg.id === excludeMessageId) continue
       return msg
     }
