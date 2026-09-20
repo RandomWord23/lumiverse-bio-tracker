@@ -1,10 +1,7 @@
 declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
 import {
-  type Snapshot,
   sheets,
-  snapshots,
-  committedMessageIds,
   activeChatId,
   pendingGenerationType,
   setPendingGenerationType,
@@ -12,7 +9,6 @@ import {
   setToastSettings,
   engineToggles,
   setEngineToggles,
-  promptSheets,
 } from './state'
 
 import { processStruggle } from './struggle'
@@ -22,6 +18,7 @@ import {
   extractTextContent,
   extractSheetUpdate,
   findLastAssistantMessage,
+  getLatestSheetFromHistory,
   getAttrFromString,
   collectModifiers,
   getStat,
@@ -59,7 +56,6 @@ import {
 import {
   loadChatSheet,
   saveChatSheet,
-  saveChatSnapshots,
 } from './storage'
 
 import {
@@ -1110,25 +1106,20 @@ export async function commitUpdate(
   chatId: string,
   messageId: string,
   sheetXml: string,
-  chatIndex: number,
 ): Promise<string> {
-  // ── Use the prompt-time sheet as "old" if available ──────────
-  // promptSheets stores the exact sheet the LLM saw in the prompt.
-  // This decouples us from the race condition where GENERATION_ENDED
-  // might fire before the content processor — we always compute from
-  // the pre-generation state, not the potentially-updated sheets Map.
-  const promptSheet = promptSheets.get(chatId)
-  const cachedSheet = sheets.get(chatId)
-  const oldSheet = promptSheet ?? cachedSheet ?? ''
+  // ── Stateless: fetch the "old" sheet from chat history ────────
+  // The chat history IS the database.  We fetch the sheet from the
+  // previous AI message (excluding the one we're committing now) so
+  // that runDigestionTick computes the correct elapsed-time delta.
+  // This is IDEMPOTENT: calling commitUpdate twice with the same
+  // messageId and sheetXml produces the same result, because the old
+  // sheet is always derived from the same chat-history state.
+  const historySheet = await getLatestSheetFromHistory(chatId, messageId)
+  const oldSheet = historySheet ?? sheets.get(chatId) ?? ''
   const finalXml = await runDigestionTick(sheetXml, oldSheet, chatId)
 
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml) // keep in-memory cache in sync
-
-  const list = snapshots.get(chatId) || []
-  list.push({ messageId, sheetXml: finalXml, chatIndex })
-  snapshots.set(chatId, list)
-  await saveChatSnapshots(chatId)
 
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
@@ -1150,7 +1141,7 @@ export async function commitUpdate(
  * LLM copied from the previous tick.
  *
  * Pipeline:
- *   promptInterceptor (inject sheet, store in promptSheets)
+ *   promptInterceptor (inject sheet from chat history)
  *     → LLM generates <sheet_update> with stale copied values
  *       → contentProcessor (THIS)            ← run digestion tick here
  *         → DB write with computed values
@@ -1204,16 +1195,14 @@ export async function contentProcessor(
     return cleanedContent !== ctx.content ? { content: cleanedContent } : undefined
   }
 
-  // ── Load the "old" sheet — prefer the prompt-time snapshot ───────
-  // promptSheets stores the exact sheet the LLM saw in the prompt.  This
-  // decouples us from the race condition where GENERATION_ENDED might
-  // fire before this processor and update sheets.get(chatId).
-  const promptSheetCP = promptSheets.get(chatId)
-  const cachedSheetCP = sheets.get(chatId)
-  let oldSheet = promptSheetCP ?? cachedSheetCP
-  if (oldSheet === undefined) {
-    oldSheet = (await loadChatSheet(chatId)) || ''
-  }
+  // ── Stateless: fetch the "old" sheet from chat history ──────────
+  // The chat history IS the database.  We exclude the current message
+  // (ctx.messageId) so we get the PREVIOUS AI message's sheet — the
+  // correct pre-turn baseline for runDigestionTick.  This is idempotent:
+  // running contentProcessor twice on the same message produces the same
+  // result because the old sheet is always derived from the same history.
+  const historySheet = await getLatestSheetFromHistory(chatId, ctx.messageId)
+  let oldSheet = historySheet ?? sheets.get(chatId) ?? ''
   // ── Run the digestion tick (the real computation) ───────────────
   // This is the same function commitUpdate calls — it computes
   // indigestion, stamina, struggle, digestion %, acid, climax, nutrient
@@ -1246,45 +1235,6 @@ export async function contentProcessor(
   await saveChatSheet(chatId, finalXml)
   sheets.set(chatId, finalXml)
 
-  // ── Push a snapshot for rollback support ────────────────────────
-  // commitUpdate (Tier 2) pushes a snapshot so rollbackOnDelete can
-  // restore the previous sheet state when a message is deleted or
-  // regenerated.  contentProcessor (Tier 1) must do the same —
-  // otherwise rollbackOnDelete finds no snapshot and bails out with a
-  // warning, leaving the sheet at its post-deletion state instead of
-  // reverting to the pre-generation state.  Every committed message
-  // must have an entry so that delete/regenerate rollbacks work
-  // regardless of which tier processed the message.
-  const snapList = snapshots.get(chatId) || []
-  const snapIndex = ctx.swipeIndex ?? snapList.length
-  snapList.push({ messageId: ctx.messageId ?? '', sheetXml: finalXml, chatIndex: snapIndex })
-  snapshots.set(chatId, snapList)
-  await saveChatSnapshots(chatId)
-
-  // ── Mark this message as committed ──────────────────────────────
-  // Without this, if GENERATION_ENDED is skipped (e.g. chatId mismatch),
-  // the promptInterceptor safety net re-commits the same message on the
-  // next turn.  That re-commit uses the already-computed sheet as "old",
-  // producing elapsed=0, which overwrites the computed values with the
-  // LLM's raw (digestion=0%) output — corrupting the baseline for all
-  // future turns.
-  if (ctx.messageId) {
-    committedMessageIds.add(ctx.messageId)
-  }
-
-  // ── Clean up the prompt-time snapshot ────────────────────────────
-  // promptSheets is used by contentProcessor/commitUpdate as the "old"
-  // sheet for runDigestionTick.  It is per-turn and must be deleted so
-  // the GENERATION_ENDED handler can detect that contentProcessor ran
-  // (it checks promptSheets.has(chatId)).
-  //
-  // The pre-generation sheet (stored via spindle.variables.chat) is
-  // intentionally NOT deleted here — it must persist across swipes
-  // of the same turn so that every swipe variant can restore the
-  // same pre-turn baseline.  It is overwritten on the next
-  // normal/continue/regenerate generation.
-  promptSheets.delete(chatId)
-
   // ── Notify the frontend panel so the UI updates immediately ──────
   if (chatId === activeChatId) {
     spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: finalXml })
@@ -1296,73 +1246,17 @@ export async function contentProcessor(
   return { content: modifiedContent }
 }
 
-export async function rollbackOnDelete(chatId: string, messageId: string) {
-  const list = snapshots.get(chatId)
-  if (!list) {
-    maybeToast('rollbackWarnings', 'warning', 'Rollback: no snapshot list found')
-    return
-  }
-
-  const hadSnapshot = list.some((s) => s.messageId === messageId)
-  const newList = list.filter((s) => s.messageId !== messageId)
-  snapshots.set(chatId, newList)
-  committedMessageIds.delete(messageId)
-
-  if (!hadSnapshot) {
-    maybeToast('rollbackWarnings', 'warning', 'Rollback: deleted message had no snapshot')
-    return
-  }
-
-  maybeToast('rollbackEvents', 'info', 'Rollback: restoring previous sheet state...')
-
-  if (newList.length > 0) {
-    const latest = newList.reduce((a, b) => (a.chatIndex > b.chatIndex ? a : b))
-    await saveChatSheet(chatId, latest.sheetXml)
-    if (chatId === activeChatId) {
-      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: latest.sheetXml })
-    }
-    maybeToast('rollbackEvents', 'success', 'Rollback: restored previous sheet')
-  } else {
-    await saveChatSheet(chatId, '')
-    if (chatId === activeChatId) {
-      spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: '' })
-    }
-    maybeToast('rollbackEvents', 'success', 'Rollback: cleared sheet')
-  }
-
-  await saveChatSnapshots(chatId)
-  spindle.log.info(`Rolled back in chat ${chatId} after deletion of ${messageId}`)
-}
-
 /**
- * Prompt interceptor: injects the current character sheet into the prompt,
- * commits any pending sheet updates from the last assistant message, and
- * strips stale <sheet_update> blocks from chat history.
+ * Prompt interceptor: injects the current character sheet into the prompt
+ * and strips stale <sheet_update> blocks from chat history.
+ *
+ * STATELESS: The sheet shown to the LLM is always derived from the chat
+ * history (the single source of truth).  No pre-generation snapshots, no
+ * prompt-time caches, no committed-message tracking.  For swipes, the
+ * last AI message in history is the swipe being replaced — we exclude it
+ * to get the pre-turn baseline.  For all other generation types, the last
+ * AI message is the previous turn's committed response.
  */
-
-// ─── Persistent pre-generation sheet helpers ──────────────────
-// These store the pre-generation sheet in a Lumiverse chat variable so it
-// survives page reloads, extension restarts, and mobile backgrounding —
-// which was the root cause of the swipe context bug (the in-memory Map was
-// lost, causing swipes to see the post-generation sheet instead of the
-// pre-generation baseline).
-async function getPreGenerationSheet(chatId: string): Promise<string | null> {
-  try {
-    const data = await spindle.variables.chat.get(chatId, 'preGenerationSheet')
-    return data || null
-  } catch (e) {
-    spindle.log.error(`[getPreGenerationSheet] Failed to read: ${e}`)
-    return null
-  }
-}
-
-async function setPreGenerationSheet(chatId: string, sheet: string): Promise<void> {
-  try {
-    await spindle.variables.chat.set(chatId, 'preGenerationSheet', sheet)
-  } catch (e) {
-    spindle.log.error(`[setPreGenerationSheet] Failed to persist: ${e}`)
-  }
-}
 
 export async function promptInterceptor(messages: any[], context: any) {
   const ctx = context as any
@@ -1376,83 +1270,37 @@ export async function promptInterceptor(messages: any[], context: any) {
     sheet = (await loadChatSheet(chatId)) || ''
   }
 
-  if (!sheet) return messages
-
-  const manualSyncPending = await spindle.variables.chat.get(chatId, 'manualSyncPending')
-  if (manualSyncPending === 'true') {
-    await spindle.variables.chat.delete(chatId, 'manualSyncPending')
-    spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
-    // ── Update preGenerationSheet so swipes restore to the SYNCED sheet ──
-    // Without this, the preGenerationSheet chat variable still holds the
-    // pre-sync sheet (with old timeAdded values). On swipe, the stale
-    // sheet would be restored — reverting the user's manual edits.
-    await setPreGenerationSheet(chatId, sheet)
-  } else if (genType === 'normal') {
+  // ── Stateless: derive the sheet from chat history ──────────────
+  // The chat history IS the database.  For swipes, the last AI message
+  // in history is the swipe being replaced — we exclude it to get the
+  // pre-turn baseline.  For all other generation types, the last AI
+  // message is the previous turn's committed response, which has the
+  // correct sheet.
+  if (genType === 'swipe') {
     const lastAssistant = findLastAssistantMessage(messages)
-    if (
-      lastAssistant &&
-      lastAssistant.sourceMessageId &&
-      !committedMessageIds.has(lastAssistant.sourceMessageId)
-    ) {
-      const content = extractTextContent(lastAssistant.content)
-      const update = extractSheetUpdate(content)
-      if (update) {
-        const chatIndex = lastAssistant.sourceIndexInChat ?? 0
-        await commitUpdate(chatId, lastAssistant.sourceMessageId, update, chatIndex)
-        committedMessageIds.add(lastAssistant.sourceMessageId)
-        sheet = sheets.get(chatId) || sheet
-      }
-    }
-    // ── Capture the pre-generation sheet for this turn ──────────
-    // On "normal" (and "continue"/"regenerate") this is the sheet
-    // state BEFORE the upcoming digestion tick.  We store it so that
-    // if the user swipes, we can restore this exact baseline — giving
-    // every swipe variant the same correct elapsed time that
-    // "regenerate" gets via MESSAGE_DELETED → rollbackOnDelete.
-    //
-    // PERSISTENT: stored via spindle.variables.chat so it survives
-    // page reloads, extension restarts, and mobile backgrounding.
-    await setPreGenerationSheet(chatId, sheet)
-  } else if (genType === 'continue' || genType === 'regenerate') {
-    // ── Capture the pre-generation sheet for this turn ──────────
-    // Same as "normal" — store the current sheet as the pre-turn
-    // baseline so swipes can restore to it.  Regenerate already gets
-    // a rollback via MESSAGE_DELETED, but storing here is harmless
-    // and keeps the logic uniform.
-    await setPreGenerationSheet(chatId, sheet)
-  } else if (genType === 'swipe') {
-    // ── Swipe: restore the pre-generation sheet ────────────────
-    // Regenerate works correctly because it DELETEs the old message
-    // (firing MESSAGE_DELETED → rollbackOnDelete → sheet restored to
-    // pre-generation state) before the new generation starts.  Swipe
-    // adds a variant without deleting, so the sheet stays at the
-    // post-digestion state — making elapsed ≈ 0 and skipping the
-    // digestion tick.  We replicate regenerate's behaviour here by
-    // restoring the sheet from the persistent pre-generation snapshot,
-    // which was captured on the "normal"/"continue"/"regenerate" that
-    // started this turn.
-    //
-    // This works for any number of repeated swipes because the
-    // pre-generation sheet is never deleted by contentProcessor.
-    // It is overwritten on the next normal/continue/regenerate.
-    // It persists across page reloads and mobile backgrounding because
-    // it is stored in a chat variable, not an in-memory Map.
-    const preGenSheet = await getPreGenerationSheet(chatId)
-    if (preGenSheet) {
-      sheet = preGenSheet
+    const excludeId = lastAssistant?.sourceMessageId
+    const historySheet = await getLatestSheetFromHistory(chatId, excludeId)
+    if (historySheet) {
+      sheet = historySheet
       sheets.set(chatId, sheet)
       await saveChatSheet(chatId, sheet)
       spindle.log.info(
-        `[promptInterceptor] Swipe: restored pre-generation sheet ` +
-          `from chat variable (len=${sheet.length})`,
+        `[promptInterceptor] Swipe: restored pre-turn sheet from history (len=${sheet.length})`,
       )
     } else {
       spindle.log.info(
-        `[promptInterceptor] Swipe: no preGenerationSheet found ` +
-          `— using current sheet (first-ever generation or chat reload)`,
+        `[promptInterceptor] Swipe: no pre-turn sheet in history — using cached sheet`,
       )
     }
+  } else {
+    const historySheet = await getLatestSheetFromHistory(chatId)
+    if (historySheet) {
+      sheet = historySheet
+      sheets.set(chatId, sheet)
+    }
   }
+
+  if (!sheet) return messages
 
   // ─── Repair malformed DigestiveTract XML before prompt ──────
   // If the stored sheet has unclosed <Stomach>, <Bowels>, <Womb>, or
@@ -1468,13 +1316,6 @@ export async function promptInterceptor(messages: any[], context: any) {
   // those errors. Sanitizing here breaks the copy-cycle.
   sheet = sanitizeSheetXml(sheet)
   sheets.set(chatId, sheet)
-
-  // ─── Store the prompt-time sheet snapshot ───────────────────
-  // This is the exact sheet XML the LLM sees in its prompt.  The
-  // contentProcessor and commitUpdate use it as the "old" sheet for
-  // runDigestionTick, decoupling them from the race condition where
-  // GENERATION_ENDED might update sheets.get(chatId) first.
-  promptSheets.set(chatId, sheet)
 
   let populateInstructions = ''
   const populateFields = await spindle.variables.chat.get(

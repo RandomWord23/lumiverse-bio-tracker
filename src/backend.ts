@@ -2,15 +2,11 @@ declare const spindle: import('lumiverse-spindle-types').SpindleAPI
 
 import {
   sheets,
-  snapshots,
-  committedMessageIds,
   activeChatId,
-  pendingGenerationType,
   toastSettings,
   setToastSettings,
   engineToggles,
   setEngineToggles,
-  promptSheets,
 } from './backend/state'
 
 import {
@@ -19,6 +15,7 @@ import {
   extractSheetUpdate,
   spendAttributePoint,
   sanitizeSheetXml,
+  getLatestAssistantMessage,
 } from './backend/engine'
 
 import {
@@ -29,7 +26,6 @@ import {
 
 import {
   commitUpdate,
-  rollbackOnDelete,
   promptInterceptor,
   contentProcessor,
 } from './backend/interceptor'
@@ -47,9 +43,39 @@ spindle.onFrontendMessage(async (msg: any) => {
       maybeToast('chatWarnings', 'warning', 'Open a chat first before syncing the sheet.')
       return
     }
+
+    // ── Phase 1: Direct message edit ──────────────────────────
+    // The chat history IS the database.  Instead of stashing the synced
+    // sheet in a variable and waiting for the next generation to pick it
+    // up, we immediately edit the most recent AI message in-place,
+    // replacing (or appending) its <sheet_update> block with the new XML.
+    const aiMsg = await getLatestAssistantMessage(activeChatId)
+    if (aiMsg) {
+      const rawContent = extractTextContent(aiMsg.content)
+      const newBlock = `<sheet_update>\n${msg.xmlData}\n</sheet_update>`
+      let modifiedContent: string
+      if (/<sheet_update>[\s\S]*?<\/sheet_update>/i.test(rawContent)) {
+        modifiedContent = rawContent.replace(
+          /<sheet_update>[\s\S]*?<\/sheet_update>/i,
+          newBlock,
+        )
+      } else {
+        modifiedContent = `${rawContent}\n\n${newBlock}`
+      }
+      try {
+        await spindle.chat.updateMessage(activeChatId, aiMsg.id, { content: modifiedContent })
+        spindle.log.info(`SYNC_BIO_DATA: edited message ${aiMsg.id} in chat ${activeChatId}`)
+      } catch (e) {
+        spindle.log.error(`SYNC_BIO_DATA: updateMessage failed: ${e}`)
+      }
+    } else {
+      spindle.log.info(`SYNC_BIO_DATA: no assistant message found in chat ${activeChatId}`)
+    }
+
+    // Update the in-memory cache + persisted sheet file so the frontend
+    // and promptInterceptor see the new sheet immediately.
     await saveChatSheet(activeChatId, msg.xmlData)
-    await spindle.variables.chat.set(activeChatId, 'manualSyncPending', 'true')
-    spindle.log.info(`Sheet synced from frontend for chat ${activeChatId}`)
+    spindle.sendToFrontend({ type: 'SHEET_UPDATED', xml: msg.xmlData })
     maybeToast('sheetSync', 'success', 'Character sheet synced!')
   }
 
@@ -58,8 +84,6 @@ spindle.onFrontendMessage(async (msg: any) => {
       maybeToast('chatWarnings', 'warning', 'Open a chat first.')
       return
     }
-    await spindle.variables.chat.delete(activeChatId, 'manualSyncPending')
-
     // Always scan chat history first — the button is "Sync from Latest Message"
     let sheet = ''
 
@@ -251,58 +275,20 @@ spindle.on('GENERATION_ENDED', async (payload: any) => {
   }
   if (!update) return
 
-  // ─── Determine if contentProcessor (Tier 1) already ran ──────
-  // contentProcessor deletes the promptSheets entry after use.
-  // If the entry still exists, contentProcessor was skipped or
-  // failed — we must run commitUpdate ourselves.
-  // If the entry is gone, contentProcessor already computed the
-  // correct values and stored them in sheets.  We must NOT re-run
-  // commitUpdate — that would use the already-computed sheet as
-  // "old", making elapsed=0, skipping the tick, and overwriting
-  // sheets with the LLM's raw (indigestion=0) values.
+  // ─── Tier 2 fallback: run commitUpdate if Tier 1 didn't ──────
+  // commitUpdate is now idempotent: it fetches the "old" sheet from
+  // chat history via getLatestSheetFromHistory(chatId, messageId),
+  // so running it twice for the same message produces the same
+  // result.  This eliminates the need for promptSheets guards,
+  // committedMessageIds dedup, or snapshots.
   //
-  // ── Duplicate GENERATION_ENDED prevention ────────────────────
-  // After running commitUpdate, we delete promptSheets so a
-  // duplicate GENERATION_ENDED for the same message falls through
-  // to the else branch (using the cached result, no duplicate
-  // snapshot).  This replaces the old committedMessageIds guard.
-  //
-  // CRITICAL: We must NOT use committedMessageIds as a guard here.
-  // Swipes share the same messageId as the first generation, so
-  // committedMessageIds already has the messageId from Gen 1's
-  // contentProcessor.  Guarding on it would skip commitUpdate for
-  // swipes when contentProcessor didn't run, causing the handler to
-  // use the restored pre-generation sheet (Sheet 1) instead of
-  // computing the digestion tick — producing the wrong sheet.
-  // promptInterceptor sets a fresh promptSheets entry for every
-  // generation (including swipes), so it is the correct signal.
-  let finalXml: string
-
-  if (promptSheets.has(chatId)) {
-    // contentProcessor did NOT run — compute now.
-    const list = snapshots.get(chatId) || []
-    const chatIndex = list.length
-    finalXml = await commitUpdate(chatId, messageId, update, chatIndex)
-    committedMessageIds.add(messageId)
-    // Delete promptSheets so a duplicate GENERATION_ENDED for the
-    // same message falls through to the else branch (cached result,
-    // no duplicate snapshot).
-    promptSheets.delete(chatId)
-    // The pre-generation sheet (stored via spindle.variables.chat) is
-    // intentionally NOT deleted here — it must persist across swipes
-    // of the same turn so every swipe variant restores the same
-    // pre-turn baseline.  It is overwritten on the next
-    // normal/continue/regenerate generation.
-  } else {
-    // contentProcessor already ran OR we already processed this
-    // generation in a previous GENERATION_ENDED — use the cached
-    // result directly.  Sanitize as a safety net: if sheets cache
-    // is empty and we fall back to raw LLM output (update), it may
-    // contain conversion on Stomach items or newlines in multiplier
-    // tags.
-    finalXml = sanitizeSheetXml(sheets.get(chatId) || update)
-    committedMessageIds.add(messageId)
-  }
+  // If contentProcessor (Tier 1) already ran, sheets.get(chatId)
+  // holds the final computed sheet.  commitUpdate will fetch the
+  // pre-turn sheet from history as "old", run the digestion tick
+  // again with the same inputs, and produce the same result — a
+  // harmless no-op.  If Tier 1 didn't run, this is the primary
+  // computation path.
+  const finalXml = await commitUpdate(chatId, messageId, update)
 
   // ─── Rewrite visible chat text with computed values ─────────
   // This corrects the <sheet_update> block in the visible message,
@@ -362,11 +348,6 @@ spindle.on('GENERATION_STOPPED', async (payload: any) => {
 
 spindle.on('CHAT_SWITCHED', async (payload: any) => {
   await switchToChat(payload.chatId)
-})
-
-spindle.on('MESSAGE_DELETED', async (payload: any) => {
-  const { chatId, messageId } = payload
-  if (chatId) await rollbackOnDelete(chatId, messageId)
 })
 
 spindle.log.info('Bio Tracker backend loaded (Digestion Engine v9)')

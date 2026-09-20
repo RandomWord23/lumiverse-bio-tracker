@@ -86,9 +86,6 @@ export function maybeToast(category: string, type: 'success' | 'warning' | 'erro
 export function sheetPath(chatId: string) {
   return `sheets/${chatId}.xml`
 }
-export function snapshotsPath(chatId: string) {
-  return `snapshots/${chatId}.json`
-}
 
 export function extractTextContent(content: unknown): string {
   if (typeof content === 'string') return content
@@ -126,6 +123,53 @@ export function findLastAssistantMessage(messages: any[]): any | null {
     if (msg.role === 'assistant' && msg.__isChatHistory) return msg
   }
   return null
+}
+
+// ---------------------------------------------------------------------------
+// Stateless history helpers — the chat history IS the database.
+//
+// getLatestAssistantMessage(chatId, excludeMessageId?)
+//   Fetches the full message list via spindle.chat.getMessages and returns
+//   the most recent assistant message (the one with __isChatHistory === true).
+//   If excludeMessageId is supplied, that message is skipped — useful when
+//   you want the *previous* AI message (e.g. the "old" sheet for a digestion
+//   tick on the message currently being generated).
+//
+// getLatestSheetFromHistory(chatId, excludeMessageId?)
+//   Convenience wrapper: returns the inner XML of the <sheet_update> block
+//   found inside the message returned by getLatestAssistantMessage, or null
+//   if no such block exists.
+//
+// Both functions swallow errors and return null so callers can fall back to
+// the in-memory `sheets` cache or the persisted sheet file.
+// ---------------------------------------------------------------------------
+
+export async function getLatestAssistantMessage(
+  chatId: string,
+  excludeMessageId?: string,
+): Promise<any | null> {
+  try {
+    const messages = (await spindle.chat.getMessages(chatId)) as any[]
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (msg.role !== 'assistant' || !msg.__isChatHistory) continue
+      if (excludeMessageId && msg.id === excludeMessageId) continue
+      return msg
+    }
+  } catch (e) {
+    spindle.log.error(`getLatestAssistantMessage: ${e}`)
+  }
+  return null
+}
+
+export async function getLatestSheetFromHistory(
+  chatId: string,
+  excludeMessageId?: string,
+): Promise<string | null> {
+  const msg = await getLatestAssistantMessage(chatId, excludeMessageId)
+  if (!msg) return null
+  const content = extractTextContent(msg.content)
+  return extractSheetUpdate(content)
 }
 
 // ---------------------------------------------------------------------------
