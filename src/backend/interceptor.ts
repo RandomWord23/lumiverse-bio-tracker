@@ -1380,6 +1380,11 @@ export async function promptInterceptor(messages: any[], context: any) {
   if (manualSyncPending === 'true') {
     await spindle.variables.chat.delete(chatId, 'manualSyncPending')
     spindle.log.info(`Manual sync pending — skipping stale parse for chat ${chatId}`)
+    // ── Update preGenerationSheet so swipes restore to the SYNCED sheet ──
+    // Without this, the preGenerationSheet chat variable still holds the
+    // pre-sync sheet (with old timeAdded values). On swipe, the stale
+    // sheet would be restored — reverting the user's manual edits.
+    await setPreGenerationSheet(chatId, sheet)
   } else if (genType === 'normal') {
     const lastAssistant = findLastAssistantMessage(messages)
     if (
