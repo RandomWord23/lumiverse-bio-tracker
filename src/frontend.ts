@@ -2329,7 +2329,7 @@ export function setup(ctx: SpindleFrontendContext) {
 
       ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name')
       ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L')
-      ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'digestion') || '').replace('%', '')
+      ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'digestion') || getAttr(itemNode, 'conversion') || '').replace('%', '')
 
       const type = getAttr(itemNode, 'type') || 'Food'
       const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
@@ -2443,13 +2443,13 @@ export function setup(ctx: SpindleFrontendContext) {
     // Parse Womb
     const wombNode = doc.querySelector('Womb')
     if (wombNode) {
-      wombNode.querySelectorAll('Item').forEach((itemNode) => {
+      wombNode.querySelectorAll(':scope > Item').forEach((itemNode) => {
         const div = createWombItem()
         document.getElementById('womb-container')?.appendChild(div)
 
         ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name')
         ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L')
-        ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'absorption') || '').replace('%', '')
+        ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'absorption') || getAttr(itemNode, 'conversion') || getAttr(itemNode, 'digestion') || '').replace('%', '')
 
         const type = getAttr(itemNode, 'type') || 'Food'
         const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
@@ -2494,13 +2494,13 @@ export function setup(ctx: SpindleFrontendContext) {
       const cumVolEl = document.getElementById('bt-cum-vol')
       if (cumVolEl) cumVolEl.textContent = `${cumVol.toFixed(0)} ml`
 
-      ballsNode.querySelectorAll('Item').forEach((itemNode) => {
+      ballsNode.querySelectorAll(':scope > Item').forEach((itemNode) => {
         const div = createBallsItem()
         document.getElementById('balls-container')?.appendChild(div)
 
         ;(div.querySelector('.v-name') as HTMLInputElement).value = getAttr(itemNode, 'name')
         ;(div.querySelector('.v-vol') as HTMLInputElement).value = getAttr(itemNode, 'volume_L')
-        ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'conversion') || '').replace('%', '')
+        ;(div.querySelector('.v-dig') as HTMLInputElement).value = (getAttr(itemNode, 'conversion') || getAttr(itemNode, 'digestion') || '').replace('%', '')
 
         const type = getAttr(itemNode, 'type') || 'Food'
         const typeSelect = div.querySelector('.v-type') as HTMLSelectElement
