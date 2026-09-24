@@ -17,7 +17,7 @@ import {
   maybeToast,
   extractTextContent,
   extractSheetUpdate,
-  findLastAssistantMessage,
+  getLatestAssistantMessage,
   getLatestSheetFromHistory,
   getAttrFromString,
   collectModifiers,
@@ -1271,32 +1271,30 @@ export async function promptInterceptor(messages: any[], context: any) {
   }
 
   // ── Stateless: derive the sheet from chat history ──────────────
-  // The chat history IS the database.  For swipes, the last AI message
-  // in history is the swipe being replaced — we exclude it to get the
-  // pre-turn baseline.  For all other generation types, the last AI
-  // message is the previous turn's committed response, which has the
-  // correct sheet.
-  if (genType === 'swipe') {
-    const lastAssistant = findLastAssistantMessage(messages)
-    const excludeId = lastAssistant?.sourceMessageId
-    const historySheet = await getLatestSheetFromHistory(chatId, excludeId)
-    if (historySheet) {
-      sheet = historySheet
-      sheets.set(chatId, sheet)
+  // The chat history IS the database.  For both swipes and regenerations,
+  // the last AI message in history is the message being replaced — we
+  // exclude it (by its database id) so getLatestSheetFromHistory returns
+  // the PREVIOUS AI message's sheet, which is the correct pre-turn
+  // baseline.  For normal/continue generations, the last AI message IS
+  // the previous turn's committed response, so no exclusion is needed.
+  //
+  // We fetch the latest assistant message directly from chat history
+  // (via getLatestAssistantMessage) rather than from the prompt messages
+  // array, because:
+  //   - The prompt array's __isChatHistory flag may not be set reliably.
+  //   - The prompt message exposes sourceMessageId, but getLatestAssistant
+  //     Message compares against msg.id — a mismatch would silently skip
+  //     the exclusion and return the latest (wrong) sheet.
+  const isReplacement = genType === 'swipe' || genType === 'regenerate'
+  const excludeId = isReplacement
+    ? (await getLatestAssistantMessage(chatId))?.id
+    : undefined
+  const historySheet = await getLatestSheetFromHistory(chatId, excludeId)
+  if (historySheet) {
+    sheet = historySheet
+    sheets.set(chatId, sheet)
+    if (genType === 'swipe') {
       await saveChatSheet(chatId, sheet)
-      spindle.log.info(
-        `[promptInterceptor] Swipe: restored pre-turn sheet from history (len=${sheet.length})`,
-      )
-    } else {
-      spindle.log.info(
-        `[promptInterceptor] Swipe: no pre-turn sheet in history — using cached sheet`,
-      )
-    }
-  } else {
-    const historySheet = await getLatestSheetFromHistory(chatId)
-    if (historySheet) {
-      sheet = historySheet
-      sheets.set(chatId, sheet)
     }
   }
 
